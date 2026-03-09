@@ -1,6 +1,9 @@
+#This module provides utility functions for authentication, including password hashing, JWT token creation and decoding, and Google token verification.
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
 from app.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
