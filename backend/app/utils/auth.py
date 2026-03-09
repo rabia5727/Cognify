@@ -27,3 +27,18 @@ def decode_access_token(token: str) -> dict | None:
         return payload
     except JWTError:
         return None
+#google authentication and authorization packages
+def verify_google_token(token: str) -> dict | None:
+    try:
+        idinfo = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            settings.GOOGLE_CLIENT_ID
+        )
+        return {
+            "google_id": idinfo["sub"],
+            "email": idinfo["email"],
+            "name": idinfo["name"]
+        }
+    except Exception:
+        return None
