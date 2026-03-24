@@ -1,3 +1,4 @@
+#This module defines dependencies for FastAPI routes, particularly for retrieving the current authenticated user based on the JWT token provided in the request. It uses HTTP Bearer authentication to extract the token, decodes it to get the user ID, and then fetches the user from the database. If any step fails (invalid token, expired token, user not found), it raises appropriate HTTP exceptions.
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.utils.auth import decode_access_token

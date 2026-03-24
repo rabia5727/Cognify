@@ -1,3 +1,5 @@
+#This module defines the authentication routes for the FastAPI application, including user registration, login, and Google authentication. It handles incoming requests, interacts with the user database, and generates JWT tokens for authenticated users. The routes include error handling for common issues such as duplicate email registration and invalid login credentials.
+#registration, login, and google login endpoints 
 from fastapi import APIRouter, HTTPException, status
 from app.models.user import UserRegister, UserLogin, UserResponse
 from app.crud.user import create_user, get_user_by_email
