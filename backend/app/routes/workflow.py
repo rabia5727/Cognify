@@ -1,3 +1,10 @@
+# -------------------------------------------------------
+# This module defines the API routes for managing workflows in the application. \
+# It includes endpoints for creating, retrieving, updating, and deleting workflows,
+#  as well as adding tasks and milestones to workflows. All routes are protected and require a valid JWT token for authentication. 
+# The routes interact with the corresponding CRUD functions to perform database operations
+#  and return appropriate responses or error messages based on the outcome of each operation.
+#--------------------------------------------------------
 from fastapi import APIRouter, HTTPException, status, Depends
 from app.models.workflow import WorkflowCreate, WorkflowUpdate, WorkflowResponse, MilestoneCreate
 from app.crud.workflow import (
