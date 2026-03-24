@@ -84,7 +84,7 @@ class _NameScreenState extends State<NameScreen> {
               // Full Name field
               LabeledTextField(
                 label: 'Full Name',
-                hint: 'e.g. Taiba Khan',
+                hint: 'e.g. John Doe',
                 controller: _nameController,
               ),
 
