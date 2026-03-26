@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../theme/app_theme.dart';
-import '../screens/dashboard/dashboard_screen.dart';
-import '../screens/settings/settings_screen.dart';
+import '../theme/app_theme.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -15,28 +13,10 @@ class BottomNavBar extends StatelessWidget {
     required this.onTabSelected,
   });
 
-  void _navigateTo(BuildContext context, int index) {
-    // Only push SettingsScreen, others can use callback
-    if (index == 3) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => SettingsScreen(
-            currentIndex: index,
-            onNavTap: onTabSelected,
-            userName: userName,
-          ),
-        ),
-      );
-    } else {
-      onTabSelected(index);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return BottomAppBar(
-      shape: const CircularNotchedRectangle(),
+      shape: const CircularNotchedRectangle(), // creates notch for the FAB
       notchMargin: 8,
       color: Colors.white,
       elevation: 8,
@@ -46,26 +26,31 @@ class BottomNavBar extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
             _NavItem(
-                icon: Icons.dashboard_rounded,
-                label: 'Dashboard',
-                isSelected: currentIndex == 0,
-                onTap: () => _navigateTo(context, 0)),
+              icon: Icons.dashboard_rounded,
+              label: 'Dashboard',
+              isSelected: currentIndex == 0,
+              onTap: () => onTabSelected(0),
+            ),
             _NavItem(
-                icon: Icons.bar_chart_rounded,
-                label: 'Analytics',
-                isSelected: currentIndex == 1,
-                onTap: () => _navigateTo(context, 1)),
+              icon: Icons.bar_chart_rounded,
+              label: 'Analytics',
+              isSelected: currentIndex == 1,
+              onTap: () => onTabSelected(1),
+            ),
+            // Empty space for the FAB notch in the center
             const SizedBox(width: 48),
             _NavItem(
-                icon: Icons.task_alt_rounded,
-                label: 'Tasks',
-                isSelected: currentIndex == 2,
-                onTap: () => _navigateTo(context, 2)),
+              icon: Icons.task_alt_rounded,
+              label: 'Tasks',
+              isSelected: currentIndex == 2,
+              onTap: () => onTabSelected(2),
+            ),
             _NavItem(
-                icon: Icons.settings_rounded,
-                label: 'Settings',
-                isSelected: currentIndex == 3,
-                onTap: () => _navigateTo(context, 3)),
+              icon: Icons.settings_rounded,
+              label: 'Settings',
+              isSelected: currentIndex == 3,
+              onTap: () => onTabSelected(3),
+            ),
           ],
         ),
       ),
@@ -73,6 +58,7 @@ class BottomNavBar extends StatelessWidget {
   }
 }
 
+// Single tab item — icon + label
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;

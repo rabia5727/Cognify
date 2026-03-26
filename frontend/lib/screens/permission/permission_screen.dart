@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common_widgets.dart'; // Import common widgets
-import '../dashboard/dashboard_screen.dart';
 import '../auth/preference_quiz_screen.dart';
+import '../home_screen.dart';
 
 class PermissionScreen extends StatelessWidget {
   final String userName;
@@ -17,7 +17,7 @@ class PermissionScreen extends StatelessWidget {
   void _goToDashboard(BuildContext context) {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => DashboardScreen(userName: userName),
+        builder: (_) => HomeScreen(userName: userName),
       ),
     );
   }

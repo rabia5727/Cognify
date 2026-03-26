@@ -1,24 +1,23 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common_widgets.dart';
+import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/app_card.dart';
+import './profile_screen.dart';
 
-enum SettingType {
-  notifications,
-  darkMode,
-  voicePermission,
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// SETTINGS SCREEN
+// ─────────────────────────────────────────────────────────────────────────────
 
 class SettingsScreen extends StatefulWidget {
-  final Function(int) onNavTap;
-  final int currentIndex;
   final String userName;
+  final int currentIndex;
+  final ValueChanged<int> onTabSelected;
 
   const SettingsScreen({
     super.key,
-    required this.onNavTap,
-    required this.currentIndex,
     required this.userName,
+    required this.currentIndex,
+    required this.onTabSelected,
   });
 
   @override
@@ -26,163 +25,56 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  // Toggle states — later save these to shared_preferences
   bool _notificationsEnabled = false;
-  bool _darkModeEnabled = true;
+  bool _darkModeEnabled = false;
   bool _voicePermissionEnabled = true;
 
-  String _userName = '';
-  String _userEmail = 'eiman.asmat@example.com';
-  String _appVersion = '1.0.0';
-
-  @override
-  void initState() {
-    super.initState();
-    _userName = widget.userName;
-  }
-
-  void _updateSetting(bool value, SettingType type) {
-    setState(() {
-      switch (type) {
-        case SettingType.notifications:
-          _notificationsEnabled = value;
-          break;
-        case SettingType.darkMode:
-          _darkModeEnabled = value;
-          break;
-        case SettingType.voicePermission:
-          _voicePermissionEnabled = value;
-          break;
-      }
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${type.name} ${value ? "enabled" : "disabled"}'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
+  // ── Logout dialog ──────────────────────────────────────────────────────────
   void _showLogoutDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text('Log Out'),
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Log Out',
+            style: TextStyle(fontWeight: FontWeight.w700)),
         content: const Text('Are you sure you want to log out?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: AppColors.grayText)),
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context);
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Logged out successfully')),
-              );
+              Navigator.pop(ctx);
+              // TODO: Clear auth tokens, then navigate to auth screen:
+              // Navigator.of(context).pushAndRemoveUntil(
+              //   MaterialPageRoute(builder: (_) => const SplashScreen()),
+              //   (route) => false,
+              // );
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Logged out successfully')),
+                );
+              }
             },
-            child: const Text('Log Out', style: TextStyle(color: Colors.red)),
+            child: const Text('Log Out',
+                style:
+                    TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
   }
 
+  // ── Personal info dialog ───────────────────────────────────────────────────
   void _showPersonalInfoDialog() {
-    final nameController = TextEditingController(text: _userName);
-    final emailController = TextEditingController(text: _userEmail);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text('Personal Information'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _userName = nameController.text;
-                _userEmail = emailController.text;
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfileScreen(userName: widget.userName),
       ),
     );
-  }
-
-  void _showAppVersionDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('App Version'),
-        content: Text('Version $_appVersion'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPrivacyPolicy() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Privacy Policy'),
-        content: const Text('Privacy policy placeholder...'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openHelp() {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Open Help Screen')));
-  }
-
-  void _contactUs() {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Contact Support')));
   }
 
   @override
@@ -192,54 +84,64 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // HEADER
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            // ── Top bar ────────────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 12, 20, 4),
               child: Row(
                 children: [
+                  // Back arrow goes to dashboard (tab 0)
                   IconButton(
-                    onPressed: () => widget.onNavTap(0),
-                    icon: const Icon(Icons.arrow_back),
-                    color: AppColors.darkText,
+                    onPressed: () => widget.onTabSelected(0),
+                    icon: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryBlue,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white, size: 16),
+                    ),
                   ),
                   const Expanded(
                     child: Text(
                       'Settings',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.darkText,
                       ),
                     ),
                   ),
+                  // Invisible spacer to center the title
                   const SizedBox(width: 48),
                 ],
               ),
             ),
 
+            // ── Scrollable content ─────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
                 child: Column(
                   children: [
-                    // Profile Header - Using AppCard
+                    // 1. Profile card
                     AppCard(
-                      padding: const EdgeInsets.all(20),
                       child: Row(
                         children: [
+                          // Avatar circle
                           Container(
-                            width: 60,
-                            height: 60,
+                            width: 56,
+                            height: 56,
                             decoration: BoxDecoration(
                               color: AppColors.primaryBlue.withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.person_rounded,
-                                size: 32,
-                                color: AppColors.primaryBlue,
-                              ),
+                            child: const Icon(
+                              Icons.person_rounded,
+                              size: 30,
+                              color: AppColors.primaryBlue,
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -248,41 +150,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _userName,
+                                  widget.userName,
                                   style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700,
                                     color: AppColors.darkText,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
-                                Text(
-                                  _userEmail,
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: AppColors.grayText,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
                                 GestureDetector(
                                   onTap: _showPersonalInfoDialog,
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.edit_rounded,
-                                        size: 14,
-                                        color: AppColors.primaryBlue,
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'See Personal info >',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.primaryBlue,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
+                                  child: const Text(
+                                    'See Personal info >',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.primaryBlue,
+                                      fontWeight: FontWeight.w500,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -292,115 +176,117 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 20),
 
-                    // Preferences Section
-                    _SettingsSection(
-                      title: 'PREFERENCES',
-                      isFirst: true,
+                    // 2. Preferences section
+                    _SectionCard(
+                      title: 'Preferences',
                       children: [
-                        _SettingsTile(
-                          icon: Icons.notifications,
-                          title: 'Notifications',
-                          subtitle: 'Receive task reminders and updates',
-                          trailing: Switch(
-                            value: _notificationsEnabled,
-                            onChanged: (v) =>
-                                _updateSetting(v, SettingType.notifications),
-                            activeColor: AppColors.primaryBlue,
-                          ),
+                        _ToggleRow(
+                          icon: Icons.notifications_outlined,
+                          label: 'Notifications',
+                          value: _notificationsEnabled,
+                          onChanged: (v) =>
+                              setState(() => _notificationsEnabled = v),
                         ),
-                        _SettingsTile(
-                          icon: Icons.dark_mode,
-                          title: 'Dark Mode',
-                          subtitle: 'Switch to dark theme',
-                          trailing: Switch(
-                            value: _darkModeEnabled,
-                            onChanged: (v) =>
-                                _updateSetting(v, SettingType.darkMode),
-                            activeColor: AppColors.primaryBlue,
-                          ),
+                        _RowDivider(),
+                        _ToggleRow(
+                          icon: Icons.dark_mode_outlined,
+                          label: 'Dark Mode',
+                          value: _darkModeEnabled,
+                          onChanged: (v) =>
+                              setState(() => _darkModeEnabled = v),
                         ),
-                        _SettingsTile(
-                          icon: Icons.mic,
-                          title: 'Voice Permission',
-                          subtitle: 'Allow voice input for tasks',
-                          trailing: Switch(
-                            value: _voicePermissionEnabled,
-                            onChanged: (v) =>
-                                _updateSetting(v, SettingType.voicePermission),
-                            activeColor: AppColors.primaryBlue,
-                          ),
+                        _RowDivider(),
+                        _ToggleRow(
+                          icon: Icons.mic_outlined,
+                          label: 'Voice Permission',
+                          value: _voicePermissionEnabled,
+                          onChanged: (v) =>
+                              setState(() => _voicePermissionEnabled = v),
                         ),
                       ],
                     ),
 
-                    // Support Section
-                    _SettingsSection(
-                      title: 'SUPPORT',
+                    const SizedBox(height: 16),
+
+                    // 3. Support section
+                    _SectionCard(
+                      title: 'Support',
                       children: [
-                        _SettingsTile(
-                          icon: Icons.help,
-                          title: 'Help',
-                          subtitle: 'Get assistance and tutorials',
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: _openHelp,
+                        _TapRow(
+                          icon: Icons.help_outline_rounded,
+                          label: 'Help',
+                          onTap: () => ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                                  content: Text('Help coming soon!'))),
                         ),
-                        _SettingsTile(
-                          icon: Icons.contact_support,
-                          title: 'Contact Us',
-                          subtitle: 'Reach out to our support team',
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: _contactUs,
+                        _RowDivider(),
+                        _TapRow(
+                          icon: Icons.headset_mic_outlined,
+                          label: 'Contact us',
+                          onTap: () => ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                                  content: Text('Contact coming soon!'))),
                         ),
                       ],
                     ),
 
-                    // About Section
-                    _SettingsSection(
-                      title: 'ABOUT',
+                    const SizedBox(height: 16),
+
+                    // 4. About section
+                    _SectionCard(
+                      title: 'About',
                       children: [
-                        _SettingsTile(
-                          icon: Icons.info,
-                          title: 'App Version',
-                          subtitle: 'Version $_appVersion',
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: _showAppVersionDialog,
+                        _TapRow(
+                          icon: Icons.info_outline_rounded,
+                          label: 'App version',
+                          trailing: const Text('v1.0.0',
+                              style: TextStyle(
+                                  fontSize: 12, color: AppColors.grayText)),
+                          onTap: () {},
                         ),
-                        _SettingsTile(
-                          icon: Icons.privacy_tip,
-                          title: 'Privacy Policy',
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: _showPrivacyPolicy,
+                        _RowDivider(),
+                        _TapRow(
+                          icon: Icons.privacy_tip_outlined,
+                          label: 'Privacy Policy',
+                          onTap: () => ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                                  content:
+                                      Text('Privacy Policy coming soon!'))),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 32),
 
-                    // Log Out Button
+                    // 5. Log out button — RED filled, matches mockup
                     SizedBox(
                       width: double.infinity,
-                      child: OutlinedButton(
+                      height: 52,
+                      child: ElevatedButton.icon(
                         onPressed: _showLogoutDialog,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          side: const BorderSide(color: Colors.red, width: 1.5),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: const Text(
-                          'Log Out',
+                        icon: const Icon(Icons.logout_rounded,
+                            color: Colors.white, size: 20),
+                        label: const Text(
+                          'Log out',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade500,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(30),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
@@ -408,188 +294,141 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _BottomNav(
+
+      // Shared bottom nav bar — no local _BottomNav duplicate
+      floatingActionButton: const _VoiceFAB(),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      bottomNavigationBar: BottomNavBar(
         currentIndex: widget.currentIndex,
-        onTap: (index) {
-          if (index != widget.currentIndex) {
-            widget.onNavTap(index);
-            Navigator.pop(context);
-          }
-        },
+        userName: widget.userName,
+        onTabSelected: widget.onTabSelected,
       ),
     );
   }
 }
 
-// ============================================================================
-// WIDGETS
-// ============================================================================
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDGET: Section Card
+// A white card with a title label above it and rows inside
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _SettingsSection extends StatelessWidget {
+class _SectionCard extends StatelessWidget {
   final String title;
   final List<Widget> children;
-  final bool isFirst;
 
-  const _SettingsSection({
-    required this.title,
-    required this.children,
-    this.isFirst = false,
-  });
+  const _SectionCard({required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (!isFirst) const SizedBox(height: 24),
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 8),
           child: Text(
             title,
             style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: AppColors.grayText,
-              letterSpacing: 0.5,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.darkText,
             ),
           ),
         ),
         AppCard(
           padding: EdgeInsets.zero,
-          child: Column(
-            children: children,
-          ),
+          child: Column(children: children),
         ),
       ],
     );
   }
 }
 
-class _SettingsTile extends StatelessWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDGET: Toggle Row (for Preferences)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ToggleRow extends StatelessWidget {
   final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-  final VoidCallback? onTap;
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
 
-  const _SettingsTile({
+  const _ToggleRow({
     required this.icon,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-    this.onTap,
+    required this.label,
+    required this.value,
+    required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        InkWell(
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryBlue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    icon,
-                    color: AppColors.primaryBlue,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.darkText,
-                        ),
-                      ),
-                      if (subtitle != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: AppColors.grayText,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                if (trailing != null) trailing!,
-              ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.primaryBlue),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.darkText,
+              ),
             ),
           ),
-        ),
-        Divider(
-          height: 1,
-          thickness: 1,
-          color: AppColors.lightGray,
-          indent: 70,
-        ),
-      ],
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeColor: AppColors.primaryBlue,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _BottomNav extends StatelessWidget {
-  final int currentIndex;
-  final Function(int) onTap;
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDGET: Tap Row (for Support and About)
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _BottomNav({
-    required this.currentIndex,
+class _TapRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Widget? trailing;
+
+  const _TapRow({
+    required this.icon,
+    required this.label,
     required this.onTap,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
-    return BottomAppBar(
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 8,
-      color: Colors.white,
-      elevation: 8,
-      child: SizedBox(
-        height: 60,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround, // Fixed spacing
           children: [
-            _NavItem(
-              icon: Icons.dashboard_rounded,
-              label: 'Dashboard',
-              isSelected: currentIndex == 0,
-              onTap: () => onTap(0),
+            Icon(icon, size: 20, color: AppColors.primaryBlue),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.darkText,
+                ),
+              ),
             ),
-            _NavItem(
-              icon: Icons.bar_chart_rounded,
-              label: 'Analytics',
-              isSelected: currentIndex == 1,
-              onTap: () => onTap(1),
-            ),
-            _NavItem(
-              icon: Icons.task_alt_rounded,
-              label: 'Tasks',
-              isSelected: currentIndex == 2,
-              onTap: () => onTap(2),
-            ),
-            _NavItem(
-              icon: Icons.settings_rounded,
-              label: 'Settings',
-              isSelected: currentIndex == 3,
-              onTap: () => onTap(3),
-            ),
+            trailing ?? const SizedBox.shrink(),
           ],
         ),
       ),
@@ -597,39 +436,42 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDGET: Row Divider
+// ─────────────────────────────────────────────────────────────────────────────
 
-  const _NavItem({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
+class _RowDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: AppColors.lightGray,
+      indent: 48,
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDGET: Voice FAB
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VoiceFAB extends StatelessWidget {
+  const _VoiceFAB();
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? AppColors.primaryBlue : AppColors.grayText;
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 24, color: color),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: color,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
-            ),
-          ),
-        ],
+    return SizedBox(
+      width: 64,
+      height: 64,
+      child: FloatingActionButton(
+        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Voice recording coming soon!')),
+        ),
+        backgroundColor: AppColors.primaryBlue,
+        elevation: 4,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.mic_rounded, color: Colors.white, size: 32),
       ),
     );
   }

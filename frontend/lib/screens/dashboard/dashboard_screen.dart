@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/bottom_nav_bar.dart';
-import '../../widgets/app_card.dart'; // Import reusable card
+import '../../widgets/app_card.dart';
+import '../settings/profile_screen.dart'; // Add this import
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA MODEL
@@ -24,21 +25,29 @@ class Task {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN DASHBOARD SCREEN
+// DASHBOARD SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
-  const DashboardScreen({super.key, required this.userName});
+  final int currentIndex;
+  final ValueChanged<int> onTabSelected;
+
+  const DashboardScreen({
+    super.key,
+    required this.userName,
+    required this.currentIndex,
+    required this.onTabSelected,
+  });
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedNavIndex = 0;
   bool _showProactiveCard = true;
 
+  // Dummy tasks — later replaced with real data from backend
   final List<Task> _tasks = [
     Task(
       id: '1',
@@ -83,10 +92,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _onTabSelected(int index) {
-    setState(() {
-      _selectedNavIndex = index;
-    });
+  // Navigation to Profile Screen
+  void _navigateToProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ProfileScreen(userName: widget.userName),
+      ),
+    );
   }
 
   @override
@@ -96,6 +109,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: SafeArea(
         child: Column(
           children: [
+            // Blue header with greeting + AI proactive card inside
             _HeaderBanner(
               greeting: _greeting,
               userName: widget.userName,
@@ -103,7 +117,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               showProactiveCard: _showProactiveCard,
               onYes: _dismissProactiveCard,
               onNo: _dismissProactiveCard,
+              onProfileTap: _navigateToProfile, // Pass the navigation callback
             ),
+
+            // Scrollable body
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
@@ -119,6 +136,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
+
+                    // Task area
                     SizedBox(
                       height: 165,
                       child: _isNewUser
@@ -128,12 +147,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               onStartTask: _markTaskComplete,
                             ),
                     ),
+
                     const SizedBox(height: 16),
+
+                    // Productivity score card
                     _ProductivityCard(
                       score: _productivityScore,
                       completedCount: _completedCount,
                       totalCount: _tasks.length,
                     ),
+
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -142,19 +165,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
+
+      // Voice mic FAB in center of bottom nav
       floatingActionButton: const _VoiceFAB(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+
+      // Shared bottom nav bar
       bottomNavigationBar: BottomNavBar(
-        currentIndex: _selectedNavIndex,
+        currentIndex: widget.currentIndex,
         userName: widget.userName,
-        onTabSelected: _onTabSelected,
+        onTabSelected: widget.onTabSelected,
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Header Banner
+// WIDGET: Header Banner (Updated with tappable profile icon)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _HeaderBanner extends StatelessWidget {
@@ -164,6 +191,7 @@ class _HeaderBanner extends StatelessWidget {
   final bool showProactiveCard;
   final VoidCallback onYes;
   final VoidCallback onNo;
+  final VoidCallback onProfileTap; // Add this callback
 
   const _HeaderBanner({
     required this.greeting,
@@ -172,6 +200,7 @@ class _HeaderBanner extends StatelessWidget {
     required this.showProactiveCard,
     required this.onYes,
     required this.onNo,
+    required this.onProfileTap, // Required parameter
   });
 
   @override
@@ -223,6 +252,7 @@ class _HeaderBanner extends StatelessWidget {
               ),
               Row(
                 children: [
+                  // AI mascot icon
                   Container(
                     width: 52,
                     height: 52,
@@ -237,17 +267,21 @@ class _HeaderBanner extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.25),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.person_rounded,
-                      color: Colors.white,
-                      size: 20,
+                  // User avatar - Made tappable
+                  GestureDetector(
+                    onTap: onProfileTap, // Navigate to profile when tapped
+                    child: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.25),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.person_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ],
@@ -255,6 +289,8 @@ class _HeaderBanner extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
+
+          // White card inside blue header
           AppCard(
             child: isNewUser
                 ? const _NewUserMessage()
@@ -289,11 +325,8 @@ class _NewUserMessage extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           "I'm here to help you stay organized, motivated, and kind to yourself along the way.",
-          style: TextStyle(
-            fontSize: 13,
-            color: AppColors.grayText,
-            height: 1.5,
-          ),
+          style:
+              TextStyle(fontSize: 13, color: AppColors.grayText, height: 1.5),
         ),
       ],
     );
@@ -327,11 +360,8 @@ class _ReturningUserMessage extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           'You have a quiz due today. Would you like me to help prepare it?',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppColors.grayText,
-            height: 1.5,
-          ),
+          style:
+              TextStyle(fontSize: 13, color: AppColors.grayText, height: 1.5),
         ),
         if (showButtons) ...[
           const SizedBox(height: 14),
@@ -345,14 +375,12 @@ class _ReturningUserMessage extends StatelessWidget {
                     foregroundColor: Colors.white,
                     minimumSize: const Size(0, 40),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                        borderRadius: BorderRadius.circular(10)),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Yes',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
+                  child: const Text('Yes',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(width: 12),
@@ -365,13 +393,11 @@ class _ReturningUserMessage extends StatelessWidget {
                     side: const BorderSide(
                         color: AppColors.primaryBlue, width: 1.5),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                        borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text(
-                    'No',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
+                  child: const Text('No',
+                      style:
+                          TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                 ),
               ),
             ],
@@ -388,10 +414,7 @@ class _ReturningUserMessage extends StatelessWidget {
 
 class _EmptyTaskArea extends StatelessWidget {
   final VoidCallback onAddTask;
-
-  const _EmptyTaskArea({
-    required this.onAddTask,
-  });
+  const _EmptyTaskArea({required this.onAddTask});
 
   @override
   Widget build(BuildContext context) {
@@ -412,13 +435,8 @@ class _EmptyTaskArea extends StatelessWidget {
               child: const Icon(Icons.add, color: Colors.white, size: 30),
             ),
             const SizedBox(height: 10),
-            Text(
-              'Add a high-priority task',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.grayText,
-              ),
-            ),
+            Text('Add a high-priority task',
+                style: TextStyle(fontSize: 14, color: AppColors.grayText)),
           ],
         ),
       ),
@@ -434,10 +452,7 @@ class _TaskList extends StatelessWidget {
   final List<Task> tasks;
   final Function(String) onStartTask;
 
-  const _TaskList({
-    required this.tasks,
-    required this.onStartTask,
-  });
+  const _TaskList({required this.tasks, required this.onStartTask});
 
   @override
   Widget build(BuildContext context) {
@@ -461,10 +476,7 @@ class _TaskCard extends StatelessWidget {
   final Task task;
   final VoidCallback onStart;
 
-  const _TaskCard({
-    required this.task,
-    required this.onStart,
-  });
+  const _TaskCard({required this.task, required this.onStart});
 
   Color get _priorityColor {
     switch (task.priority) {
@@ -530,13 +542,8 @@ class _TaskCard extends StatelessWidget {
                 Icon(Icons.access_time_rounded,
                     size: 13, color: AppColors.grayText),
                 const SizedBox(width: 4),
-                Text(
-                  _dueTime,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.grayText,
-                  ),
-                ),
+                Text(_dueTime,
+                    style: TextStyle(fontSize: 12, color: AppColors.grayText)),
               ],
             ),
             const SizedBox(height: 6),
@@ -654,10 +661,7 @@ class _ProductivityCard extends StatelessWidget {
                           ? 'Bravo! Keep it up, you are almost done for today.'
                           : 'Good progress! Keep going, you are doing great.',
                   style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.grayText,
-                    height: 1.5,
-                  ),
+                      fontSize: 13, color: AppColors.grayText, height: 1.5),
                 ),
                 const SizedBox(height: 12),
                 Row(
