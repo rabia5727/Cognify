@@ -1,32 +1,24 @@
+// ═══════════════════════════════════════════════════════════════════
+// FILE: lib/screens/dashboard/dashboard_screen.dart
+// CHANGES:
+//   - Removed Task model (now in lib/models/task.dart)
+//   - Removed _VoiceFAB (now in lib/widgets/voice_fab.dart)
+//   - Removed _HeaderBanner (now DashboardHeader in lib/widgets/app_header.dart)
+//   - Uses AppConstants for colors, greeting, formatting
+//   - Uses DummyData for task list
+//   - Uses PriorityBadge widget
+// ═══════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
-import '../../theme/app_theme.dart';
+import '../../constants/app_constant.dart';
+import '../../models/task_model.dart';
+import '../../data/dummy_data.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/app_card.dart';
-import '../settings/profile_screen.dart'; // Add this import
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DATA MODEL
-// ─────────────────────────────────────────────────────────────────────────────
-
-class Task {
-  final String id;
-  final String title;
-  final DateTime dueDate;
-  final String priority;
-  bool isCompleted;
-
-  Task({
-    required this.id,
-    required this.title,
-    required this.dueDate,
-    required this.priority,
-    this.isCompleted = false,
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DASHBOARD SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
+import '../../widgets/app_header.dart';
+import '../../widgets/voice_fab.dart';
+import '../../widgets/priority_badge.dart';
+import '../settings/profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userName;
@@ -47,80 +39,64 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _showProactiveCard = true;
 
-  // Dummy tasks — later replaced with real data from backend
-  final List<Task> _tasks = [
-    Task(
-      id: '1',
-      title: 'Complete Maths Assignment',
-      dueDate: DateTime.now().copyWith(hour: 22, minute: 0),
-      priority: 'high',
-    ),
-    Task(
-      id: '2',
-      title: 'Review Pull Requests',
-      dueDate: DateTime.now().copyWith(hour: 18, minute: 30),
-      priority: 'medium',
-    ),
-  ];
+  // Load tasks from DummyData (replace with TaskService later)
+  late List<Task> _tasks;
 
   bool get _isNewUser => _tasks.isEmpty;
   int get _completedCount => _tasks.where((t) => t.isCompleted).length;
   double get _productivityScore =>
       _tasks.isEmpty ? 0.0 : _completedCount / _tasks.length;
 
-  String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
+  @override
+  void initState() {
+    super.initState();
+    _tasks = List.from(DummyData.tasks);
   }
 
   void _markTaskComplete(String taskId) {
     setState(() {
-      final task = _tasks.firstWhere((t) => t.id == taskId);
-      task.isCompleted = true;
+      final index = _tasks.indexWhere((t) => t.id == taskId);
+      if (index != -1) {
+        final task = _tasks[index];
+        _tasks[index] = task.copyWith(status: TaskStatus.completed);
+      }
     });
   }
 
-  void _dismissProactiveCard() {
-    setState(() => _showProactiveCard = false);
-  }
+  void _dismissProactiveCard() => setState(() => _showProactiveCard = false);
 
   void _addTask() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Add Task screen coming soon!')),
+      const SnackBar(content: Text('Add Task coming soon!')),
     );
   }
 
-  // Navigation to Profile Screen
   void _navigateToProfile() {
     Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => ProfileScreen(userName: widget.userName),
-      ),
-    );
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProfileScreen(userName: widget.userName),
+        ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: AppConstants.scaffoldBg,
       body: SafeArea(
         child: Column(
           children: [
-            // Blue header with greeting + AI proactive card inside
-            _HeaderBanner(
-              greeting: _greeting,
+            // ── Dashboard header (blue gradient) ─────────────────────
+            DashboardHeader(
               userName: widget.userName,
               isNewUser: _isNewUser,
               showProactiveCard: _showProactiveCard,
               onYes: _dismissProactiveCard,
               onNo: _dismissProactiveCard,
-              onProfileTap: _navigateToProfile, // Pass the navigation callback
+              onProfileTap: _navigateToProfile,
             ),
 
-            // Scrollable body
+            // ── Body ─────────────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
@@ -132,12 +108,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.darkText,
+                        color: AppConstants.darkText,
                       ),
                     ),
                     const SizedBox(height: 14),
-
-                    // Task area
                     SizedBox(
                       height: 165,
                       child: _isNewUser
@@ -147,16 +121,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               onStartTask: _markTaskComplete,
                             ),
                     ),
-
                     const SizedBox(height: 16),
-
-                    // Productivity score card
                     _ProductivityCard(
                       score: _productivityScore,
                       completedCount: _completedCount,
                       totalCount: _tasks.length,
                     ),
-
                     const SizedBox(height: 20),
                   ],
                 ),
@@ -165,245 +135,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-
-      // Voice mic FAB in center of bottom nav
-      floatingActionButton: const _VoiceFAB(),
+      floatingActionButton: const VoiceFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-
-      // Shared bottom nav bar
       bottomNavigationBar: BottomNavBar(
         currentIndex: widget.currentIndex,
         userName: widget.userName,
         onTabSelected: widget.onTabSelected,
       ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Header Banner (Updated with tappable profile icon)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _HeaderBanner extends StatelessWidget {
-  final String greeting;
-  final String userName;
-  final bool isNewUser;
-  final bool showProactiveCard;
-  final VoidCallback onYes;
-  final VoidCallback onNo;
-  final VoidCallback onProfileTap; // Add this callback
-
-  const _HeaderBanner({
-    required this.greeting,
-    required this.userName,
-    required this.isNewUser,
-    required this.showProactiveCard,
-    required this.onYes,
-    required this.onNo,
-    required this.onProfileTap, // Required parameter
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1360E2), Color(0xFF4DA3FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(28),
-          bottomRight: Radius.circular(28),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      isNewUser ? 'Welcome to\nCo-tasker' : '$greeting,',
-                      style: const TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        height: 1.2,
-                      ),
-                    ),
-                    if (!isNewUser)
-                      Text(
-                        userName,
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              Row(
-                children: [
-                  // AI mascot icon
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.smart_toy_rounded,
-                      color: Colors.white,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  // User avatar - Made tappable
-                  GestureDetector(
-                    onTap: onProfileTap, // Navigate to profile when tapped
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person_rounded,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // White card inside blue header
-          AppCard(
-            child: isNewUser
-                ? const _NewUserMessage()
-                : _ReturningUserMessage(
-                    showButtons: showProactiveCard,
-                    onYes: onYes,
-                    onNo: onNo,
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NewUserMessage extends StatelessWidget {
-  const _NewUserMessage();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Welcome to Co-tasker',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppColors.darkText,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          "I'm here to help you stay organized, motivated, and kind to yourself along the way.",
-          style:
-              TextStyle(fontSize: 13, color: AppColors.grayText, height: 1.5),
-        ),
-      ],
-    );
-  }
-}
-
-class _ReturningUserMessage extends StatelessWidget {
-  final bool showButtons;
-  final VoidCallback onYes;
-  final VoidCallback onNo;
-
-  const _ReturningUserMessage({
-    required this.showButtons,
-    required this.onYes,
-    required this.onNo,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Welcome Back',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: AppColors.darkText,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'You have a quiz due today. Would you like me to help prepare it?',
-          style:
-              TextStyle(fontSize: 13, color: AppColors.grayText, height: 1.5),
-        ),
-        if (showButtons) ...[
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: onYes,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryBlue,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    elevation: 0,
-                  ),
-                  child: const Text('Yes',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onNo,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.primaryBlue,
-                    minimumSize: const Size(0, 40),
-                    side: const BorderSide(
-                        color: AppColors.primaryBlue, width: 1.5),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('No',
-                      style:
-                          TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
     );
   }
 }
@@ -429,14 +167,16 @@ class _EmptyTaskArea extends StatelessWidget {
               width: 52,
               height: 52,
               decoration: const BoxDecoration(
-                color: AppColors.primaryBlue,
+                color: AppConstants.primaryBlue,
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.add, color: Colors.white, size: 30),
             ),
             const SizedBox(height: 10),
-            Text('Add a high-priority task',
-                style: TextStyle(fontSize: 14, color: AppColors.grayText)),
+            Text(
+              'Add a high-priority task',
+              style: TextStyle(fontSize: 14, color: AppConstants.grayText),
+            ),
           ],
         ),
       ),
@@ -445,7 +185,7 @@ class _EmptyTaskArea extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Task List
+// WIDGET: Task List (horizontal scroll)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TaskList extends StatelessWidget {
@@ -460,9 +200,9 @@ class _TaskList extends StatelessWidget {
       scrollDirection: Axis.horizontal,
       itemCount: tasks.length,
       separatorBuilder: (_, __) => const SizedBox(width: 12),
-      itemBuilder: (context, index) => _TaskCard(
-        task: tasks[index],
-        onStart: () => onStartTask(tasks[index].id),
+      itemBuilder: (_, i) => _TaskCard(
+        task: tasks[i],
+        onStart: () => onStartTask(tasks[i].id),
       ),
     );
   }
@@ -478,25 +218,6 @@ class _TaskCard extends StatelessWidget {
 
   const _TaskCard({required this.task, required this.onStart});
 
-  Color get _priorityColor {
-    switch (task.priority) {
-      case 'high':
-        return const Color(0xFFFF5252);
-      case 'medium':
-        return AppColors.orange;
-      default:
-        return Colors.green;
-    }
-  }
-
-  String get _dueTime {
-    final h = task.dueDate.hour;
-    final m = task.dueDate.minute.toString().padLeft(2, '0');
-    final period = h >= 12 ? 'pm' : 'am';
-    final display = h > 12 ? h - 12 : h;
-    return 'Due $display:${m}$period';
-  }
-
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -506,23 +227,10 @@ class _TaskCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Priority badge (uses shared widget)
             Align(
               alignment: Alignment.topRight,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _priorityColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  task.priority,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: _priorityColor,
-                  ),
-                ),
-              ),
+              child: PriorityBadge(priority: task.priority),
             ),
             const SizedBox(height: 6),
             Text(
@@ -532,7 +240,7 @@ class _TaskCard extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: AppColors.darkText,
+                color: AppConstants.darkText,
                 height: 1.3,
               ),
             ),
@@ -540,10 +248,12 @@ class _TaskCard extends StatelessWidget {
             Row(
               children: [
                 Icon(Icons.access_time_rounded,
-                    size: 13, color: AppColors.grayText),
+                    size: 13, color: AppConstants.grayText),
                 const SizedBox(width: 4),
-                Text(_dueTime,
-                    style: TextStyle(fontSize: 12, color: AppColors.grayText)),
+                Text(
+                  task.dueTime ?? task.formattedDueDate,
+                  style: TextStyle(fontSize: 12, color: AppConstants.grayText),
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -555,7 +265,7 @@ class _TaskCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: task.isCompleted
                       ? Colors.green.withOpacity(0.1)
-                      : AppColors.primaryBlue.withOpacity(0.1),
+                      : AppConstants.primaryBlue.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -564,8 +274,9 @@ class _TaskCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color:
-                        task.isCompleted ? Colors.green : AppColors.primaryBlue,
+                    color: task.isCompleted
+                        ? Colors.green
+                        : AppConstants.primaryBlue,
                   ),
                 ),
               ),
@@ -613,7 +324,7 @@ class _ProductivityCard extends StatelessWidget {
                     value: 1.0,
                     strokeWidth: 11,
                     valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.lightGray),
+                        AppConstants.lightGray),
                   ),
                 ),
                 SizedBox(
@@ -624,7 +335,7 @@ class _ProductivityCard extends StatelessWidget {
                     strokeWidth: 11,
                     strokeCap: StrokeCap.round,
                     valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.primaryBlue),
+                        AppConstants.primaryBlue),
                   ),
                 ),
                 Text(
@@ -632,7 +343,7 @@ class _ProductivityCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.darkText,
+                    color: AppConstants.darkText,
                   ),
                 ),
               ],
@@ -649,31 +360,33 @@ class _ProductivityCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w800,
-                    color: AppColors.darkText,
+                    color: AppConstants.darkText,
                     letterSpacing: 0.4,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  score == 0
-                      ? 'Start completing tasks and tracking focus, your score will update as you grow.'
-                      : score >= 0.8
-                          ? 'Bravo! Keep it up, you are almost done for today.'
-                          : 'Good progress! Keep going, you are doing great.',
+                  AppConstants.productivityMessage(score),
                   style: TextStyle(
-                      fontSize: 13, color: AppColors.grayText, height: 1.5),
+                    fontSize: 13,
+                    color: AppConstants.grayText,
+                    height: 1.5,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(Icons.check_circle_rounded,
-                        size: 16, color: AppColors.primaryBlue),
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      size: 16,
+                      color: AppConstants.primaryBlue,
+                    ),
                     const SizedBox(width: 5),
                     Text(
                       '$completedCount/$totalCount Completed',
                       style: const TextStyle(
                         fontSize: 13,
-                        color: AppColors.primaryBlue,
+                        color: AppConstants.primaryBlue,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -683,33 +396,6 @@ class _ProductivityCard extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Voice FAB
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _VoiceFAB extends StatelessWidget {
-  const _VoiceFAB();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 64,
-      height: 64,
-      child: FloatingActionButton(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Voice recording coming soon!')),
-          );
-        },
-        backgroundColor: AppColors.primaryBlue,
-        elevation: 4,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.mic_rounded, color: Colors.white, size: 32),
       ),
     );
   }

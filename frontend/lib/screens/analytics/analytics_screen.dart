@@ -1,9 +1,20 @@
+// ═══════════════════════════════════════════════════════════════════
+// FILE: lib/screens/analytics/analytics_screen.dart
+// CHANGES:
+//   - Uses AppConstants for all colors
+//   - Uses VoiceFab widget instead of inline _VoiceFAB
+//   - Uses DummyData for all chart data and achievements
+//   - All colors now from AppConstants
+// ═══════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../theme/app_theme.dart';
+import '../../constants/app_constant.dart';
+import '../../data/dummy_data.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/stat_card.dart';
+import '../../widgets/voice_fab.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ANALYTICS SCREEN
@@ -30,80 +41,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   // true = Weekly tab, false = Monthly tab
   bool _isWeekly = true;
 
-  // ── Weekly data ────────────────────────────────────────────────────────────
-  // Each value = number of tasks completed on that day
-  // Later replace with real data from your backend
-  final List<double> _weeklyData = [4, 6, 3, 7, 8, 5, 6];
-  final List<String> _weekDays = [
-    'Mon',
-    'Tue',
-    'Wed',
-    'Thu',
-    'Fri',
-    'Sat',
-    'Sun'
-  ];
+  // ── Data from DummyData ────────────────────────────────────────────────────
+  List<double> get _weeklyData => DummyData.weeklyChartData;
+  List<String> get _weekDays => DummyData.weekDays;
 
-  // ── Monthly data ───────────────────────────────────────────────────────────
-  final List<double> _monthlyData = [
-    3,
-    5,
-    4,
-    6,
-    8,
-    7,
-    5,
-    9,
-    10,
-    7,
-    8,
-    6,
-  ];
-  final List<String> _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
+  List<double> get _monthlyData => DummyData.monthlyChartData;
+  List<String> get _months => DummyData.months;
 
-  // ── Achievements ───────────────────────────────────────────────────────────
-  // These would come from your AI/backend in the real app
-  static const List<_Achievement> _achievements = [
-    _Achievement(
-      icon: '🔥',
-      iconColor: Color(0xFFFF6B35),
-      title: '5-day completion streak!',
-      subtitle: 'Keep the momentum going',
-      borderColor: Color(0xFFFFE8D6),
-    ),
-    _Achievement(
-      icon: '🎯',
-      iconColor: Color(0xFF1360E2),
-      title: 'Met 90% of weekly goals',
-      subtitle: 'Excellent execution this week!',
-      borderColor: Color(0xFFDCEAFF),
-    ),
-    _Achievement(
-      icon: '🏆',
-      iconColor: Color(0xFF9B59B6),
-      title: 'Task backlog reduced by 35%',
-      subtitle: "You're closing gaps before deadlines stack up.",
-      borderColor: Color(0xFFF0E6FF),
-    ),
-  ];
+  List<Map<String, dynamic>> get _achievements => DummyData.achievements;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF4F6FA),
+      backgroundColor: AppConstants.scaffoldBg,
       body: SafeArea(
         child: Column(
           children: [
@@ -118,11 +68,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       width: 36,
                       height: 36,
                       decoration: const BoxDecoration(
-                        color: AppColors.primaryBlue,
+                        color: AppConstants.primaryBlue,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new_rounded,
-                          color: Colors.white, size: 16),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white,
+                        size: 16,
+                      ),
                     ),
                   ),
                   const Expanded(
@@ -132,7 +85,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.darkText,
+                        color: AppConstants.darkText,
                       ),
                     ),
                   ),
@@ -141,7 +94,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
             ),
 
-            // ── Scrollable body ────────────────────────────────────────
+            // ── Scrollable body ────────────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -161,19 +114,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       label: _isWeekly
                           ? 'Weekly Completion Rate'
                           : 'Monthly Completion Rate',
-                      rate: 0.80, // 80%
+                      rate: 0.80,
                     ),
 
                     const SizedBox(height: 16),
 
-                    // 3. Stat cards row — different metrics per tab
+                    // 3. Stat cards row
                     Row(
                       children: _isWeekly
                           ? [
                               Expanded(
                                 child: StatCard(
                                   icon: Icons.bolt_rounded,
-                                  iconColor: AppColors.primaryBlue,
+                                  iconColor: AppConstants.primaryBlue,
                                   value: '24.5',
                                   label: 'Focus Hours',
                                 ),
@@ -182,7 +135,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                               Expanded(
                                 child: StatCard(
                                   icon: Icons.access_time_rounded,
-                                  iconColor: AppColors.orange,
+                                  iconColor: AppConstants.orange,
                                   value: '3.5h',
                                   label: 'Avg Time',
                                 ),
@@ -201,7 +154,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                               Expanded(
                                 child: StatCard(
                                   icon: Icons.trending_up_rounded,
-                                  iconColor: AppColors.orange,
+                                  iconColor: AppConstants.orange,
                                   value: '85%',
                                   label: 'Efficiency',
                                 ),
@@ -217,22 +170,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.darkText,
+                        color: AppConstants.darkText,
                       ),
                     ),
 
                     const SizedBox(height: 12),
 
-                    // Bar chart (weekly) or Line chart (monthly)
                     AppCard(
                       padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
                       child: SizedBox(
                         height: 200,
                         child: _isWeekly
                             ? _WeeklyBarChart(
-                                data: _weeklyData, labels: _weekDays)
+                                data: _weeklyData,
+                                labels: _weekDays,
+                              )
                             : _MonthlyLineChart(
-                                data: _monthlyData, labels: _months),
+                                data: _monthlyData,
+                                labels: _months,
+                              ),
                       ),
                     ),
 
@@ -244,17 +200,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.darkText,
+                        color: AppConstants.darkText,
                       ),
                     ),
 
                     const SizedBox(height: 12),
 
-                    // Achievement cards
+                    // Achievement cards from DummyData
                     ..._achievements.map(
-                      (a) => Padding(
+                      (achievement) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _AchievementCard(achievement: a),
+                        child: _AchievementCard(
+                          icon: achievement['icon'] as String,
+                          iconColor: achievement['iconColor'] as Color,
+                          title: achievement['title'] as String,
+                          subtitle: achievement['subtitle'] as String,
+                          borderColor: achievement['borderColor'] as Color,
+                        ),
                       ),
                     ),
                   ],
@@ -264,7 +226,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ],
         ),
       ),
-      floatingActionButton: const _VoiceFAB(),
+      floatingActionButton: const VoiceFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: BottomNavBar(
         currentIndex: widget.currentIndex,
@@ -289,13 +251,12 @@ class _TabToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.lightGray,
+        color: AppConstants.lightGray,
         borderRadius: BorderRadius.circular(30),
       ),
       padding: const EdgeInsets.all(4),
       child: Row(
         children: [
-          // Weekly tab
           Expanded(
             child: GestureDetector(
               onTap: () => onToggle(true),
@@ -303,7 +264,8 @@ class _TabToggle extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: isWeekly ? AppColors.primaryBlue : Colors.transparent,
+                  color:
+                      isWeekly ? AppConstants.primaryBlue : Colors.transparent,
                   borderRadius: BorderRadius.circular(26),
                 ),
                 child: Text(
@@ -312,13 +274,12 @@ class _TabToggle extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: isWeekly ? Colors.white : AppColors.grayText,
+                    color: isWeekly ? Colors.white : AppConstants.grayText,
                   ),
                 ),
               ),
             ),
           ),
-          // Monthly tab
           Expanded(
             child: GestureDetector(
               onTap: () => onToggle(false),
@@ -326,7 +287,8 @@ class _TabToggle extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color: !isWeekly ? AppColors.primaryBlue : Colors.transparent,
+                  color:
+                      !isWeekly ? AppConstants.primaryBlue : Colors.transparent,
                   borderRadius: BorderRadius.circular(26),
                 ),
                 child: Text(
@@ -335,7 +297,7 @@ class _TabToggle extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: !isWeekly ? Colors.white : AppColors.grayText,
+                    color: !isWeekly ? Colors.white : AppConstants.grayText,
                   ),
                 ),
               ),
@@ -348,12 +310,12 @@ class _TabToggle extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Completion Rate (label + progress bar + percentage)
+// WIDGET: Completion Rate
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CompletionRate extends StatelessWidget {
   final String label;
-  final double rate; // 0.0 to 1.0
+  final double rate;
 
   const _CompletionRate({required this.label, required this.rate});
 
@@ -371,7 +333,7 @@ class _CompletionRate extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: AppColors.darkText,
+                color: AppConstants.darkText,
               ),
             ),
             Text(
@@ -379,19 +341,18 @@ class _CompletionRate extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
-                color: AppColors.darkText,
+                color: AppConstants.darkText,
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        // Green progress bar
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
           child: LinearProgressIndicator(
             value: rate,
             minHeight: 10,
-            backgroundColor: AppColors.lightGray,
+            backgroundColor: AppConstants.lightGray,
             valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
           ),
         ),
@@ -402,7 +363,6 @@ class _CompletionRate extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WIDGET: Weekly Bar Chart
-// Uses fl_chart BarChart
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _WeeklyBarChart extends StatelessWidget {
@@ -413,7 +373,6 @@ class _WeeklyBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Find max value to scale bars correctly
     final maxY = data.reduce((a, b) => a > b ? a : b) + 2;
 
     return BarChart(
@@ -422,7 +381,6 @@ class _WeeklyBarChart extends StatelessWidget {
         minY: 0,
         barTouchData: BarTouchData(enabled: true),
         titlesData: FlTitlesData(
-          // Bottom labels — day names
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
@@ -436,7 +394,7 @@ class _WeeklyBarChart extends StatelessWidget {
                     labels[index],
                     style: const TextStyle(
                       fontSize: 11,
-                      color: AppColors.grayText,
+                      color: AppConstants.grayText,
                     ),
                   ),
                 );
@@ -444,7 +402,6 @@ class _WeeklyBarChart extends StatelessWidget {
               reservedSize: 28,
             ),
           ),
-          // Hide all other axis labels
           leftTitles:
               const AxisTitles(sideTitles: SideTitles(showTitles: false)),
           topTitles:
@@ -456,13 +413,12 @@ class _WeeklyBarChart extends StatelessWidget {
           show: true,
           drawVerticalLine: false,
           getDrawingHorizontalLine: (_) => FlLine(
-            color: AppColors.lightGray,
+            color: AppConstants.lightGray,
             strokeWidth: 1,
           ),
         ),
         borderData: FlBorderData(show: false),
         barGroups: List.generate(data.length, (i) {
-          // Highlight today (index 4 = Friday for demo)
           final isToday = i == 4;
           return BarChartGroupData(
             x: i,
@@ -471,15 +427,14 @@ class _WeeklyBarChart extends StatelessWidget {
                 toY: data[i],
                 width: 18,
                 borderRadius: BorderRadius.circular(6),
-                // Today is solid blue, others are gradient blue/purple
                 gradient: isToday
                     ? null
                     : const LinearGradient(
-                        colors: [Color(0xFF9B8FFF), Color(0xFF1360E2)],
+                        colors: [Color(0xFF9B8FFF), AppConstants.primaryBlue],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
-                color: isToday ? AppColors.primaryBlue : null,
+                color: isToday ? AppConstants.primaryBlue : null,
               ),
             ],
           );
@@ -491,7 +446,6 @@ class _WeeklyBarChart extends StatelessWidget {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WIDGET: Monthly Line Chart
-// Uses fl_chart LineChart
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _MonthlyLineChart extends StatelessWidget {
@@ -518,7 +472,6 @@ class _MonthlyLineChart extends StatelessWidget {
                 final index = value.toInt();
                 if (index < 0 || index >= labels.length)
                   return const SizedBox();
-                // Only show every 2nd label to avoid crowding
                 if (index % 2 != 0) return const SizedBox();
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
@@ -526,7 +479,7 @@ class _MonthlyLineChart extends StatelessWidget {
                     labels[index],
                     style: const TextStyle(
                       fontSize: 10,
-                      color: AppColors.grayText,
+                      color: AppConstants.grayText,
                     ),
                   ),
                 );
@@ -545,28 +498,26 @@ class _MonthlyLineChart extends StatelessWidget {
           show: true,
           drawVerticalLine: false,
           getDrawingHorizontalLine: (_) => FlLine(
-            color: AppColors.lightGray,
+            color: AppConstants.lightGray,
             strokeWidth: 1,
           ),
         ),
         borderData: FlBorderData(show: false),
         lineBarsData: [
           LineChartBarData(
-            // Convert list of doubles to FlSpot (x, y) points
             spots: List.generate(
               data.length,
               (i) => FlSpot(i.toDouble(), data[i]),
             ),
-            isCurved: true, // smooth curves like the mockup
+            isCurved: true,
             curveSmoothness: 0.35,
-            color: AppColors.primaryBlue,
+            color: AppConstants.primaryBlue,
             barWidth: 2.5,
             isStrokeCapRound: true,
-            dotData: const FlDotData(show: false), // hide dots for clean look
+            dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              // Light blue fill under the line
-              color: AppColors.primaryBlue.withOpacity(0.08),
+              color: AppConstants.primaryBlue.withOpacity(0.08),
             ),
           ),
         ],
@@ -576,33 +527,23 @@ class _MonthlyLineChart extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATA CLASS: Achievement
-// Holds data for a single achievement card
+// WIDGET: Achievement Card
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _Achievement {
+class _AchievementCard extends StatelessWidget {
   final String icon;
   final Color iconColor;
   final String title;
   final String subtitle;
   final Color borderColor;
 
-  const _Achievement({
+  const _AchievementCard({
     required this.icon,
     required this.iconColor,
     required this.title,
     required this.subtitle,
     required this.borderColor,
   });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Achievement Card
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _AchievementCard extends StatelessWidget {
-  final _Achievement achievement;
-  const _AchievementCard({required this.achievement});
 
   @override
   Widget build(BuildContext context) {
@@ -611,62 +552,36 @@ class _AchievementCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: achievement.borderColor, width: 1.5),
+        border: Border.all(color: borderColor, width: 1.5),
       ),
       child: Row(
         children: [
-          // Emoji icon
-          Text(achievement.icon, style: const TextStyle(fontSize: 22)),
+          Text(icon, style: const TextStyle(fontSize: 22)),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  achievement.title,
+                  title,
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.darkText,
+                    color: AppConstants.darkText,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  achievement.subtitle,
+                  subtitle,
                   style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors.grayText,
+                    color: AppConstants.grayText,
                   ),
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Voice FAB
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _VoiceFAB extends StatelessWidget {
-  const _VoiceFAB();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 64,
-      height: 64,
-      child: FloatingActionButton(
-        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Voice recording coming soon!')),
-        ),
-        backgroundColor: AppColors.primaryBlue,
-        elevation: 4,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.mic_rounded, color: Colors.white, size: 32),
       ),
     );
   }
