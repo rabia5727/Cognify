@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'analytics/analytics_screen.dart';
-import 'tasks/tasks_screen.dart';
+import 'workspace/workspace_screen.dart';
 import 'settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -19,8 +19,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // IndexedStack keeps all screens alive — switching tabs is instant
-    // and preserves scroll position and state.
     return IndexedStack(
       index: _currentIndex,
       children: [
@@ -34,7 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
           currentIndex: _currentIndex,
           onTabSelected: _onTabSelected,
         ),
-        TasksScreen(
+        WorkSpaceScreen(
           userName: widget.userName,
           currentIndex: _currentIndex,
           onTabSelected: _onTabSelected,

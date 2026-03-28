@@ -37,66 +37,70 @@ class _NameScreenState extends State<NameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Mascot centered at top
-              Center(
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: const Color(0xFFF0F4FF),
+    // Force light theme for name screen
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Mascot centered at top
+                Center(
+                  child: Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFF0F4FF),
+                    ),
+                    child: const Center(
+                        child: Text('🤖', style: TextStyle(fontSize: 52))),
                   ),
-                  child: const Center(
-                      child: Text('🤖', style: TextStyle(fontSize: 52))),
                 ),
-              ),
 
-              const SizedBox(height: 28),
+                const SizedBox(height: 28),
 
-              // Welcome text centered
-              const Center(
-                child: Text(
-                  'Welcome !!',
-                  style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.darkText),
+                // Welcome text centered
+                const Center(
+                  child: Text(
+                    'Welcome !!',
+                    style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkText),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              const Center(
-                child: Text(
-                  'What should we call you?',
-                  style: TextStyle(fontSize: 15, color: AppColors.grayText),
+                const SizedBox(height: 8),
+                const Center(
+                  child: Text(
+                    'What should we call you?',
+                    style: TextStyle(fontSize: 15, color: AppColors.grayText),
+                  ),
                 ),
-              ),
 
-              const SizedBox(height: 48),
+                const SizedBox(height: 48),
 
-              // Full Name field
-              LabeledTextField(
-                label: 'Full Name',
-                hint: 'e.g. John Doe',
-                controller: _nameController,
-              ),
+                // Full Name field
+                LabeledTextField(
+                  label: 'Full Name',
+                  hint: 'e.g. John Doe',
+                  controller: _nameController,
+                ),
 
-              const SizedBox(height: 32),
+                const SizedBox(height: 32),
 
-              // Continue button
-              PrimaryButton(
-                label: 'Continue',
-                onPressed: _continue,
-                isLoading: _isLoading,
-              ),
-            ],
+                // Continue button
+                PrimaryButton(
+                  label: 'Continue',
+                  onPressed: _continue,
+                  isLoading: _isLoading,
+                ),
+              ],
+            ),
           ),
         ),
       ),

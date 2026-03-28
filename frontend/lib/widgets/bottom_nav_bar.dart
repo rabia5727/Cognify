@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -15,10 +14,13 @@ class BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return BottomAppBar(
-      shape: const CircularNotchedRectangle(), // creates notch for the FAB
+      shape: const CircularNotchedRectangle(),
       notchMargin: 8,
-      color: Colors.white,
+      color: isDark ? const Color(0xFF1E1E2A) : Colors.white,
       elevation: 8,
       child: SizedBox(
         height: 60,
@@ -37,11 +39,10 @@ class BottomNavBar extends StatelessWidget {
               isSelected: currentIndex == 1,
               onTap: () => onTabSelected(1),
             ),
-            // Empty space for the FAB notch in the center
             const SizedBox(width: 48),
             _NavItem(
-              icon: Icons.task_alt_rounded,
-              label: 'Tasks',
+              icon: Icons.work_outline, // ✅ Self-explanatory work icon
+              label: 'Workspace',
               isSelected: currentIndex == 2,
               onTap: () => onTabSelected(2),
             ),
@@ -58,7 +59,12 @@ class BottomNavBar extends StatelessWidget {
   }
 }
 
-// Single tab item — icon + label
+// ... _NavItem widget remains the same
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDGET: Single Nav Item
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _NavItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -74,7 +80,12 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = isSelected ? AppColors.primaryBlue : AppColors.grayText;
+    final theme = Theme.of(context);
+
+    final color = isSelected
+        ? theme.colorScheme.primary
+        : theme.textTheme.bodySmall?.color;
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,

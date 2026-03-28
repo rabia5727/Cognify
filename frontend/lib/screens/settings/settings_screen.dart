@@ -1,15 +1,14 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/settings/settings_screen.dart
-// CHANGES:
-//   - Removed _VoiceFAB (now VoiceFab widget)
-//   - Removed _RowDivider (now RowDivider widget)
-//   - Removed _SectionCard (now SectionCard widget)
-//   - Uses AppHeader instead of inline top bar
-//   - Uses AppConstants for all colors
+// FIX: Uses global themeNotifier directly instead of
+//      CoTaskerApp.of(context) which broke inside IndexedStack.
+//      Toggle now works instantly across the whole app.
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constant.dart';
+import '../../theme_notifier.dart';
 import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/app_header.dart';
@@ -36,9 +35,22 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   bool _notificationsEnabled = false;
-  bool _darkModeEnabled = false;
   bool _voicePermissionEnabled = true;
 
+  // Read dark mode state from global notifier
+  bool get _isDark => themeNotifier.value == ThemeMode.dark;
+
+  // ── Toggle dark mode ───────────────────────────────────────────────
+  Future<void> _toggleDarkMode(bool value) async {
+    // Update global notifier → main.dart rebuilds MaterialApp instantly
+    themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
+
+    // Save to persist across restarts
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isDarkMode', value);
+  }
+
+  // ── Logout dialog ──────────────────────────────────────────────────
   void _showLogoutDialog() {
     showDialog(
       context: context,
@@ -56,7 +68,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              // TODO: clear tokens → navigate to SplashScreen
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Logged out successfully')),
@@ -74,17 +85,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? const Color(0xFFF1F1F3) : AppConstants.darkText;
+    final subTextColor =
+        isDark ? const Color(0xFF9EA3B8) : AppConstants.grayText;
+    final bgColor = isDark ? const Color(0xFF0F1117) : AppConstants.scaffoldBg;
+
     return Scaffold(
-      backgroundColor: AppConstants.scaffoldBg,
+      backgroundColor: bgColor,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Shared header ─────────────────────────────────────────
             AppHeader(
               title: 'Settings',
               onBack: () => widget.onTabSelected(0),
             ),
-
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
@@ -110,10 +125,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(widget.userName,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 17,
                                       fontWeight: FontWeight.w700,
-                                      color: AppConstants.darkText,
+                                      color: textColor,
                                     )),
                                 const SizedBox(height: 4),
                                 GestureDetector(
@@ -138,34 +153,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                     const SizedBox(height: 20),
 
-                    // 2. Preferences — uses shared SectionCard + RowDivider
-                    SectionCard(
-                      title: 'Preferences',
-                      children: [
-                        _ToggleRow(
-                          icon: Icons.notifications_outlined,
-                          label: 'Notifications',
-                          value: _notificationsEnabled,
-                          onChanged: (v) =>
-                              setState(() => _notificationsEnabled = v),
-                        ),
-                        const RowDivider(),
-                        _ToggleRow(
-                          icon: Icons.dark_mode_outlined,
-                          label: 'Dark Mode',
-                          value: _darkModeEnabled,
-                          onChanged: (v) =>
-                              setState(() => _darkModeEnabled = v),
-                        ),
-                        const RowDivider(),
-                        _ToggleRow(
-                          icon: Icons.mic_outlined,
-                          label: 'Voice Permission',
-                          value: _voicePermissionEnabled,
-                          onChanged: (v) =>
-                              setState(() => _voicePermissionEnabled = v),
-                        ),
-                      ],
+                    // 2. Preferences
+                    // ValueListenableBuilder keeps toggle in sync with actual theme
+                    ValueListenableBuilder<ThemeMode>(
+                      valueListenable: themeNotifier,
+                      builder: (context, mode, _) {
+                        return SectionCard(
+                          title: 'Preferences',
+                          children: [
+                            _ToggleRow(
+                              icon: Icons.notifications_outlined,
+                              label: 'Notifications',
+                              value: _notificationsEnabled,
+                              onChanged: (v) =>
+                                  setState(() => _notificationsEnabled = v),
+                            ),
+                            const RowDivider(),
+                            // Dark mode toggle — reads from notifier so
+                            // it always shows the correct state
+                            _ToggleRow(
+                              icon: Icons.dark_mode_outlined,
+                              label: 'Dark Mode',
+                              value: mode == ThemeMode.dark,
+                              onChanged: _toggleDarkMode,
+                            ),
+                            const RowDivider(),
+                            _ToggleRow(
+                              icon: Icons.mic_outlined,
+                              label: 'Voice Permission',
+                              value: _voicePermissionEnabled,
+                              onChanged: (v) =>
+                                  setState(() => _voicePermissionEnabled = v),
+                            ),
+                          ],
+                        );
+                      },
                     ),
 
                     const SizedBox(height: 16),
@@ -194,7 +216,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                     const SizedBox(height: 16),
 
-                    // 4. About — uses AppConstants.appVersion
+                    // 4. About
                     SectionCard(
                       title: 'About',
                       children: [
@@ -202,8 +224,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: Icons.info_outline_rounded,
                           label: 'App version',
                           trailing: Text(AppConstants.appVersion,
-                              style: TextStyle(
-                                  fontSize: 12, color: AppConstants.grayText)),
+                              style:
+                                  TextStyle(fontSize: 12, color: subTextColor)),
                           onTap: () {},
                         ),
                         const RowDivider(),
@@ -220,7 +242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                     const SizedBox(height: 32),
 
-                    // 5. Logout button
+                    // 5. Logout
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -280,6 +302,10 @@ class _ToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFF1F1F3)
+        : AppConstants.darkText;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Row(
@@ -287,12 +313,13 @@ class _ToggleRow extends StatelessWidget {
           Icon(icon, size: 20, color: AppConstants.primaryBlue),
           const SizedBox(width: 12),
           Expanded(
-              child: Text(label,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: AppConstants.darkText,
-                  ))),
+            child: Text(label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                )),
+          ),
           Switch(
             value: value,
             onChanged: onChanged,
@@ -324,6 +351,10 @@ class _TapRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFF1F1F3)
+        : AppConstants.darkText;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -334,12 +365,13 @@ class _TapRow extends StatelessWidget {
             Icon(icon, size: 20, color: AppConstants.primaryBlue),
             const SizedBox(width: 12),
             Expanded(
-                child: Text(label,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppConstants.darkText,
-                    ))),
+              child: Text(label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textColor,
+                  )),
+            ),
             if (trailing != null) trailing!,
           ],
         ),

@@ -46,15 +46,14 @@ class _AuthScreenState extends State<AuthScreen>
 
   void _handleSubmit() async {
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 1)); // Simulate network call
+    await Future.delayed(const Duration(seconds: 1));
     setState(() => _isLoading = false);
 
     if (!_isLogin && mounted) {
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const NameScreen()));
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const NameScreen()),
+      );
     }
-    // For login: navigate to Dashboard (add later)
   }
 
   @override
@@ -68,135 +67,139 @@ class _AuthScreenState extends State<AuthScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Logo row
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      color: const Color(0xFFF0F4FF),
-                    ),
-                    child: const Center(
-                      child: Text('🤖', style: TextStyle(fontSize: 28)),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Co-Tasker',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.darkText,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              // Title
-              const Text(
-                'Welcome Back!!',
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.darkText,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Organize your life, powered by AI',
-                style: TextStyle(fontSize: 14, color: AppColors.grayText),
-              ),
-
-              const SizedBox(height: 28),
-
-              // Toggle tab
-              AuthTabBar(isLogin: _isLogin, onToggle: _toggleTab),
-
-              const SizedBox(height: 28),
-
-              // Form fields with fade animation
-              FadeTransition(
-                opacity: _fadeAnim,
-                child: _isLogin ? _buildLoginForm() : _buildSignUpForm(),
-              ),
-
-              const SizedBox(height: 28),
-
-              // Submit button
-              PrimaryButton(
-                label: _isLogin ? 'Log in' : 'Sign Up',
-                onPressed: _handleSubmit,
-                isLoading: _isLoading,
-              ),
-
-              const SizedBox(height: 28),
-
-              // Social login
-              const OrDivider(),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  SocialButton(
-                    label: 'Continue with Google',
-                    icon: _googleIcon(),
-                    onPressed: () {},
-                  ),
-                  const SizedBox(width: 12),
-                  SocialButton(
-                    label: 'Continue with Apple',
-                    icon: const Icon(Icons.apple, size: 20),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Bottom link
-              Center(
-                child: RichText(
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.grayText,
-                    ),
-                    children: [
-                      TextSpan(
-                        text: _isLogin
-                            ? "Don't have an account? "
-                            : "Already have an account? ",
+    // Force light theme for auth screen
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Logo row
+                Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        color: const Color(0xFFF0F4FF),
                       ),
-                      WidgetSpan(
-                        child: GestureDetector(
-                          onTap: () => _toggleTab(!_isLogin),
-                          child: Text(
-                            _isLogin ? 'Sign Up' : 'Log in',
-                            style: const TextStyle(
-                              color: AppColors.primaryBlue,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
+                      child: const Center(
+                        child: Text('🤖', style: TextStyle(fontSize: 28)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'Co-Tasker',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkText,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
+                // Title
+                const Text(
+                  'Welcome Back!!',
+                  style: TextStyle(
+                    fontSize: 26,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.darkText,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Organize your life, powered by AI',
+                  style: TextStyle(fontSize: 14, color: AppColors.grayText),
+                ),
+
+                const SizedBox(height: 28),
+
+                // Toggle tab
+                AuthTabBar(isLogin: _isLogin, onToggle: _toggleTab),
+
+                const SizedBox(height: 28),
+
+                // Form fields with fade animation
+                FadeTransition(
+                  opacity: _fadeAnim,
+                  child: _isLogin ? _buildLoginForm() : _buildSignUpForm(),
+                ),
+
+                const SizedBox(height: 28),
+
+                // Submit button
+                PrimaryButton(
+                  label: _isLogin ? 'Log in' : 'Sign Up',
+                  onPressed: _handleSubmit,
+                  isLoading: _isLoading,
+                ),
+
+                const SizedBox(height: 28),
+
+                // Social login
+                const OrDivider(),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    SocialButton(
+                      label: 'Continue with Google',
+                      icon: _googleIcon(),
+                      onPressed: () {},
+                    ),
+                    const SizedBox(width: 12),
+                    SocialButton(
+                      label: 'Continue with Apple',
+                      icon: const Icon(Icons.apple, size: 20),
+                      onPressed: () {},
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // Bottom link
+                Center(
+                  child: RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.grayText,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: _isLogin
+                              ? "Don't have an account? "
+                              : "Already have an account? ",
+                        ),
+                        WidgetSpan(
+                          child: GestureDetector(
+                            onTap: () => _toggleTab(!_isLogin),
+                            child: Text(
+                              _isLogin ? 'Sign Up' : 'Log in',
+                              style: const TextStyle(
+                                color: AppColors.primaryBlue,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-            ],
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
       ),
@@ -341,11 +344,9 @@ class _GoogleLogoPainter extends CustomPainter {
     final double cy = size.height / 2;
     final double r = size.width / 2;
 
-    // Background circle
     paint.color = Colors.white;
     canvas.drawCircle(Offset(cx, cy), r, paint);
 
-    // Simple colored quadrants approximating G logo
     paint.color = const Color(0xFF4285F4);
     canvas.drawArc(
       Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.85),
@@ -382,7 +383,6 @@ class _GoogleLogoPainter extends CustomPainter {
       paint,
     );
 
-    // Inner white circle (donut)
     paint.color = Colors.white;
     canvas.drawCircle(Offset(cx, cy), r * 0.5, paint);
   }

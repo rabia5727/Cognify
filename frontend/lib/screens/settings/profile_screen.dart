@@ -1,10 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/settings/profile_screen.dart
 // CHANGES:
-//   - Removed _SectionCard (now SectionCard widget)
-//   - Removed _RowDivider (now RowDivider widget)
-//   - Uses AppHeader instead of inline top bar
-//   - Uses AppConstants for all colors
+//   - Now uses Theme.of(context) for dynamic colors
+//   - Dark mode compatible
+//   - Uses shared widgets (SectionCard, RowDivider, AppHeader)
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -59,7 +58,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  // ── Edit name ──────────────────────────────────────────────────────
   void _editName() {
     _nameController.text = _name;
     _showEditDialog(
@@ -75,7 +73,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Edit email ─────────────────────────────────────────────────────
   void _editEmail() {
     _emailController.text = _email;
     _showEditDialog(
@@ -91,7 +88,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Shared simple edit dialog ──────────────────────────────────────
   void _showEditDialog({
     required String title,
     required TextEditingController controller,
@@ -99,11 +95,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String hint,
     required VoidCallback onSave,
   }) {
+    final theme = Theme.of(context);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(title, style: theme.textTheme.titleMedium),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -114,15 +112,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide:
-                  const BorderSide(color: AppConstants.primaryBlue, width: 1.5),
+                  BorderSide(color: theme.colorScheme.primary, width: 1.5),
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                Text('Cancel', style: TextStyle(color: AppConstants.grayText)),
+            child: Text('Cancel',
+                style: TextStyle(color: theme.textTheme.bodySmall?.color)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -130,7 +128,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppConstants.primaryBlue,
+              backgroundColor: theme.colorScheme.primary,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
               elevation: 0,
@@ -142,8 +140,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Change password ────────────────────────────────────────────────
   void _changePassword() {
+    final theme = Theme.of(context);
     _currentPasswordController.clear();
     _newPasswordController.clear();
     _confirmPasswordController.clear();
@@ -163,11 +161,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text('Change Password',
-                      style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: AppConstants.darkText)),
+                  Text('Change Password',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      )),
                   const SizedBox(height: 20),
                   _PasswordField(
                     controller: _currentPasswordController,
@@ -205,12 +202,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: AppConstants.lightGray),
+                              side: BorderSide(color: theme.dividerColor),
                             ),
                           ),
                           child: Text('Cancel',
                               style: TextStyle(
-                                  color: AppConstants.grayText,
+                                  color: theme.textTheme.bodySmall?.color,
                                   fontWeight: FontWeight.w600)),
                         ),
                       ),
@@ -229,7 +226,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: AppConstants.primaryBlue,
+                            backgroundColor: theme.colorScheme.primary,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
@@ -285,22 +282,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _confirmPasswordController.clear();
   }
 
-  // ── Connect/disconnect accounts ────────────────────────────────────
   void _toggleConnection(String platform, bool current) {
+    final theme = Theme.of(context);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(current ? 'Disconnect $platform' : 'Connect $platform',
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+            style: theme.textTheme.titleMedium),
         content: Text(current
             ? 'Disconnect $platform?'
             : 'Connect $platform to sync tasks automatically.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                Text('Cancel', style: TextStyle(color: AppConstants.grayText)),
+            child: Text('Cancel',
+                style: TextStyle(color: theme.textTheme.bodySmall?.color)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -321,7 +319,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor:
-                  current ? Colors.red.shade500 : AppConstants.primaryBlue,
+                  current ? Colors.red.shade500 : theme.colorScheme.primary,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
               elevation: 0,
@@ -334,8 +332,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ── Photo picker ───────────────────────────────────────────────────
   Future<void> _pickPhoto() async {
+    final theme = Theme.of(context);
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -345,11 +344,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Change Profile Photo',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: AppConstants.darkText)),
+            Text('Change Profile Photo', style: theme.textTheme.titleMedium),
             const SizedBox(height: 20),
             Row(
               children: [
@@ -376,8 +371,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
                 child: Text('Cancel',
-                    style:
-                        TextStyle(color: AppConstants.grayText, fontSize: 16))),
+                    style: TextStyle(
+                        color: theme.textTheme.bodySmall?.color,
+                        fontSize: 16))),
           ],
         ),
       ),
@@ -409,8 +405,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // ── Delete account ─────────────────────────────────────────────────
   void _showDeleteDialog() {
+    final theme = Theme.of(context);
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -422,8 +419,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child:
-                Text('Cancel', style: TextStyle(color: AppConstants.grayText)),
+            child: Text('Cancel',
+                style: TextStyle(color: theme.textTheme.bodySmall?.color)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -445,54 +442,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppConstants.scaffoldBg,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Shared header ─────────────────────────────────────────
             AppHeader(
               title: 'Profile',
               onBack: () => Navigator.pop(context),
             ),
-
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
                 child: Column(
                   children: [
-                    // Profile photo
                     _ProfilePhoto(
                         onTap: _pickPhoto, profileImage: _profileImage),
                     const SizedBox(height: 16),
-
-                    // Name
                     Text(_name,
-                        style: const TextStyle(
-                          fontSize: 22,
+                        style: theme.textTheme.headlineSmall?.copyWith(
                           fontWeight: FontWeight.w700,
-                          color: AppConstants.darkText,
                         )),
                     const SizedBox(height: 8),
-
-                    // Email pill
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 20, vertical: 8),
                       decoration: BoxDecoration(
-                        color: AppConstants.inputBg,
+                        color: theme.dividerColor.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(_email,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppConstants.primaryBlue,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w500,
                           )),
                     ),
                     const SizedBox(height: 28),
-
-                    // Edit profile — uses shared SectionCard + RowDivider
                     SectionCard(
                       children: [
                         _ActionRow(
@@ -514,28 +502,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-
-                    // Connected accounts
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Padding(
-                          padding: EdgeInsets.only(left: 4, bottom: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 8),
                           child: Text('Connected Accounts',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: AppConstants.darkText,
-                              )),
+                              style: theme.textTheme.titleMedium),
                         ),
-                        const Padding(
-                          padding: EdgeInsets.only(left: 4, bottom: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 4, bottom: 12),
                           child: Text(
                             'Connect your accounts to automatically sync tasks and deadlines.',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: AppConstants.grayText,
-                                height: 1.4),
+                            style: theme.textTheme.labelSmall,
                           ),
                         ),
                         SectionCard(
@@ -562,8 +541,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-
-                    // Delete account
                     SectionCard(
                       children: [
                         _ActionRow(
@@ -598,6 +575,8 @@ class _ProfilePhoto extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return GestureDetector(
       onTap: onTap,
       child: Stack(
@@ -608,23 +587,23 @@ class _ProfilePhoto extends StatelessWidget {
             height: 100,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppConstants.inputBg,
+              color: theme.dividerColor.withOpacity(0.3),
               border: Border.all(
-                  color: AppConstants.primaryBlue.withOpacity(0.2), width: 3),
+                  color: theme.colorScheme.primary.withOpacity(0.2), width: 3),
             ),
             child: ClipOval(
               child: profileImage != null
                   ? Image.file(profileImage!,
                       width: 100, height: 100, fit: BoxFit.cover)
-                  : const Icon(Icons.person_rounded,
-                      size: 52, color: AppConstants.primaryBlue),
+                  : Icon(Icons.person_rounded,
+                      size: 52, color: theme.colorScheme.primary),
             ),
           ),
           Container(
             width: 30,
             height: 30,
-            decoration: const BoxDecoration(
-                color: AppConstants.primaryBlue, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+                color: theme.colorScheme.primary, shape: BoxShape.circle),
             child:
                 const Icon(Icons.edit_rounded, size: 15, color: Colors.white),
           ),
@@ -653,21 +632,22 @@ class _PasswordField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return TextField(
       controller: controller,
       obscureText: obscure,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: AppConstants.grayText),
+        labelStyle: TextStyle(color: theme.textTheme.bodySmall?.color),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppConstants.primaryBlue, width: 1.5),
+          borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
         ),
         suffixIcon: IconButton(
           icon: Icon(obscure ? Icons.visibility_off : Icons.visibility,
-              color: AppConstants.grayText),
+              color: theme.textTheme.bodySmall?.color),
           onPressed: onToggle,
         ),
         contentPadding:
@@ -699,6 +679,8 @@ class _ActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -706,7 +688,7 @@ class _ActionRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            Icon(icon, size: 20, color: iconColor ?? AppConstants.primaryBlue),
+            Icon(icon, size: 20, color: iconColor ?? theme.colorScheme.primary),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -716,20 +698,19 @@ class _ActionRow extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: labelColor ?? AppConstants.darkText,
+                        color: labelColor ?? theme.textTheme.bodyLarge?.color,
                       )),
                   if (subtitle != null) ...[
                     const SizedBox(height: 2),
                     Text(subtitle!,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12, color: AppConstants.grayText)),
+                        style: theme.textTheme.labelSmall),
                   ],
                 ],
               ),
             ),
             Icon(Icons.chevron_right_rounded,
-                size: 20, color: AppConstants.grayText),
+                size: 20, color: theme.textTheme.bodySmall?.color),
           ],
         ),
       ),
@@ -757,6 +738,8 @@ class _ConnectedAccountRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -765,10 +748,10 @@ class _ConnectedAccountRow extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: AppConstants.primaryBlue.withOpacity(0.1),
+              color: theme.colorScheme.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, size: 22, color: AppConstants.primaryBlue),
+            child: Icon(icon, size: 22, color: theme.colorScheme.primary),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -776,15 +759,11 @@ class _ConnectedAccountRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: const TextStyle(
-                      fontSize: 14,
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: AppConstants.darkText,
                     )),
                 const SizedBox(height: 2),
-                Text(description,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppConstants.grayText)),
+                Text(description, style: theme.textTheme.labelSmall),
               ],
             ),
           ),
@@ -796,12 +775,12 @@ class _ConnectedAccountRow extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isConnected
                     ? Colors.green.withOpacity(0.1)
-                    : AppConstants.primaryBlue.withOpacity(0.1),
+                    : theme.colorScheme.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isConnected
                       ? Colors.green.withOpacity(0.4)
-                      : AppConstants.primaryBlue.withOpacity(0.4),
+                      : theme.colorScheme.primary.withOpacity(0.4),
                 ),
               ),
               child: Text(isConnected ? 'Connected' : 'Connect',
@@ -809,7 +788,7 @@ class _ConnectedAccountRow extends StatelessWidget {
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                     color:
-                        isConnected ? Colors.green : AppConstants.primaryBlue,
+                        isConnected ? Colors.green : theme.colorScheme.primary,
                   )),
             ),
           ),
@@ -833,23 +812,23 @@ class _PhotoOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: AppConstants.inputBg,
+          color: theme.dividerColor.withOpacity(0.3),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           children: [
-            Icon(icon, size: 32, color: AppConstants.primaryBlue),
+            Icon(icon, size: 32, color: theme.colorScheme.primary),
             const SizedBox(height: 8),
             Text(label,
-                style: TextStyle(
-                  fontSize: 14,
+                style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w500,
-                  color: AppConstants.darkText,
                 )),
           ],
         ),

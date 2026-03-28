@@ -1,12 +1,9 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/dashboard/dashboard_screen.dart
 // CHANGES:
-//   - Removed Task model (now in lib/models/task.dart)
-//   - Removed _VoiceFAB (now in lib/widgets/voice_fab.dart)
-//   - Removed _HeaderBanner (now DashboardHeader in lib/widgets/app_header.dart)
-//   - Uses AppConstants for colors, greeting, formatting
-//   - Uses DummyData for task list
-//   - Uses PriorityBadge widget
+//   - Now uses Theme.of(context) for dynamic colors
+//   - Dark mode compatible
+//   - Uses AppConstants only for non-color values
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -39,7 +36,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _showProactiveCard = true;
 
-  // Load tasks from DummyData (replace with TaskService later)
   late List<Task> _tasks;
 
   bool get _isNewUser => _tasks.isEmpty;
@@ -81,12 +77,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppConstants.scaffoldBg,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Dashboard header (blue gradient) ─────────────────────
             DashboardHeader(
               userName: widget.userName,
               isNewUser: _isNewUser,
@@ -95,20 +93,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onNo: _dismissProactiveCard,
               onProfileTap: _navigateToProfile,
             ),
-
-            // ── Body ─────────────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       "Today's Priorities",
-                      style: TextStyle(
-                        fontSize: 18,
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: AppConstants.darkText,
                       ),
                     ),
                     const SizedBox(height: 14),
@@ -156,6 +150,8 @@ class _EmptyTaskArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return GestureDetector(
       onTap: onAddTask,
       child: AppCard(
@@ -166,8 +162,8 @@ class _EmptyTaskArea extends StatelessWidget {
             Container(
               width: 52,
               height: 52,
-              decoration: const BoxDecoration(
-                color: AppConstants.primaryBlue,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.add, color: Colors.white, size: 30),
@@ -175,7 +171,9 @@ class _EmptyTaskArea extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               'Add a high-priority task',
-              style: TextStyle(fontSize: 14, color: AppConstants.grayText),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.textTheme.bodySmall?.color,
+              ),
             ),
           ],
         ),
@@ -220,6 +218,8 @@ class _TaskCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return SizedBox(
       width: 165,
       child: AppCard(
@@ -227,7 +227,6 @@ class _TaskCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Priority badge (uses shared widget)
             Align(
               alignment: Alignment.topRight,
               child: PriorityBadge(priority: task.priority),
@@ -237,10 +236,8 @@ class _TaskCard extends StatelessWidget {
               task.title,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 14,
+              style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppConstants.darkText,
                 height: 1.3,
               ),
             ),
@@ -248,11 +245,11 @@ class _TaskCard extends StatelessWidget {
             Row(
               children: [
                 Icon(Icons.access_time_rounded,
-                    size: 13, color: AppConstants.grayText),
+                    size: 13, color: theme.textTheme.bodySmall?.color),
                 const SizedBox(width: 4),
                 Text(
                   task.dueTime ?? task.formattedDueDate,
-                  style: TextStyle(fontSize: 12, color: AppConstants.grayText),
+                  style: theme.textTheme.labelSmall,
                 ),
               ],
             ),
@@ -265,18 +262,17 @@ class _TaskCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: task.isCompleted
                       ? Colors.green.withOpacity(0.1)
-                      : AppConstants.primaryBlue.withOpacity(0.1),
+                      : theme.colorScheme.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   task.isCompleted ? 'Done ✓' : 'Start Task >',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: task.isCompleted
                         ? Colors.green
-                        : AppConstants.primaryBlue,
+                        : theme.colorScheme.primary,
                   ),
                 ),
               ),
@@ -305,6 +301,7 @@ class _ProductivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final percentage = (score * 100).toInt();
 
     return AppCard(
@@ -323,8 +320,9 @@ class _ProductivityCard extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: 1.0,
                     strokeWidth: 11,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppConstants.lightGray),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      theme.dividerColor,
+                    ),
                   ),
                 ),
                 SizedBox(
@@ -334,16 +332,15 @@ class _ProductivityCard extends StatelessWidget {
                     value: score,
                     strokeWidth: 11,
                     strokeCap: StrokeCap.round,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppConstants.primaryBlue),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      theme.colorScheme.primary,
+                    ),
                   ),
                 ),
                 Text(
                   '$percentage%',
-                  style: const TextStyle(
-                    fontSize: 22,
+                  style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: AppConstants.darkText,
                   ),
                 ),
               ],
@@ -355,38 +352,31 @@ class _ProductivityCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'PRODUCTIVITY SCORE',
-                  style: TextStyle(
-                    fontSize: 13,
+                  style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: AppConstants.darkText,
                     letterSpacing: 0.4,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   AppConstants.productivityMessage(score),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppConstants.grayText,
-                    height: 1.5,
-                  ),
+                  style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.check_circle_rounded,
                       size: 16,
-                      color: AppConstants.primaryBlue,
+                      color: theme.colorScheme.primary,
                     ),
                     const SizedBox(width: 5),
                     Text(
                       '$completedCount/$totalCount Completed',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppConstants.primaryBlue,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: theme.colorScheme.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

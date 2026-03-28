@@ -1,5 +1,11 @@
+// ═══════════════════════════════════════════════════════════════════
+// FILE: lib/widgets/app_card.dart
+// CHANGES: Uses Theme.of(context) for dark mode aware colors
+//          instead of hardcoded Colors.white
+// ═══════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
-import '../../theme/app_theme.dart';
+import '../theme/app_theme.dart';
 
 class AppCard extends StatelessWidget {
   final Widget child;
@@ -23,11 +29,12 @@ class AppCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // Automatically adapts to light/dark mode
     final cardColor =
-        backgroundColor ?? (isDark ? const Color(0xFF1E1E1E) : Colors.white);
+        backgroundColor ?? (isDark ? AppColors.darkSurface : Colors.white);
 
     final borderColor = showBorder
-        ? (isDark ? Colors.white.withOpacity(0.08) : AppColors.lightGray)
+        ? (isDark ? AppColors.darkBorder : AppColors.lightGray)
         : Colors.transparent;
 
     final card = Container(

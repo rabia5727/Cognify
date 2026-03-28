@@ -1,10 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/analytics/analytics_screen.dart
 // CHANGES:
-//   - Uses AppConstants for all colors
-//   - Uses VoiceFab widget instead of inline _VoiceFAB
+//   - Now uses Theme.of(context) for dynamic colors
+//   - Dark mode compatible
+//   - Uses VoiceFab widget
 //   - Uses DummyData for all chart data and achievements
-//   - All colors now from AppConstants
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -15,11 +15,6 @@ import '../../widgets/bottom_nav_bar.dart';
 import '../../widgets/app_card.dart';
 import '../../widgets/stat_card.dart';
 import '../../widgets/voice_fab.dart';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ANALYTICS SCREEN
-// Shows Weekly (bar chart) and Monthly (line chart) productivity stats
-// ─────────────────────────────────────────────────────────────────────────────
 
 class AnalyticsScreen extends StatefulWidget {
   final String userName;
@@ -38,22 +33,21 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  // true = Weekly tab, false = Monthly tab
   bool _isWeekly = true;
 
-  // ── Data from DummyData ────────────────────────────────────────────────────
   List<double> get _weeklyData => DummyData.weeklyChartData;
   List<String> get _weekDays => DummyData.weekDays;
-
   List<double> get _monthlyData => DummyData.monthlyChartData;
   List<String> get _months => DummyData.months;
-
   List<Map<String, dynamic>> get _achievements => DummyData.achievements;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppConstants.scaffoldBg,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -67,8 +61,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     icon: Container(
                       width: 36,
                       height: 36,
-                      decoration: const BoxDecoration(
-                        color: AppConstants.primaryBlue,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -78,14 +72,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ),
                     ),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Statistics',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 20,
+                      style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: AppConstants.darkText,
                       ),
                     ),
                   ),
@@ -94,39 +86,31 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               ),
             ),
 
-            // ── Scrollable body ────────────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 1. Weekly / Monthly toggle
                     _TabToggle(
                       isWeekly: _isWeekly,
                       onToggle: (val) => setState(() => _isWeekly = val),
                     ),
-
                     const SizedBox(height: 20),
-
-                    // 2. Completion rate label + progress bar
                     _CompletionRate(
                       label: _isWeekly
                           ? 'Weekly Completion Rate'
                           : 'Monthly Completion Rate',
                       rate: 0.80,
                     ),
-
                     const SizedBox(height: 16),
-
-                    // 3. Stat cards row
                     Row(
                       children: _isWeekly
                           ? [
                               Expanded(
                                 child: StatCard(
                                   icon: Icons.bolt_rounded,
-                                  iconColor: AppConstants.primaryBlue,
+                                  iconColor: theme.colorScheme.primary,
                                   value: '24.5',
                                   label: 'Focus Hours',
                                 ),
@@ -161,21 +145,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                               ),
                             ],
                     ),
-
                     const SizedBox(height: 24),
-
-                    // 4. Chart section
-                    const Text(
+                    Text(
                       'Productivity Trends',
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: AppConstants.darkText,
                       ),
                     ),
-
                     const SizedBox(height: 12),
-
                     AppCard(
                       padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
                       child: SizedBox(
@@ -191,22 +168,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                               ),
                       ),
                     ),
-
                     const SizedBox(height: 24),
-
-                    // 5. Achievements section
-                    const Text(
+                    Text(
                       'Achievements and Insights',
-                      style: TextStyle(
-                        fontSize: 16,
+                      style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
-                        color: AppConstants.darkText,
                       ),
                     ),
-
                     const SizedBox(height: 12),
-
-                    // Achievement cards from DummyData
                     ..._achievements.map(
                       (achievement) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
@@ -249,9 +218,11 @@ class _TabToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       decoration: BoxDecoration(
-        color: AppConstants.lightGray,
+        color: theme.dividerColor,
         borderRadius: BorderRadius.circular(30),
       ),
       padding: const EdgeInsets.all(4),
@@ -265,7 +236,7 @@ class _TabToggle extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color:
-                      isWeekly ? AppConstants.primaryBlue : Colors.transparent,
+                      isWeekly ? theme.colorScheme.primary : Colors.transparent,
                   borderRadius: BorderRadius.circular(26),
                 ),
                 child: Text(
@@ -274,7 +245,9 @@ class _TabToggle extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: isWeekly ? Colors.white : AppConstants.grayText,
+                    color: isWeekly
+                        ? Colors.white
+                        : theme.textTheme.bodySmall?.color,
                   ),
                 ),
               ),
@@ -287,8 +260,9 @@ class _TabToggle extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
-                  color:
-                      !isWeekly ? AppConstants.primaryBlue : Colors.transparent,
+                  color: !isWeekly
+                      ? theme.colorScheme.primary
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(26),
                 ),
                 child: Text(
@@ -297,7 +271,9 @@ class _TabToggle extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: !isWeekly ? Colors.white : AppConstants.grayText,
+                    color: !isWeekly
+                        ? Colors.white
+                        : theme.textTheme.bodySmall?.color,
                   ),
                 ),
               ),
@@ -321,7 +297,9 @@ class _CompletionRate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final percent = (rate * 100).toInt();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -330,18 +308,14 @@ class _CompletionRate extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 14,
+              style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
-                color: AppConstants.darkText,
               ),
             ),
             Text(
               '$percent %',
-              style: const TextStyle(
-                fontSize: 14,
+              style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppConstants.darkText,
               ),
             ),
           ],
@@ -352,7 +326,7 @@ class _CompletionRate extends StatelessWidget {
           child: LinearProgressIndicator(
             value: rate,
             minHeight: 10,
-            backgroundColor: AppConstants.lightGray,
+            backgroundColor: theme.dividerColor,
             valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
           ),
         ),
@@ -373,6 +347,7 @@ class _WeeklyBarChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final maxY = data.reduce((a, b) => a > b ? a : b) + 2;
 
     return BarChart(
@@ -392,10 +367,7 @@ class _WeeklyBarChart extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     labels[index],
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AppConstants.grayText,
-                    ),
+                    style: theme.textTheme.labelSmall,
                   ),
                 );
               },
@@ -413,7 +385,7 @@ class _WeeklyBarChart extends StatelessWidget {
           show: true,
           drawVerticalLine: false,
           getDrawingHorizontalLine: (_) => FlLine(
-            color: AppConstants.lightGray,
+            color: theme.dividerColor,
             strokeWidth: 1,
           ),
         ),
@@ -429,12 +401,12 @@ class _WeeklyBarChart extends StatelessWidget {
                 borderRadius: BorderRadius.circular(6),
                 gradient: isToday
                     ? null
-                    : const LinearGradient(
-                        colors: [Color(0xFF9B8FFF), AppConstants.primaryBlue],
+                    : LinearGradient(
+                        colors: [Color(0xFF9B8FFF), theme.colorScheme.primary],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
-                color: isToday ? AppConstants.primaryBlue : null,
+                color: isToday ? theme.colorScheme.primary : null,
               ),
             ],
           );
@@ -456,6 +428,7 @@ class _MonthlyLineChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final maxY = data.reduce((a, b) => a > b ? a : b) + 2;
 
     return LineChart(
@@ -477,10 +450,7 @@ class _MonthlyLineChart extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     labels[index],
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: AppConstants.grayText,
-                    ),
+                    style: theme.textTheme.labelSmall,
                   ),
                 );
               },
@@ -498,7 +468,7 @@ class _MonthlyLineChart extends StatelessWidget {
           show: true,
           drawVerticalLine: false,
           getDrawingHorizontalLine: (_) => FlLine(
-            color: AppConstants.lightGray,
+            color: theme.dividerColor,
             strokeWidth: 1,
           ),
         ),
@@ -506,18 +476,16 @@ class _MonthlyLineChart extends StatelessWidget {
         lineBarsData: [
           LineChartBarData(
             spots: List.generate(
-              data.length,
-              (i) => FlSpot(i.toDouble(), data[i]),
-            ),
+                data.length, (i) => FlSpot(i.toDouble(), data[i])),
             isCurved: true,
             curveSmoothness: 0.35,
-            color: AppConstants.primaryBlue,
+            color: theme.colorScheme.primary,
             barWidth: 2.5,
             isStrokeCapRound: true,
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              color: AppConstants.primaryBlue.withOpacity(0.08),
+              color: theme.colorScheme.primary.withOpacity(0.08),
             ),
           ),
         ],
@@ -547,12 +515,18 @@ class _AchievementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: 1.5),
+        border: Border.all(
+          color: isDark ? theme.dividerColor : borderColor,
+          width: 1.5,
+        ),
       ),
       child: Row(
         children: [
@@ -564,19 +538,14 @@ class _AchievementCard extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    fontSize: 13,
+                  style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: AppConstants.darkText,
                   ),
                 ),
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppConstants.grayText,
-                  ),
+                  style: theme.textTheme.labelSmall,
                 ),
               ],
             ),
