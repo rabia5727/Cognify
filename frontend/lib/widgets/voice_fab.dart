@@ -1,23 +1,16 @@
-// ═══════════════════════════════════════════════════════════════════
-// FILE: lib/widgets/voice_fab.dart
-// WHY: _VoiceFAB was copy-pasted in:
-//        - dashboard_screen.dart
-//        - settings_screen.dart
-//        - analytics_screen.dart
-//      Now it's one widget used by all screens.
-//
-// USAGE:
-//   floatingActionButton: const VoiceFab(),
-//   floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-// ═══════════════════════════════════════════════════════════════════
-
 import 'package:flutter/material.dart';
-import '../constants/app_constant.dart'; // ← Changed from app_theme
+import '../constants/app_constant.dart';
+import '../screens/assistant//voice_assistant_screen.dart';
 
 class VoiceFab extends StatelessWidget {
   final VoidCallback? onPressed;
+  final String? heroTag;
 
-  const VoiceFab({super.key, this.onPressed});
+  const VoiceFab({
+    super.key,
+    this.onPressed,
+    this.heroTag,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +18,15 @@ class VoiceFab extends StatelessWidget {
       width: 64,
       height: 64,
       child: FloatingActionButton(
-        heroTag: 'voiceFab', // ✅ unique hero tag
+        heroTag: heroTag,
         onPressed: onPressed ??
             () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Voice recording coming soon!')),
+              // Navigate to voice assistant screen
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const VoiceAssistantScreen(),
+                ),
               );
             },
         backgroundColor: AppConstants.primaryBlue,

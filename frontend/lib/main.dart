@@ -8,7 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'theme/app_theme.dart';
-import 'theme_notifier.dart';
+import 'theme/theme_notifier.dart';
 import 'screens/auth/splash_screen.dart';
 
 void main() async {

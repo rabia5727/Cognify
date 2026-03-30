@@ -1,19 +1,12 @@
-import 'package:flutter/material.dart';
-import '../theme/app_theme.dart';
-import 'app_card.dart';
+// ═══════════════════════════════════════════════════════════════════
+// FILE: lib/widgets/stat_card.dart
+// CHANGES:
+//   - Replaced hardcoded AppColors with Theme.of(context) text styles
+//   - Fully dark mode compatible now
+// ═══════════════════════════════════════════════════════════════════
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STAT CARD — Reusable widget for showing a single metric
-// Used in Analytics screen for Focus Hours, Avg Time, Tasks Completed, etc.
-//
-// Usage:
-//   StatCard(
-//     icon: Icons.bolt_rounded,
-//     iconColor: AppColors.primaryBlue,
-//     value: '24.5',
-//     label: 'Focus Hours',
-//   )
-// ─────────────────────────────────────────────────────────────────────────────
+import 'package:flutter/material.dart';
+import 'app_card.dart';
 
 class StatCard extends StatelessWidget {
   final IconData icon;
@@ -31,6 +24,8 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
@@ -42,18 +37,13 @@ class StatCard extends StatelessWidget {
             children: [
               Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 18,
+                style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: AppColors.darkText,
                 ),
               ),
               Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: AppColors.grayText,
-                ),
+                style: theme.textTheme.labelSmall,
               ),
             ],
           ),

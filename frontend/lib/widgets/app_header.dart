@@ -1,24 +1,8 @@
-// ═══════════════════════════════════════════════════════════════════
-// FILE: lib/widgets/app_header.dart
-// WHY: Every screen (settings, tasks, analytics, profile) had its
-//      own copy of the top bar with back button + centered title.
-//      That's 4 copies of the same 30 lines of code.
-//      Now it's one widget used everywhere.
-//
-// TWO MODES:
-//   1. Simple header (all screens except dashboard):
-//      AppHeader(title: 'Tasks', onBack: () => onTabSelected(0))
-//
-//   2. Dashboard header (blue gradient with greeting + AI card):
-//      DashboardHeader(...) — separate widget for dashboard only
-// ═══════════════════════════════════════════════════════════════════
-
 import 'package:flutter/material.dart';
-import '../constants/app_constant.dart'; // Import global constants
 import 'app_card.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SIMPLE HEADER — used by Settings, Tasks, Analytics, Profile
+// SIMPLE HEADER — Settings, Workspace, Analytics, Profile
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AppHeader extends StatelessWidget {
@@ -33,18 +17,19 @@ class AppHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 20, 4),
       child: Row(
         children: [
-          // Blue circle back button
           IconButton(
             onPressed: onBack,
             icon: Container(
               width: 36,
               height: 36,
-              decoration: const BoxDecoration(
-                color: AppConstants.primaryBlue,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -54,19 +39,15 @@ class AppHeader extends StatelessWidget {
               ),
             ),
           ),
-          // Centered title
           Expanded(
             child: Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 20,
+              style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: AppConstants.darkText,
               ),
             ),
           ),
-          // Invisible spacer to keep title truly centered
           const SizedBox(width: 48),
         ],
       ),
@@ -75,8 +56,7 @@ class AppHeader extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DASHBOARD HEADER — the blue gradient header with greeting + AI card
-// Used only by dashboard_screen.dart
+// DASHBOARD HEADER — blue gradient, greeting, AI proactive card
 // ─────────────────────────────────────────────────────────────────────────────
 
 class DashboardHeader extends StatelessWidget {
@@ -97,6 +77,13 @@ class DashboardHeader extends StatelessWidget {
     required this.onProfileTap,
   });
 
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -116,7 +103,6 @@ class DashboardHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Top row: greeting + mascot + avatar ──────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -126,7 +112,7 @@ class DashboardHeader extends StatelessWidget {
                   children: [
                     Text(
                       isNewUser
-                          ? 'Welcome to\nCo-tasker'
+                          ? 'Welcome to\nCo-Tasker'
                           : '${_getGreeting()},',
                       style: const TextStyle(
                         fontSize: 26,
@@ -149,7 +135,6 @@ class DashboardHeader extends StatelessWidget {
               ),
               Row(
                 children: [
-                  // AI mascot icon
                   Container(
                     width: 52,
                     height: 52,
@@ -164,7 +149,6 @@ class DashboardHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // Tappable user avatar → goes to profile
                   GestureDetector(
                     onTap: onProfileTap,
                     child: Container(
@@ -185,10 +169,7 @@ class DashboardHeader extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          // ── White card inside the blue header ─────────────────────
           AppCard(
             child: isNewUser
                 ? const _NewUserMessage()
@@ -202,48 +183,38 @@ class DashboardHeader extends StatelessWidget {
       ),
     );
   }
-
-  // Private helper method for greeting (no external dependency)
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good Morning';
-    if (hour < 17) return 'Good Afternoon';
-    return 'Good Evening';
-  }
 }
 
-// ── Greeting message for new users ────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PRIVATE WIDGETS
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _NewUserMessage extends StatelessWidget {
   const _NewUserMessage();
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Welcome to Co-tasker',
-          style: TextStyle(
-            fontSize: 16,
+        Text(
+          'Welcome to Co-Tasker',
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            color: AppConstants.darkText,
           ),
         ),
         const SizedBox(height: 6),
         Text(
           "I'm here to help you stay organized, motivated, and kind to yourself along the way.",
-          style: TextStyle(
-            fontSize: 13,
-            color: AppConstants.grayText,
-            height: 1.5,
-          ),
+          style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
         ),
       ],
     );
   }
 }
 
-// ── AI proactive message for returning users ───────────────────────
 class _ReturningUserMessage extends StatelessWidget {
   final bool showButtons;
   final VoidCallback onYes;
@@ -257,25 +228,21 @@ class _ReturningUserMessage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Welcome Back',
-          style: TextStyle(
-            fontSize: 16,
+          style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            color: AppConstants.darkText,
           ),
         ),
         const SizedBox(height: 6),
         Text(
           'You have a quiz due today. Would you like me to help prepare it?',
-          style: TextStyle(
-            fontSize: 13,
-            color: AppConstants.grayText,
-            height: 1.5,
-          ),
+          style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
         ),
         if (showButtons) ...[
           const SizedBox(height: 14),
@@ -285,7 +252,7 @@ class _ReturningUserMessage extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onYes,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppConstants.primaryBlue,
+                    backgroundColor: theme.colorScheme.primary,
                     foregroundColor: Colors.white,
                     minimumSize: const Size(0, 40),
                     shape: RoundedRectangleBorder(
@@ -304,10 +271,10 @@ class _ReturningUserMessage extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: onNo,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: AppConstants.primaryBlue,
+                    foregroundColor: theme.colorScheme.primary,
                     minimumSize: const Size(0, 40),
-                    side: const BorderSide(
-                      color: AppConstants.primaryBlue,
+                    side: BorderSide(
+                      color: theme.colorScheme.primary,
                       width: 1.5,
                     ),
                     shape: RoundedRectangleBorder(

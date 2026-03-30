@@ -6,7 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:frontend/main.dart';
-import 'package:frontend/theme_notifier.dart';
+import 'package:frontend/theme/theme_notifier.dart';
 
 void main() {
   setUp(() {
