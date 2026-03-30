@@ -14,6 +14,11 @@ dependencies:
   cupertino_icons: ^1.0.6
   http: ^1.2.0
   shared_preferences: ^2.2.3
+  fl_chart: ^0.68.0 
+  image_picker: ^1.0.7
+  confetti: ^0.7.0
+  provider: ^6.1.2
+  
 
 dev_dependencies:
   flutter_test:

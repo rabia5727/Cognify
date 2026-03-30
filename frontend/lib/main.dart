@@ -1,54 +1,122 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/main.dart
-// FIX: Uses global themeNotifier (ValueNotifier) so SettingsScreen
-//      can change the theme without needing context tricks.
+// CHANGES:
+//   - MultiProvider wraps the entire app
+//   - AuthProvider.checkSession() called at startup
+//   - Router decides between AuthScreen and HomeScreen
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_notifier.dart';
+import 'providers/auth_provider.dart';
+import 'providers/task_provider.dart';
+import 'providers/project_provider.dart';
+import 'providers/analytics_provider.dart';
 import 'screens/auth/splash_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/auth/auth_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Load saved preference and set notifier before app starts
-  final prefs = await SharedPreferences.getInstance();
-  final isDark = prefs.getBool('isDarkMode') ?? false;
-  themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
-
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.white,
-    systemNavigationBarIconBrightness: Brightness.dark,
-  ));
-
-  runApp(const CoTaskerApp());
+  runApp(const CognifyApp());
 }
 
-class CoTaskerApp extends StatelessWidget {
-  const CoTaskerApp({super.key});
+class CognifyApp extends StatelessWidget {
+  const CognifyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // ValueListenableBuilder rebuilds ONLY when themeNotifier changes
-    // No setState, no context tricks needed
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeNotifier,
-      builder: (context, mode, _) {
-        return MaterialApp(
-          title: 'Co-Tasker',
-          debugShowCheckedModeBanner: false,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => TaskProvider()),
+        ChangeNotifierProvider(create: (_) => ProjectProvider()),
+        // AnalyticsProvider listens to TaskProvider — it's a ProxyProvider
+        ChangeNotifierProxyProvider<TaskProvider, AnalyticsProvider>(
+          create: (_) => AnalyticsProvider(),
+          update: (_, taskProvider, analytics) {
+            analytics!.updateTasks(taskProvider.tasks);
+            return analytics;
+          },
+        ),
+      ],
+      child: ValueListenableBuilder<ThemeMode>(
+        valueListenable: themeNotifier,
+        builder: (_, mode, __) => MaterialApp(
+          title: 'Cognify',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
-          themeMode: mode, // changes instantly when notifier updates
-          home: const SplashScreen(),
-        );
+          themeMode: mode,
+          debugShowCheckedModeBanner: false,
+          home: const _AppEntryPoint(),
+        ),
+      ),
+    );
+  }
+}
+
+/// Decides which screen to show based on auth state.
+/// This replaces hardcoded navigation in your old main.dart.
+class _AppEntryPoint extends StatefulWidget {
+  const _AppEntryPoint();
+
+  @override
+  State<_AppEntryPoint> createState() => _AppEntryPointState();
+}
+
+class _AppEntryPointState extends State<_AppEntryPoint> {
+  @override
+  void initState() {
+    super.initState();
+    // Check stored session on app launch
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AuthProvider>().checkSession();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (_, auth, __) {
+        switch (auth.authState) {
+          case AuthState.unknown:
+            // Still checking stored token — show splash
+            return const SplashScreen();
+
+          case AuthState.authenticated:
+            // Load data then show home
+            return _DataLoader(child: const HomeScreen());
+
+          case AuthState.unauthenticated:
+            return const AuthScreen();
+        }
       },
     );
   }
+}
+
+/// Triggers data loading when user is authenticated.
+/// Wrap HomeScreen in this so tasks/projects load before UI renders.
+class _DataLoader extends StatefulWidget {
+  final Widget child;
+  const _DataLoader({required this.child});
+
+  @override
+  State<_DataLoader> createState() => _DataLoaderState();
+}
+
+class _DataLoaderState extends State<_DataLoader> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TaskProvider>().loadTasks();
+      context.read<ProjectProvider>().loadProjects();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

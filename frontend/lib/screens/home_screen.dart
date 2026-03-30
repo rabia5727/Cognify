@@ -1,12 +1,21 @@
+// ═══════════════════════════════════════════════════════════════════
+// FILE: lib/screens/home_screen.dart
+// CHANGES:
+//   - No longer accepts `userName` as a constructor parameter
+//   - Reads userName from AuthProvider instead
+//   - Screens no longer receive userName as a prop (they read it themselves)
+// ═══════════════════════════════════════════════════════════════════
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
 import 'dashboard/dashboard_screen.dart';
 import 'analytics/analytics_screen.dart';
 import 'workspace/workspace_screen.dart';
 import 'settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final String userName;
-  const HomeScreen({super.key, required this.userName});
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -23,22 +32,18 @@ class _HomeScreenState extends State<HomeScreen> {
       index: _currentIndex,
       children: [
         DashboardScreen(
-          userName: widget.userName,
           currentIndex: _currentIndex,
           onTabSelected: _onTabSelected,
         ),
         AnalyticsScreen(
-          userName: widget.userName,
           currentIndex: _currentIndex,
           onTabSelected: _onTabSelected,
         ),
         WorkSpaceScreen(
-          userName: widget.userName,
           currentIndex: _currentIndex,
           onTabSelected: _onTabSelected,
         ),
         SettingsScreen(
-          userName: widget.userName,
           currentIndex: _currentIndex,
           onTabSelected: _onTabSelected,
         ),

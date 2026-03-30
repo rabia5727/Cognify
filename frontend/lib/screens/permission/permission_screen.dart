@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common_widgets.dart'; // Import common widgets
+import '../../widgets/common_widgets.dart';
 import '../auth/preference_quiz_screen.dart';
 import '../home_screen.dart';
+import 'package:provider/provider.dart';
+import '../../providers/auth_provider.dart';
 
 class PermissionScreen extends StatelessWidget {
   final String userName;
@@ -15,9 +17,16 @@ class PermissionScreen extends StatelessWidget {
   });
 
   void _goToDashboard(BuildContext context) {
+    // Get auth provider to ensure user is set
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+    // Update user info if needed
+    authProvider.updateUserInfo(name: userName);
+
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => HomeScreen(userName: userName),
+        builder: (_) =>
+            const HomeScreen(), // HomeScreen now gets userName from AuthProvider
       ),
     );
   }
@@ -74,7 +83,7 @@ class PermissionScreen extends StatelessWidget {
 
               const SizedBox(height: 48),
 
-              // ── Allow Access Button (Using PrimaryButton from common_widgets) ──
+              // ── Allow Access Button ──────────────────────────────────────
               PrimaryButton(
                 label: 'Allow Access',
                 onPressed: () => _goToDashboard(context),

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/services/api_service.dart';
-import '../../theme/app_theme.dart';
-import '../../widgets/common_widgets.dart';
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../services/token_storage.dart';
+import '../../providers/auth_provider.dart';
+import '../../models/user_model.dart';
+import '../../utils/validators.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/common_widgets.dart';
 import 'name_screen.dart';
-import '../dashboard/dashboard_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -17,6 +19,10 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen>
     with SingleTickerProviderStateMixin {
   bool _isLogin = true;
+
+  // Form keys for validation
+  final _loginFormKey = GlobalKey<FormState>();
+  final _signupFormKey = GlobalKey<FormState>();
 
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
@@ -46,48 +52,24 @@ class _AuthScreenState extends State<AuthScreen>
     });
   }
 
-  void _showError(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: Colors.redAccent,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    ));
-  }
-
-  bool _validateInputs() {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text;
-
-    if (email.isEmpty || password.isEmpty) {
-      _showError('Please fill in all fields');
-      return false;
-    }
-    if (!email.contains('@') || !email.contains('.')) {
-      _showError('Please enter a valid email');
-      return false;
-    }
-    if (password.length < 6) {
-      _showError('Password must be at least 6 characters');
-      return false;
-    }
-    if (!_isLogin) {
-      if (_confirmPasswordController.text != password) {
-        _showError('Passwords do not match');
-        return false;
-      }
-      if (!_agreedToTerms) {
-        _showError('Please agree to the Terms & Conditions');
-        return false;
-      }
-    }
-    return true;
-  }
-
   Future<void> _handleSubmit() async {
-    if (!_validateInputs()) return;
+    // Validate based on current mode
+    if (_isLogin) {
+      if (!_loginFormKey.currentState!.validate()) return;
+    } else {
+      if (!_signupFormKey.currentState!.validate()) return;
+      if (!_agreedToTerms) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please agree to the Terms & Conditions'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _isLoading = true);
 
     if (_isLogin) {
@@ -99,28 +81,44 @@ class _AuthScreenState extends State<AuthScreen>
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      if (result.isSuccess) {
+      if (result.isSuccess && result.data != null) {
         final userResult = await ApiService.getMe();
         if (!mounted) return;
-        final name = userResult.isSuccess
-            ? userResult.data!.name
-            : (await TokenStorage.getUserName() ?? 'there');
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => DashboardScreen(userName: name)),
+
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+
+        final user = UserModel(
+          id: userResult.data?.id ?? 'local',
+          name: userResult.data?.name ?? _emailController.text.split('@')[0],
+          email: _emailController.text.trim(),
         );
+
+        final token =
+            result.data?.accessToken ?? await TokenStorage.getToken() ?? '';
+
+        // This will trigger navigation to HomeScreen via _AppEntryPoint
+        authProvider.onLoginSuccess(user, token);
       } else {
-        _showError(result.error!);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.error ?? 'Login failed'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
       }
     } else {
-      // Sign up: go to NameScreen first, then register
+      // Sign up: go to NameScreen
       setState(() => _isLoading = false);
       if (!mounted) return;
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => NameScreen(
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => NameScreen(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+          ),
         ),
-      ));
+      );
     }
   }
 
@@ -242,114 +240,148 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Widget _buildLoginForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        LabeledTextField(
-          label: 'Enter Email',
-          hint: 'you@example.com',
-          controller: _emailController,
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 20),
-        LabeledTextField(
-          label: 'Enter Password',
-          hint: '••••••••',
-          obscureText: _obscurePassword,
-          controller: _passwordController,
-          suffixIcon: IconButton(
-            icon: Icon(
-              _obscurePassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              color: AppColors.grayText,
-              size: 20,
+    return Form(
+      key: _loginFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            validator: Validators.email,
+            decoration: _inputDecoration('Email', 'you@example.com'),
+          ),
+          const SizedBox(height: 20),
+          TextFormField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            validator: Validators.password,
+            decoration: _inputDecoration('Password', '••••••••').copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: AppColors.grayText,
+                  size: 20,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
             ),
-            onPressed: () =>
-                setState(() => _obscurePassword = !_obscurePassword),
           ),
-        ),
-        const SizedBox(height: 10),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () {},
-            child: const Text('Forgot Password?',
-                style: TextStyle(
-                    color: AppColors.primaryBlue, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {},
+              child: const Text('Forgot Password?',
+                  style: TextStyle(
+                      color: AppColors.primaryBlue,
+                      fontWeight: FontWeight.w600)),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildSignUpForm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        LabeledTextField(
-          label: 'Enter Email',
-          hint: 'you@example.com',
-          controller: _emailController,
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 20),
-        LabeledTextField(
-          label: 'Enter Password',
-          hint: '••••••••',
-          obscureText: _obscurePassword,
-          controller: _passwordController,
-          suffixIcon: IconButton(
-            icon: Icon(
-              _obscurePassword
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              color: AppColors.grayText,
-              size: 20,
-            ),
-            onPressed: () =>
-                setState(() => _obscurePassword = !_obscurePassword),
+    return Form(
+      key: _signupFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextFormField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            validator: Validators.email,
+            decoration: _inputDecoration('Email', 'you@example.com'),
           ),
-        ),
-        const SizedBox(height: 20),
-        LabeledTextField(
-          label: 'Confirm Password',
-          hint: '••••••••',
-          obscureText: _obscureConfirm,
-          controller: _confirmPasswordController,
-          suffixIcon: IconButton(
-            icon: Icon(
-              _obscureConfirm
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              color: AppColors.grayText,
-              size: 20,
+          const SizedBox(height: 20),
+          TextFormField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            validator: Validators.password,
+            decoration: _inputDecoration('Password', '••••••••').copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: AppColors.grayText,
+                  size: 20,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
             ),
-            onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
           ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Checkbox(
-              value: _agreedToTerms,
-              onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
-              activeColor: AppColors.primaryBlue,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4)),
+          const SizedBox(height: 20),
+          TextFormField(
+            controller: _confirmPasswordController,
+            obscureText: _obscureConfirm,
+            validator: (value) =>
+                Validators.confirmPassword(value, _passwordController.text),
+            decoration:
+                _inputDecoration('Confirm Password', '••••••••').copyWith(
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureConfirm
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: AppColors.grayText,
+                  size: 20,
+                ),
+                onPressed: () =>
+                    setState(() => _obscureConfirm = !_obscureConfirm),
+              ),
             ),
-            const Text('I agree to ', style: TextStyle(fontSize: 13)),
-            GestureDetector(
-              onTap: () {},
-              child: const Text('Terms & Conditions',
-                  style: TextStyle(
-                      color: AppColors.primaryBlue,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13)),
-            ),
-          ],
-        ),
-      ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Checkbox(
+                value: _agreedToTerms,
+                onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
+                activeColor: AppColors.primaryBlue,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(4)),
+              ),
+              const Text('I agree to ', style: TextStyle(fontSize: 13)),
+              GestureDetector(
+                onTap: () {},
+                child: const Text('Terms & Conditions',
+                    style: TextStyle(
+                        color: AppColors.primaryBlue,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label, String hint) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.primaryBlue, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 }
