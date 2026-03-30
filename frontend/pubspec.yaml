@@ -1,4 +1,4 @@
-name: frontend 
+name: frontend
 description: Co-Tasker — Your AI Productivity Assistant
 
 publish_to: 'none'
@@ -12,22 +12,13 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.6
-  image_picker: ^1.0.4
-  fl_chart: ^0.68.0
-  shared_preferences: ^2.2.0
-  confetti: ^0.7.0 
-  
-  
+  http: ^1.2.0
+  shared_preferences: ^2.2.3
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
 
 flutter:
   uses-material-design: true
-
-  # Uncomment and add your mascot image once you have it:
-  # assets:
-  #   - assets/images/mascot.png
-  #   - assets/images/mascot_small.png

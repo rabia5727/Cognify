@@ -1,10 +1,20 @@
+// This screen is shown after the user successfully registers with email + password.
+// It asks for the user's full name, then calls the register API to create the account.
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common_widgets.dart';
+import '../../services/api_service.dart';
 import 'onboarding_screen.dart';
 
 class NameScreen extends StatefulWidget {
-  const NameScreen({super.key});
+  final String email;
+  final String password;
+
+  const NameScreen({
+    super.key,
+    required this.email,
+    required this.password,
+  });
 
   @override
   State<NameScreen> createState() => _NameScreenState();
@@ -14,18 +24,50 @@ class _NameScreenState extends State<NameScreen> {
   final _nameController = TextEditingController();
   bool _isLoading = false;
 
-  void _continue() async {
-    if (_nameController.text.trim().isEmpty) return;
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: Colors.redAccent,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.all(16),
+    ));
+  }
+
+  Future<void> _continue() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      _showError('Please enter your name');
+      return;
+    }
+
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
+
+    // Call register API with name + email + password
+    final result = await ApiService.register(
+      name: name,
+      email: widget.email,
+      password: widget.password,
+    );
+    //debugger lines
+    print('=== REGISTER RESULT ===');
+    print('Success: ${result.isSuccess}');
+    print('Error: ${result.error}');
+    print('Token: ${result.data?.accessToken}');
+
+    if (!mounted) return;
     setState(() => _isLoading = false);
-    if (mounted) {
+
+    if (result.isSuccess) {
+      // Registration successful — proceed to onboarding
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) =>
-              OnboardingScreen(userName: _nameController.text.trim()),
+          builder: (_) => OnboardingScreen(userName: name),
         ),
       );
+    } else {
+      _showError(result.error!);
     }
   }
 
@@ -37,73 +79,84 @@ class _NameScreenState extends State<NameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Force light theme for name screen
-    return Theme(
-      data: AppTheme.lightTheme,
-      child: Scaffold(
+    return Scaffold(
         backgroundColor: Colors.white,
         body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Mascot centered at top
-                Center(
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFFF0F4FF),
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Back button
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF0F4FF),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new,
+                          size: 16, color: AppColors.primaryBlue),
                     ),
-                    child: const Center(
-                        child: Text('🤖', style: TextStyle(fontSize: 52))),
                   ),
-                ),
 
-                const SizedBox(height: 28),
+                  const SizedBox(height: 32),
 
-                // Welcome text centered
-                const Center(
-                  child: Text(
-                    'Welcome !!',
-                    style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.darkText),
+                  // Mascot centered
+                  Center(
+                    child: Container(
+                      width: 100,
+                      height: 100,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xFFF0F4FF),
+                      ),
+                      child: const Center(
+                          child: Text('🤖', style: TextStyle(fontSize: 52))),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Center(
-                  child: Text(
-                    'What should we call you?',
-                    style: TextStyle(fontSize: 15, color: AppColors.grayText),
+
+                  const SizedBox(height: 28),
+
+                  const Center(
+                    child: Text(
+                      'Welcome !!',
+                      style: TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.darkText),
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 8),
+                  const Center(
+                    child: Text(
+                      'What should we call you?',
+                      style: TextStyle(fontSize: 15, color: AppColors.grayText),
+                    ),
+                  ),
 
-                const SizedBox(height: 48),
+                  const SizedBox(height: 48),
 
-                // Full Name field
-                LabeledTextField(
-                  label: 'Full Name',
-                  hint: 'e.g. John Doe',
-                  controller: _nameController,
-                ),
+                  LabeledTextField(
+                    label: 'Full Name',
+                    hint: 'e.g. John Doe',
+                    controller: _nameController,
+                  ),
 
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-                // Continue button
-                PrimaryButton(
-                  label: 'Continue',
-                  onPressed: _continue,
-                  isLoading: _isLoading,
-                ),
-              ],
+                  PrimaryButton(
+                    label: 'Continue',
+                    onPressed: _continue,
+                    isLoading: _isLoading,
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 }
