@@ -12,29 +12,32 @@ class DummyData {
         Task(
           id: '1',
           title: 'Complete Maths Assignment',
-          subtitle: 'for hci assignment',
+          subtitle: 'sir kashif assignment',
           dueDate: DateTime.now().copyWith(hour: 22, minute: 0),
           dueTime: '10:00pm',
           priority: Priority.high,
           status: TaskStatus.inProgress,
+          category: TaskCategory.classroom,
         ),
         Task(
           id: '2',
           title: 'ML assignment submit',
-          subtitle: 'for hci assignment',
+          subtitle: 'sir kashif assignment',
           dueDate: DateTime.now().copyWith(hour: 18, minute: 30),
           dueTime: '6:30pm',
           priority: Priority.medium,
           status: TaskStatus.inProgress,
+          category: TaskCategory.email,
         ),
         Task(
           id: '3',
           title: 'Email reports',
-          subtitle: 'for hci assignment',
+          subtitle: 'sir kashif assignment',
           dueDate: DateTime.now().copyWith(hour: 19, minute: 0),
           dueTime: '7:00pm',
           priority: Priority.low,
           status: TaskStatus.todo,
+          category: TaskCategory.email,
         ),
         Task(
           id: '4',
@@ -44,6 +47,7 @@ class DummyData {
           dueTime: '5:00pm',
           priority: Priority.high,
           status: TaskStatus.todo,
+          category: TaskCategory.classroom,
         ),
         Task(
           id: '5',
@@ -55,6 +59,7 @@ class DummyData {
           dueTime: '2:00pm',
           priority: Priority.medium,
           status: TaskStatus.todo,
+          category: TaskCategory.general,
         ),
         Task(
           id: '6',
@@ -66,6 +71,7 @@ class DummyData {
           dueTime: '11:59pm',
           priority: Priority.low,
           status: TaskStatus.todo,
+          category: TaskCategory.general,
         ),
       ];
 

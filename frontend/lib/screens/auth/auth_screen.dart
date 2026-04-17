@@ -6,7 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../models/user_model.dart';
 import '../../utils/validators.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common_widgets.dart';
+import '../../widgets/common/auth_components.dart';
 import 'name_screen.dart';
 
 class AuthScreen extends StatefulWidget {

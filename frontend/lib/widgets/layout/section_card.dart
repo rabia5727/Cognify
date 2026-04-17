@@ -13,8 +13,8 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import '../constants/app_constant.dart'; // ✅ Fixed import
-import 'app_card.dart';
+import '../../constants/app_constant.dart'; // ✅ Fixed import
+import '../common/app_card.dart';
 
 class SectionCard extends StatelessWidget {
   final List<Widget> children;

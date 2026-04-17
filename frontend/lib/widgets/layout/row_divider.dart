@@ -12,7 +12,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import '../constants/app_constant.dart';
+import '../../constants/app_constant.dart';
 
 class RowDivider extends StatelessWidget {
   final double height;

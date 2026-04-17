@@ -12,10 +12,10 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../constants/app_constant.dart';
 import '../../providers/analytics_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/bottom_nav_bar.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/stat_card.dart';
-import '../../widgets/voice_fab.dart';
+import '../../widgets/common/bottom_nav_bar.dart';
+import '../../widgets/common/app_card.dart';
+import '../../widgets/common/stat_card.dart';
+import '../../widgets/common/voice_fab.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   final int currentIndex;

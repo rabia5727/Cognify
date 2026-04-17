@@ -33,16 +33,18 @@ class BottomNavBar extends StatelessWidget {
               isSelected: currentIndex == 0,
               onTap: () => onTabSelected(0),
             ),
+            // SWAPPED: Workspace now at index 1
             _NavItem(
-              icon: Icons.bar_chart_rounded,
-              label: 'Analytics',
+              icon: Icons.work_outline,
+              label: 'Workspace',
               isSelected: currentIndex == 1,
               onTap: () => onTabSelected(1),
             ),
             const SizedBox(width: 48),
+            // SWAPPED: Analytics now at index 2
             _NavItem(
-              icon: Icons.work_outline, // ✅ Self-explanatory work icon
-              label: 'Workspace',
+              icon: Icons.bar_chart_rounded,
+              label: 'Analytics',
               isSelected: currentIndex == 2,
               onTap: () => onTabSelected(2),
             ),
@@ -59,10 +61,8 @@ class BottomNavBar extends StatelessWidget {
   }
 }
 
-// ... _NavItem widget remains the same
-
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Single Nav Item
+// WIDGET: Single Nav Item (Moved OUTSIDE the BottomNavBar class)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _NavItem extends StatelessWidget {

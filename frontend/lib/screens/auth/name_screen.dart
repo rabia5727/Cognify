@@ -2,7 +2,7 @@
 // It asks for the user's full name, then calls the register API to create the account.
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common_widgets.dart';
+import '../../widgets/common/auth_components.dart';
 import '../../services/api_service.dart';
 import 'onboarding_screen.dart';
 

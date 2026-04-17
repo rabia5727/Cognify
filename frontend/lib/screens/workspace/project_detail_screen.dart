@@ -6,9 +6,9 @@
 import 'package:flutter/material.dart';
 import '../../models/project_model.dart';
 import '../../models/task_model.dart';
-import '../../widgets/app_header.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/priority_badge.dart';
+import '../../widgets/common/app_header.dart';
+import '../../widgets/common/app_card.dart';
+import '../../widgets/common/priority_badge.dart';
 import 'edit_project_screen.dart';
 
 class ProjectDetailScreen extends StatefulWidget {

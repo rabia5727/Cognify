@@ -15,12 +15,12 @@ import '../../constants/app_constant.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/ui_feedback.dart';
 import '../../theme/theme_notifier.dart';
-import '../../widgets/bottom_nav_bar.dart';
-import '../../widgets/app_header.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/voice_fab.dart';
-import '../../widgets/section_card.dart';
-import '../../widgets/row_divider.dart';
+import '../../widgets/common/bottom_nav_bar.dart';
+import '../../widgets/common/app_header.dart';
+import '../../widgets/common/app_card.dart';
+import '../../widgets/common/voice_fab.dart';
+import '../../widgets/layout/section_card.dart';
+import '../../widgets/layout/row_divider.dart';
 import 'profile_screen.dart';
 
 class SettingsScreen extends StatefulWidget {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common_widgets.dart';
+import '../../widgets/common/auth_components.dart';
 import '../permission/permission_screen.dart';
 
 // ─── Data model ───────────────────────────────────────────────────────────────

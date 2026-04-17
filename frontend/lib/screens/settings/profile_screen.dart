@@ -15,10 +15,10 @@ import '../../constants/app_constant.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/validators.dart';
 import '../../utils/ui_feedback.dart';
-import '../../widgets/app_card.dart';
-import '../../widgets/app_header.dart';
-import '../../widgets/section_card.dart';
-import '../../widgets/row_divider.dart';
+import '../../widgets/common/app_card.dart';
+import '../../widgets/common/app_header.dart';
+import '../../widgets/layout/section_card.dart';
+import '../../widgets/layout/row_divider.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});

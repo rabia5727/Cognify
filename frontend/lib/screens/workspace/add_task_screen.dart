@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/workspace/add_task_screen.dart
 // PURPOSE: Full screen for creating a new task
-// REPLACES: add_task_dialog.dart
+// FIXES: Added loading state (Save button shows loader, disabled while saving)
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import '../../models/task_model.dart';
-import '../../widgets/app_header.dart';
+import '../../widgets/common/app_header.dart';
 
 class AddTaskScreen extends StatefulWidget {
   // Callback — called with the new task when user taps Save
@@ -26,6 +26,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   Priority _priority = Priority.medium;
   DateTime? _dueDate;
   TimeOfDay? _dueTime;
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -73,7 +74,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   }
 
   // ── Save ───────────────────────────────────────────────────────────
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_dueDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -81,6 +82,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       );
       return;
     }
+
+    setState(() => _isSaving = true);
 
     final newTask = Task(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -90,16 +93,30 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       dueTime: _dueTime != null ? _timeDisplay : null,
       priority: _priority,
       status: TaskStatus.todo,
+      category: TaskCategory.general,
     );
 
-    widget.onTaskAdded(newTask);
-    Navigator.pop(context);
+    try {
+      await widget.onTaskAdded(newTask);
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create task: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -184,30 +201,14 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
                       const SizedBox(height: 28),
 
-                      // AI Suggest button
-                      Center(
-                        child: TextButton.icon(
-                          onPressed: () => ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(
-                                  content:
-                                      Text('AI suggestions coming soon!'))),
-                          icon:
-                              const Icon(Icons.auto_awesome_rounded, size: 16),
-                          label: const Text('Suggest detail with AI'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: theme.colorScheme.primary,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 20),
-
                       // Action buttons
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: _isSaving
+                                  ? null
+                                  : () => Navigator.pop(context),
                               style: OutlinedButton.styleFrom(
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 14),
@@ -221,7 +222,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: _save,
+                              onPressed: _isSaving ? null : _save,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: theme.colorScheme.primary,
                                 padding:
@@ -230,10 +231,19 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                                     borderRadius: BorderRadius.circular(12)),
                                 elevation: 0,
                               ),
-                              child: const Text('Save',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600)),
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text('Save',
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600)),
                             ),
                           ),
                         ],

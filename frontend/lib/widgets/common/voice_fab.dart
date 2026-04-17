@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../constants/app_constant.dart';
-import '../screens/assistant//voice_assistant_screen.dart';
+import '../../constants/app_constant.dart';
+import '../../screens/assistant/voice_assistant_screen.dart';
 
 class VoiceFab extends StatelessWidget {
   final VoidCallback? onPressed;

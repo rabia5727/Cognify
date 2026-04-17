@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common_widgets.dart';
+import '../../widgets/common/auth_components.dart';
 import '../auth/preference_quiz_screen.dart';
 import '../home_screen.dart';
 import 'package:provider/provider.dart';

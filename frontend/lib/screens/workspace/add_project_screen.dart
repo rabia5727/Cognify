@@ -1,13 +1,20 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/workspace/add_project_screen.dart
 // PURPOSE: Full screen for creating a new project
+// FIXES:
+//   - Added Category selector
+//   - Added loading state (Create button shows loader, disabled while saving)
+//   - Removed client-generated ID (backend will provide)
+//   - Properly await callback before popping
+//   - Uses Priority.color getter from model
+//   - Uses ProjectCategory.color getter from model
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import '../../constants/app_constant.dart';
 import '../../models/project_model.dart';
 import '../../models/task_model.dart';
-import '../../widgets/app_header.dart';
+import '../../widgets/common/app_header.dart';
+import 'task_picker_screen.dart';
 
 class AddProjectScreen extends StatefulWidget {
   final List<Task> allTasks;
@@ -29,9 +36,10 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
   final _descCtrl = TextEditingController();
 
   Priority _priority = Priority.medium;
-  ProjectStatus _status = ProjectStatus.active;
+  ProjectCategory _category = ProjectCategory.general;
   DateTime? _dueDate;
   List<String> _selectedTaskIds = [];
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -55,7 +63,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
     return '${_dueDate!.day}/${_dueDate!.month}/${_dueDate!.year}';
   }
 
-  void _save() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_dueDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -64,23 +72,42 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
       return;
     }
 
+    setState(() => _isSaving = true);
+
+    // Create project WITHOUT an ID - backend will assign one
     final project = Project(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: '', // Empty ID - backend will assign
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim(),
       taskIds: _selectedTaskIds,
       dueDate: _dueDate!,
       priority: _priority,
-      status: _status,
+      status: ProjectStatus.active,
+      category: _category,
     );
 
-    widget.onProjectAdded(project);
-    Navigator.pop(context);
+    try {
+      await widget.onProjectAdded(project);
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create project: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -148,26 +175,83 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Status
-                      const _Label('Status'),
+                      // Category
+                      const _Label('Category'),
                       const SizedBox(height: 8),
-                      _StatusSelector(
-                        selected: _status,
-                        onSelected: (s) => setState(() => _status = s),
+                      _CategorySelector(
+                        selected: _category,
+                        onSelected: (c) => setState(() => _category = c),
                       ),
 
-                      // Link existing tasks
-                      if (widget.allTasks.isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        const _Label('Link Existing Tasks (optional)'),
+                      const SizedBox(height: 20),
+
+                      // Link tasks section
+                      // Selected tasks preview
+                      if (_selectedTaskIds.isNotEmpty) ...[
+                        const _Label('Linked Tasks'),
                         const SizedBox(height: 8),
-                        _TaskSelector(
-                          allTasks: widget.allTasks,
-                          selectedTaskIds: _selectedTaskIds,
-                          onChanged: (ids) =>
-                              setState(() => _selectedTaskIds = ids),
+                        _LinkedTasksList(
+                          tasks: widget.allTasks
+                              .where((t) => _selectedTaskIds.contains(t.id))
+                              .toList(),
+                          onRemove: (id) =>
+                              setState(() => _selectedTaskIds.remove(id)),
                         ),
+                        const SizedBox(height: 12),
                       ],
+
+                      // Link / Create tasks button
+                      GestureDetector(
+                        onTap: _isSaving
+                            ? null
+                            : () async {
+                                final result =
+                                    await Navigator.push<List<String>>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => TaskPickerScreen(
+                                      allTasks: widget.allTasks,
+                                      initialSelected: _selectedTaskIds,
+                                    ),
+                                  ),
+                                );
+                                if (result != null && mounted) {
+                                  setState(() => _selectedTaskIds = result);
+                                }
+                              },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context).dividerColor,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.add_circle_outline_rounded,
+                                size: 18,
+                                color: _isSaving
+                                    ? theme.textTheme.bodySmall?.color
+                                    : theme.colorScheme.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Link Tasks',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _isSaving
+                                      ? theme.textTheme.bodySmall?.color
+                                      : theme.colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
 
                       const SizedBox(height: 32),
 
@@ -176,7 +260,9 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: _isSaving
+                                  ? null
+                                  : () => Navigator.pop(context),
                               style: OutlinedButton.styleFrom(
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 14),
@@ -191,7 +277,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton(
-                              onPressed: _save,
+                              onPressed: _isSaving ? null : _save,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: theme.colorScheme.primary,
                                 padding:
@@ -201,13 +287,22 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
                                 ),
                                 elevation: 0,
                               ),
-                              child: const Text(
-                                'Create Project',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Create Project',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                             ),
                           ),
                         ],
@@ -306,24 +401,13 @@ class _PrioritySelector extends StatelessWidget {
     required this.onSelected,
   });
 
-  Color _color(Priority p) {
-    switch (p) {
-      case Priority.high:
-        return const Color(0xFFFF5252);
-      case Priority.medium:
-        return const Color(0xFFEFA535);
-      case Priority.low:
-        return const Color(0xFF4CAF50);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Row(
       children: Priority.values.map((p) {
         final isSelected = selected == p;
-        final color = _color(p);
+        final color = p.color;
         return Expanded(
           child: Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -360,11 +444,12 @@ class _PrioritySelector extends StatelessWidget {
   }
 }
 
-class _StatusSelector extends StatelessWidget {
-  final ProjectStatus selected;
-  final Function(ProjectStatus) onSelected;
+// Category selector widget for projects
+class _CategorySelector extends StatelessWidget {
+  final ProjectCategory selected;
+  final Function(ProjectCategory) onSelected;
 
-  const _StatusSelector({
+  const _CategorySelector({
     required this.selected,
     required this.onSelected,
   });
@@ -372,34 +457,37 @@ class _StatusSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: ProjectStatus.values.map((s) {
-        final isSelected = selected == s;
-        return GestureDetector(
-          onTap: () => onSelected(s),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color:
-                  isSelected ? theme.colorScheme.primary : Colors.transparent,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color:
-                    isSelected ? theme.colorScheme.primary : theme.dividerColor,
-                width: 1.5,
-              ),
-            ),
-            child: Text(
-              s.label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? Colors.white
-                    : theme.textTheme.bodySmall?.color,
+    return Row(
+      children: ProjectCategory.values.map((c) {
+        final isSelected = selected == c;
+        final color = c.color;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: GestureDetector(
+              onTap: () => onSelected(c),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color:
+                      isSelected ? color.withOpacity(0.12) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isSelected ? color : theme.dividerColor,
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  c.label,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color:
+                        isSelected ? color : theme.textTheme.bodySmall?.color,
+                  ),
+                ),
               ),
             ),
           ),
@@ -409,77 +497,85 @@ class _StatusSelector extends StatelessWidget {
   }
 }
 
-class _TaskSelector extends StatelessWidget {
-  final List<Task> allTasks;
-  final List<String> selectedTaskIds;
-  final Function(List<String>) onChanged;
+// Shows the already-selected tasks as removable chips in the form
+class _LinkedTasksList extends StatelessWidget {
+  final List<Task> tasks;
+  final Function(String) onRemove;
 
-  const _TaskSelector({
-    required this.allTasks,
-    required this.selectedTaskIds,
-    required this.onChanged,
-  });
+  const _LinkedTasksList({required this.tasks, required this.onRemove});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
-      children: allTasks.map((task) {
-        final isSelected = selectedTaskIds.contains(task.id);
-        return GestureDetector(
-          onTap: () {
-            final updated = List<String>.from(selectedTaskIds);
-            if (isSelected) {
-              updated.remove(task.id);
-            } else {
-              updated.add(task.id);
-            }
-            onChanged(updated);
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? theme.colorScheme.primary.withOpacity(0.08)
-                  : theme.cardColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color:
-                    isSelected ? theme.colorScheme.primary : theme.dividerColor,
-                width: isSelected ? 1.5 : 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  isSelected
-                      ? Icons.check_box_rounded
-                      : Icons.check_box_outline_blank_rounded,
-                  size: 20,
-                  color: isSelected
-                      ? theme.colorScheme.primary
-                      : theme.textTheme.bodySmall?.color,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    task.title,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: theme.textTheme.bodyLarge?.color,
+      children: tasks.map((task) {
+        final color = task.priority.color;
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.dividerColor),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.check_box_rounded,
+                  size: 20, color: theme.colorScheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      task.title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
                     ),
-                  ),
+                    if (task.dueTime != null && task.dueTime!.isNotEmpty)
+                      Text(
+                        task.dueTime!,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: theme.textTheme.bodySmall?.color,
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: color.withOpacity(0.4)),
+                ),
+                child: Text(
+                  task.priority.label,
+                  style: TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w600, color: color),
+                ),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () => onRemove(task.id),
+                child: Icon(Icons.close_rounded,
+                    size: 18, color: theme.textTheme.bodySmall?.color),
+              ),
+            ],
           ),
         );
       }).toList(),
     );
   }
 }
+
+// =============================================================
+// INPUT DECORATION
+// =============================================================
 
 InputDecoration _inputDecoration(BuildContext context, String hint) {
   final theme = Theme.of(context);

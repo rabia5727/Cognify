@@ -66,6 +66,66 @@ extension ProjectStatusExtension on ProjectStatus {
 }
 
 // =============================================================
+// PROJECT CATEGORY ENUM
+// =============================================================
+
+enum ProjectCategory {
+  general,
+  academic,
+  freelance,
+}
+
+extension ProjectCategoryExtension on ProjectCategory {
+  /// User-friendly display text
+  String get label {
+    switch (this) {
+      case ProjectCategory.general:
+        return 'General';
+      case ProjectCategory.academic:
+        return 'Academic';
+      case ProjectCategory.freelance:
+        return 'Freelance';
+    }
+  }
+
+  /// API-compatible string value
+  String get stringValue {
+    switch (this) {
+      case ProjectCategory.general:
+        return 'general';
+      case ProjectCategory.academic:
+        return 'academic';
+      case ProjectCategory.freelance:
+        return 'freelance';
+    }
+  }
+
+  /// Color for UI display
+  Color get color {
+    switch (this) {
+      case ProjectCategory.academic:
+        return const Color(0xFF1360E2);
+      case ProjectCategory.freelance:
+        return const Color(0xFF7B61FF);
+      case ProjectCategory.general:
+        return const Color(0xFF9E9E9E);
+    }
+  }
+
+  /// Converts API string to enum
+  static ProjectCategory fromString(String value) {
+    switch (value.toLowerCase()) {
+      case 'academic':
+        return ProjectCategory.academic;
+      case 'freelance':
+        return ProjectCategory.freelance;
+      default:
+        return ProjectCategory.general;
+    }
+  }
+}
+
+// =============================================================
 // PROJECT MODEL
 // =============================================================
 
@@ -77,6 +137,7 @@ class Project {
   final DateTime dueDate;
   final Priority priority;
   final ProjectStatus status;
+  final ProjectCategory category; // NEW: Category field
   final int? colorValue; // Hex value, not Color object (UI layer converts)
 
   const Project({
@@ -87,6 +148,7 @@ class Project {
     required this.dueDate,
     required this.priority,
     this.status = ProjectStatus.active,
+    this.category = ProjectCategory.general, // NEW: Default to general
     this.colorValue,
   });
 
@@ -147,6 +209,8 @@ class Project {
       dueDate: DateTime.tryParse(json['dueDate'] ?? '') ?? DateTime.now(),
       priority: PriorityExtension.fromString(json['priority'] ?? 'medium'),
       status: ProjectStatusExtension.fromString(json['status'] ?? 'active'),
+      category: ProjectCategoryExtension.fromString(
+          json['category'] ?? 'general'), // NEW
       colorValue: json['color'],
     );
   }
@@ -159,6 +223,7 @@ class Project {
         'dueDate': dueDate.toIso8601String(),
         'priority': priority.stringValue,
         'status': status.stringValue,
+        'category': category.stringValue, // NEW
         'color': colorValue,
       };
 
@@ -187,6 +252,7 @@ class Project {
     DateTime? dueDate,
     Priority? priority,
     ProjectStatus? status,
+    ProjectCategory? category, // NEW
     int? colorValue,
   }) {
     return Project(
@@ -197,6 +263,7 @@ class Project {
       dueDate: dueDate ?? this.dueDate,
       priority: priority ?? this.priority,
       status: status ?? this.status,
+      category: category ?? this.category, // NEW
       colorValue: colorValue ?? this.colorValue,
     );
   }

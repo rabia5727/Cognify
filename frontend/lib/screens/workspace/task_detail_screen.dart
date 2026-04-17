@@ -1,22 +1,30 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/workspace/task_detail_screen.dart
 // PURPOSE: Full screen showing task details with Edit and Delete
+// FIXES:
+//   - Now accepts taskId instead of Task object
+//   - Watches provider for live data (no stale snapshots)
+//   - Category section removed
+//   - Uses priority.color getter
+//   - Fixed stale data when task is updated from edit screen
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/task_model.dart';
-import '../../widgets/app_header.dart';
-import '../../widgets/priority_badge.dart';
+import '../../providers/task_provider.dart';
+import '../../widgets/common/app_header.dart';
+import '../../widgets/common/priority_badge.dart';
 import 'edit_task_screen.dart';
 
 class TaskDetailScreen extends StatefulWidget {
-  final Task task;
+  final String taskId;
   final Function(Task) onTaskUpdated;
   final Function(String) onTaskDeleted;
 
   const TaskDetailScreen({
     super.key,
-    required this.task,
+    required this.taskId,
     required this.onTaskUpdated,
     required this.onTaskDeleted,
   });
@@ -26,30 +34,27 @@ class TaskDetailScreen extends StatefulWidget {
 }
 
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
-  late Task _task;
-
-  @override
-  void initState() {
-    super.initState();
-    _task = widget.task;
-  }
-
-  void _goToEdit() {
-    Navigator.push(
+  Future<void> _goToEdit(Task task) async {
+    final result = await Navigator.push<Task>(
       context,
       MaterialPageRoute(
         builder: (_) => EditTaskScreen(
-          task: _task,
-          onTaskUpdated: (updated) {
-            setState(() => _task = updated);
+          task: task,
+          onTaskUpdated: (updated) async {
+            // Update the provider
+            await context.read<TaskProvider>().updateTask(updated);
+            // Notify parent
             widget.onTaskUpdated(updated);
           },
         ),
       ),
     );
+
+    // No need to do anything else - the Consumer will automatically
+    // show the updated task from the provider
   }
 
-  void _confirmDelete() {
+  void _confirmDelete(String taskId) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -63,10 +68,15 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              widget.onTaskDeleted(_task.id);
-              Navigator.pop(context);
+              // Delete from provider
+              await context.read<TaskProvider>().deleteTask(taskId);
+              // Notify parent
+              widget.onTaskDeleted(taskId);
+              if (mounted) {
+                Navigator.pop(context);
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade500,
@@ -132,7 +142,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 isPrimary: false,
                 onTap: () {
                   Navigator.pop(ctx);
-                  _goToEdit();
+                  // Get fresh task from provider before editing
+                  final freshTask = context
+                      .read<TaskProvider>()
+                      .tasks
+                      .firstWhere((t) => t.id == widget.taskId);
+                  _goToEdit(freshTask);
                 },
               ),
             ],
@@ -149,148 +164,162 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
-        child: Column(
-          children: [
-            AppHeader(
-              title: 'Task Detail',
-              onBack: () => Navigator.pop(context),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-                child: Column(
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: theme.cardColor,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: theme.dividerColor),
-                      ),
-                      child: Column(
-                        children: [
-                          _DetailRow(
-                            icon: Icons.title_rounded,
-                            iconColor: theme.colorScheme.primary,
-                            label: 'Title',
-                            value: _task.title,
-                          ),
-                          _DetailDivider(),
+        child: Consumer<TaskProvider>(
+          builder: (context, taskProvider, _) {
+            // Find the task by ID - always fresh from provider
+            final task = taskProvider.tasks.firstWhere(
+              (t) => t.id == widget.taskId,
+              orElse: () => throw Exception('Task not found'),
+            );
 
-                          _DetailRow(
-                            icon: Icons.notes_rounded,
-                            iconColor: const Color(0xFFEFA535),
-                            label: 'Description',
-                            value: _task.subtitle.isNotEmpty
-                                ? _task.subtitle
-                                : 'No description',
+            return Column(
+              children: [
+                AppHeader(
+                  title: 'Task Detail',
+                  onBack: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: theme.cardColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: theme.dividerColor),
                           ),
-                          _DetailDivider(),
-
-                          _DetailRow(
-                            icon: Icons.calendar_today_outlined,
-                            iconColor: theme.colorScheme.primary,
-                            label: 'Due Date',
-                            value: _task.dueTime != null
-                                ? '${_task.formattedDueDate} at ${_task.dueTime}'
-                                : _task.formattedDueDate,
-                          ),
-                          _DetailDivider(),
-
-                          // Priority - FIXED: Pass Priority enum directly
-                          Row(
+                          child: Column(
                             children: [
-                              Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color:
-                                      const Color(0xFFEFA535).withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: const Icon(Icons.flag_outlined,
-                                    size: 18, color: Color(0xFFEFA535)),
+                              _DetailRow(
+                                icon: Icons.title_rounded,
+                                iconColor: theme.colorScheme.primary,
+                                label: 'Title',
+                                value: task.title,
                               ),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Priority',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color:
-                                              theme.textTheme.bodySmall?.color,
-                                        )),
-                                    const SizedBox(height: 4),
-                                    PriorityBadge(
-                                        priority: _task.priority), // ✅ Fixed
-                                  ],
-                                ),
+                              _DetailDivider(),
+
+                              _DetailRow(
+                                icon: Icons.notes_rounded,
+                                iconColor: const Color(0xFFEFA535),
+                                label: 'Description',
+                                value: task.subtitle.isNotEmpty
+                                    ? task.subtitle
+                                    : 'No description',
+                              ),
+                              _DetailDivider(),
+
+                              _DetailRow(
+                                icon: Icons.calendar_today_outlined,
+                                iconColor: theme.colorScheme.primary,
+                                label: 'Due Date',
+                                value: task.dueTime != null
+                                    ? '${task.formattedDueDate} at ${task.dueTime}'
+                                    : task.formattedDueDate,
+                              ),
+                              _DetailDivider(),
+
+                              // Priority
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color:
+                                          task.priority.color.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(Icons.flag_outlined,
+                                        size: 18, color: task.priority.color),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Priority',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: theme
+                                                  .textTheme.bodySmall?.color,
+                                            )),
+                                        const SizedBox(height: 4),
+                                        PriorityBadge(priority: task.priority),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _showAIPrompt,
-                        icon: Icon(Icons.auto_awesome_rounded,
-                            size: 16, color: theme.colorScheme.primary),
-                        label: Text('Continue with AI',
-                            style: TextStyle(color: theme.colorScheme.primary)),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(color: theme.colorScheme.primary),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _goToEdit,
-                        icon: const Icon(Icons.edit_outlined,
-                            size: 16, color: Colors.white),
-                        label: const Text('Edit',
-                            style: TextStyle(color: Colors.white)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _showAIPrompt,
+                            icon: Icon(Icons.auto_awesome_rounded,
+                                size: 16, color: theme.colorScheme.primary),
+                            label: Text('Continue with AI',
+                                style: TextStyle(
+                                    color: theme.colorScheme.primary)),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side:
+                                  BorderSide(color: theme.colorScheme.primary),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: _confirmDelete,
-                        icon: const Icon(Icons.delete_outline_rounded,
-                            size: 16, color: Colors.red),
-                        label: const Text('Delete Task',
-                            style: TextStyle(color: Colors.red)),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: const BorderSide(color: Colors.red),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              _goToEdit(task);
+                            },
+                            icon: const Icon(Icons.edit_outlined,
+                                size: 16, color: Colors.white),
+                            label: const Text('Edit',
+                                style: TextStyle(color: Colors.white)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _confirmDelete(task.id),
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                size: 16, color: Colors.red),
+                            label: const Text('Delete Task',
+                                style: TextStyle(color: Colors.red)),
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              side: const BorderSide(color: Colors.red),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );

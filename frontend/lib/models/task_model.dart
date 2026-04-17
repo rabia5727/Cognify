@@ -16,6 +16,82 @@ enum Priority {
   low,
 }
 
+// =============================================================
+// TASK CATEGORY ENUM
+// =============================================================
+
+enum TaskCategory {
+  general,
+  email, // ✅ Added
+  classroom, // ✅ Added
+  freelance, // Keep for existing tasks
+  academic, // Keep for existing tasks
+}
+
+extension TaskCategoryExtension on TaskCategory {
+  String get label {
+    switch (this) {
+      case TaskCategory.general:
+        return 'General';
+      case TaskCategory.email:
+        return 'Email';
+      case TaskCategory.classroom:
+        return 'Classroom';
+      case TaskCategory.freelance:
+        return 'Freelance';
+      case TaskCategory.academic:
+        return 'Academic';
+    }
+  }
+
+  /// API-compatible string value
+  String get stringValue {
+    switch (this) {
+      case TaskCategory.general:
+        return 'general';
+      case TaskCategory.email:
+        return 'email';
+      case TaskCategory.classroom:
+        return 'classroom';
+      case TaskCategory.freelance:
+        return 'freelance';
+      case TaskCategory.academic:
+        return 'academic';
+    }
+  }
+
+  /// Color for UI display
+  Color get color {
+    switch (this) {
+      case TaskCategory.academic:
+        return const Color(0xFF1360E2);
+      case TaskCategory.freelance:
+        return const Color(0xFF7B61FF);
+      case TaskCategory.email:
+        return const Color(0xFF7B61FF); // Purple for email
+      case TaskCategory.classroom:
+        return const Color(0xFF1360E2); // Blue for classroom
+      case TaskCategory.general:
+        return const Color(0xFF9E9E9E);
+    }
+  }
+
+  static TaskCategory fromString(String value) {
+    switch (value.toLowerCase()) {
+      case 'email':
+        return TaskCategory.email;
+      case 'classroom':
+        return TaskCategory.classroom;
+      case 'freelance':
+        return TaskCategory.freelance;
+      case 'academic':
+        return TaskCategory.academic;
+      default:
+        return TaskCategory.general;
+    }
+  }
+}
+
 extension PriorityExtension on Priority {
   /// User-friendly display text
   String get label {
@@ -38,6 +114,18 @@ extension PriorityExtension on Priority {
         return 'medium';
       case Priority.low:
         return 'low';
+    }
+  }
+
+  /// Color for UI display
+  Color get color {
+    switch (this) {
+      case Priority.high:
+        return const Color(0xFFFF5252);
+      case Priority.medium:
+        return const Color(0xFFEFA535);
+      case Priority.low:
+        return const Color(0xFF4CAF50);
     }
   }
 
@@ -123,6 +211,7 @@ class Task {
   final Priority priority;
   final TaskStatus status;
   final String? projectId; // Optional link to parent project
+  final TaskCategory category; // Context/source: email, classroom, general
 
   const Task({
     required this.id,
@@ -133,6 +222,7 @@ class Task {
     required this.priority,
     this.status = TaskStatus.todo,
     this.projectId,
+    this.category = TaskCategory.general,
   });
 
   // =============================================================
@@ -173,6 +263,7 @@ class Task {
       priority: PriorityExtension.fromString(json['priority']),
       status: TaskStatusExtension.fromString(json['status'] ?? 'todo'),
       projectId: json['projectId'],
+      category: TaskCategoryExtension.fromString(json['category'] ?? 'general'),
     );
   }
 
@@ -185,6 +276,7 @@ class Task {
         'priority': priority.stringValue,
         'status': status.stringValue,
         'projectId': projectId,
+        'category': category.stringValue,
       };
 
   // =============================================================
@@ -201,6 +293,7 @@ class Task {
     Priority? priority,
     TaskStatus? status,
     String? projectId,
+    TaskCategory? category,
   }) {
     return Task(
       id: id ?? this.id,
@@ -211,6 +304,7 @@ class Task {
       priority: priority ?? this.priority,
       status: status ?? this.status,
       projectId: projectId ?? this.projectId,
+      category: category ?? this.category,
     );
   }
 }

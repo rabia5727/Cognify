@@ -4,9 +4,8 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import '../../constants/app_constant.dart';
 import '../../models/task_model.dart';
-import '../../widgets/app_header.dart';
+import '../../widgets/common/app_header.dart';
 
 class EditTaskScreen extends StatefulWidget {
   final Task task;
@@ -105,6 +104,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       dueDate: _dueDate,
       dueTime: _dueTime != null ? _timeDisplay : widget.task.dueTime,
       priority: _priority,
+      category: widget.task.category,
     );
 
     widget.onTaskUpdated(updated);

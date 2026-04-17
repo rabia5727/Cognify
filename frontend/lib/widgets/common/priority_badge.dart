@@ -12,8 +12,8 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
-import '../constants/app_constant.dart';
-import '../models/task_model.dart'; // Import for Priority enum
+import '../../constants/app_constant.dart';
+import '../../models/task_model.dart'; // Import for Priority enum
 
 class PriorityBadge extends StatelessWidget {
   final Priority priority;
