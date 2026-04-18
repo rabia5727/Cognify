@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/widgets/common/auth_components.dart';
 import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../services/token_storage.dart';
@@ -6,8 +7,8 @@ import '../../providers/auth_provider.dart';
 import '../../models/user_model.dart';
 import '../../utils/validators.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common/auth_components.dart';
 import 'name_screen.dart';
+import 'forgot_password_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -139,56 +140,66 @@ class _AuthScreenState extends State<AuthScreen>
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      color: const Color(0xFFF0F4FF),
-                    ),
-                    child: const Center(
-                        child: Text('🤖', style: TextStyle(fontSize: 28))),
+              // Robot Icon - Centered
+              Center(
+                child: Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    color: const Color(0xFFF0F4FF),
                   ),
-                  const SizedBox(width: 12),
-                  const Text('Co-Tasker',
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.darkText)),
-                ],
+                  child: const Center(
+                    child: Text('🤖', style: TextStyle(fontSize: 36)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // Welcome Text - Centered
+              const Center(
+                child: Text('Welcome Back!!',
+                    style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.darkText)),
+              ),
+              const SizedBox(height: 8),
+              const Center(
+                child: Text('Organize your life, powered by AI',
+                    style: TextStyle(fontSize: 14, color: AppColors.grayText)),
               ),
               const SizedBox(height: 32),
-              const Text('Welcome Back!!',
-                  style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.darkText)),
-              const SizedBox(height: 6),
-              const Text('Organize your life, powered by AI',
-                  style: TextStyle(fontSize: 14, color: AppColors.grayText)),
-              const SizedBox(height: 28),
+              
+              // Tab Bar
               AuthTabBar(isLogin: _isLogin, onToggle: _toggleTab),
               const SizedBox(height: 28),
+              
+              // Form
               FadeTransition(
                 opacity: _fadeAnim,
                 child: _isLogin ? _buildLoginForm() : _buildSignUpForm(),
               ),
               const SizedBox(height: 28),
+              
+              // Primary Button
               PrimaryButton(
                 label: _isLogin ? 'Log in' : 'Sign Up',
                 onPressed: _handleSubmit,
                 isLoading: _isLoading,
               ),
               const SizedBox(height: 28),
+              
+              // Or Divider
               const OrDivider(),
               const SizedBox(height: 20),
-              Row(
-                children: [
-                  SocialButton(
+              
+              // Google Button
+              Row(children: [
+                Expanded(
+                  child: SocialButton(
                     label: 'Continue with Google',
                     icon: SizedBox(
                         width: 20,
@@ -196,15 +207,11 @@ class _AuthScreenState extends State<AuthScreen>
                         child: CustomPaint(painter: _GoogleLogoPainter())),
                     onPressed: () {},
                   ),
-                  const SizedBox(width: 12),
-                  SocialButton(
-                    label: 'Continue with Apple',
-                    icon: const Icon(Icons.apple, size: 20),
-                    onPressed: () {},
-                  ),
-                ],
-              ),
+                )
+              ]),
               const SizedBox(height: 24),
+              
+              // Toggle Login/Signup
               Center(
                 child: RichText(
                   text: TextSpan(
@@ -243,12 +250,13 @@ class _AuthScreenState extends State<AuthScreen>
     return Form(
       key: _loginFormKey,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextFormField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
             validator: Validators.email,
+            textAlign: TextAlign.start,
             decoration: _inputDecoration('Email', 'you@example.com'),
           ),
           const SizedBox(height: 20),
@@ -274,7 +282,13 @@ class _AuthScreenState extends State<AuthScreen>
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () {},
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const ForgotPasswordScreen()),
+                );
+              },
               child: const Text('Forgot Password?',
                   style: TextStyle(
                       color: AppColors.primaryBlue,
@@ -290,7 +304,7 @@ class _AuthScreenState extends State<AuthScreen>
     return Form(
       key: _signupFormKey,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextFormField(
             controller: _emailController,

@@ -11,11 +11,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
-import '../../constants/app_constant.dart';
+
 import '../../providers/auth_provider.dart';
 import '../../utils/validators.dart';
 import '../../utils/ui_feedback.dart';
-import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/layout/section_card.dart';
 import '../../widgets/layout/row_divider.dart';
