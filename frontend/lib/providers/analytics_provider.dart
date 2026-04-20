@@ -54,7 +54,6 @@ class AnalyticsProvider extends ChangeNotifier {
   }
 
   List<double> get monthlyChartData {
-    if (!_hasSufficientData(30)) return DummyData.monthlyChartData;
     final now = DateTime.now();
     return List.generate(12, (i) {
       return _tasks

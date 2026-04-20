@@ -1,10 +1,11 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/settings/settings_screen.dart
 // CHANGES:
-//   - Removed `userName` constructor param → reads AuthProvider
-//   - _logout now calls AuthProvider.logout() instead of direct delay
-//   - After logout, AuthProvider sets state → _AppEntryPoint shows AuthScreen
-//     (no need for pushAndRemoveUntil anymore — the state drives the UI)
+//   - Added Account section with Edit Profile option
+//   - Added arrow icon in front of Edit Profile
+//   - Kept original profile picture (Avatar with person icon)
+//   - Removed "See Personal info"
+//   - Replaced all .withOpacity() with .withValues(alpha:)
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -60,18 +61,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _notificationsEnabled = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notifications_enabled', value);
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(
           context, value ? 'Notifications enabled!' : 'Notifications disabled');
+    }
   }
 
   Future<void> _toggleVoicePermission(bool value) async {
     setState(() => _voicePermissionEnabled = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('voice_permission_enabled', value);
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(context,
           value ? 'Microphone access granted!' : 'Voice permission disabled');
+    }
   }
 
   bool get _isDark => themeNotifier.value == ThemeMode.dark;
@@ -80,9 +83,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', value);
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(
           context, value ? 'Dark mode enabled' : 'Light mode enabled');
+    }
   }
 
   void _copyToClipboard(String text) {
@@ -90,14 +94,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     UIFeedback.showSuccess(context, 'Email copied to clipboard!');
   }
 
+  void _navigateToEditProfile() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ProfileScreen()),
+    );
+  }
+
   Future<void> _logout() async {
     try {
       await context.read<AuthProvider>().logout();
-      // No navigation needed — _AppEntryPoint in main.dart reacts to
-      // AuthProvider.authState changing to unauthenticated automatically.
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         UIFeedback.showError(context, 'Logout failed. Please try again.');
+      }
     }
   }
 
@@ -133,7 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 decoration: BoxDecoration(
                     gradient: LinearGradient(colors: [
                       AppConstants.primaryBlue,
-                      AppConstants.primaryBlue.withOpacity(0.7)
+                      AppConstants.primaryBlue.withValues(alpha: 0.7)
                     ], begin: Alignment.topLeft, end: Alignment.bottomRight),
                     shape: BoxShape.circle),
                 child: const Icon(Icons.headset_mic_outlined,
@@ -171,7 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                    color: AppConstants.primaryBlue.withOpacity(0.1),
+                    color: AppConstants.primaryBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12)),
                 child: Row(mainAxisSize: MainAxisSize.min, children: [
                   const Icon(Icons.access_time_rounded,
@@ -212,7 +222,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                  color: AppConstants.primaryBlue.withOpacity(0.1),
+                  color: AppConstants.primaryBlue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12)),
               child: const Icon(Icons.privacy_tip_outlined,
                   color: AppConstants.primaryBlue, size: 22)),
@@ -284,6 +294,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Consumer<AuthProvider>(
                   builder: (_, auth, __) => Column(
                     children: [
+                      // Profile Card - Original design
                       AppCard(
                         child: Row(
                           children: [
@@ -292,39 +303,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               height: 56,
                               decoration: BoxDecoration(
                                   color: theme.colorScheme.primary
-                                      .withOpacity(0.1),
+                                      .withValues(alpha: 0.1),
                                   shape: BoxShape.circle),
                               child: Icon(Icons.person_rounded,
                                   size: 30, color: theme.colorScheme.primary),
                             ),
                             const SizedBox(width: 16),
                             Expanded(
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Text(auth.userName,
                                       style: theme.textTheme.titleMedium
                                           ?.copyWith(
                                               fontWeight: FontWeight.w700)),
                                   const SizedBox(height: 4),
-                                  GestureDetector(
-                                    onTap: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) =>
-                                                const ProfileScreen())),
-                                    child: Text('See Personal info >',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            color: theme.colorScheme.primary,
-                                            fontWeight: FontWeight.w500)),
+                                  Text(
+                                    auth.userEmail,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: theme.textTheme.bodySmall?.color,
+                                    ),
                                   ),
-                                ])),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 20),
+
+                      // Account Section with Arrow
+                      SectionCard(
+                        title: 'Account',
+                        children: [
+                          _TapRow(
+                            icon: Icons.edit_outlined,
+                            label: 'Edit Profile',
+                            onTap: _navigateToEditProfile,
+                            showArrow: true,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Preferences Section
                       ValueListenableBuilder<ThemeMode>(
                         valueListenable: themeNotifier,
                         builder: (context, mode, _) => SectionCard(
@@ -351,18 +374,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
+
+                      // Support Section
                       SectionCard(title: 'Support', children: [
                         _TapRow(
                             icon: Icons.headset_mic_outlined,
                             label: 'Contact Us',
-                            onTap: _showContactDialog),
+                            onTap: _showContactDialog,
+                            showArrow: true),
                         const RowDivider(),
                         _TapRow(
                             icon: Icons.privacy_tip_outlined,
                             label: 'Privacy Policy',
-                            onTap: _showPrivacyPolicyDialog),
+                            onTap: _showPrivacyPolicyDialog,
+                            showArrow: true),
                       ]),
                       const SizedBox(height: 16),
+
+                      // About Section
                       SectionCard(title: 'About', children: [
                         _TapRow(
                             icon: Icons.info_outline_rounded,
@@ -371,9 +400,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 style: TextStyle(
                                     fontSize: 12,
                                     color: theme.textTheme.bodySmall?.color)),
-                            onTap: () {}),
+                            onTap: () {},
+                            showArrow: false),
                       ]),
                       const SizedBox(height: 32),
+
+                      // Logout Button
                       SizedBox(
                         width: double.infinity,
                         height: 52,
@@ -422,7 +454,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// Private widgets — identical to original
+// Private widgets
 class _PolicySection extends StatelessWidget {
   final String title, content;
   const _PolicySection({required this.title, required this.content});
@@ -456,7 +488,7 @@ class _ContactEmailCard extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                    color: AppConstants.primaryBlue.withOpacity(0.1),
+                    color: AppConstants.primaryBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12)),
                 child: const Icon(Icons.email_outlined,
                     size: 22, color: AppConstants.primaryBlue)),
@@ -476,7 +508,7 @@ class _ContactEmailCard extends StatelessWidget {
             Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                    color: AppConstants.primaryBlue.withOpacity(0.1),
+                    color: AppConstants.primaryBlue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8)),
                 child: const Icon(Icons.copy_rounded,
                     size: 16, color: AppConstants.primaryBlue)),
@@ -522,11 +554,16 @@ class _TapRow extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final Widget? trailing;
-  const _TapRow(
-      {required this.icon,
-      required this.label,
-      required this.onTap,
-      this.trailing});
+  final bool showArrow;
+
+  const _TapRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.trailing,
+    this.showArrow = false,
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -535,15 +572,27 @@ class _TapRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(children: [
-          Icon(icon, size: 20, color: theme.colorScheme.primary),
-          const SizedBox(width: 12),
-          Expanded(
-              child: Text(label,
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(fontWeight: FontWeight.w500))),
-          if (trailing != null) trailing!,
-        ]),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            if (trailing != null) trailing!,
+            if (showArrow)
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: theme.textTheme.bodySmall?.color,
+              ),
+          ],
+        ),
       ),
     );
   }

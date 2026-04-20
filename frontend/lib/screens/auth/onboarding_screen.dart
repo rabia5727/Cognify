@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common/auth_components.dart';
-import '../dashboard/dashboard_screen.dart';
-import 'preference_quiz_screen.dart';
+import 'questionaire/preference_quiz_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   final String userName;
@@ -24,22 +23,28 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.initState();
     _pages = [
       _OnboardingData(
-        topType: _TopType.nameGreeting,
+        topType: _TopType.welcomeWithCoco,
         cardIcon: Icons.auto_awesome,
         cardTitle: 'Smart AI Assistant',
         cardSubtitle: 'Intelligent task suggestion and execution.',
       ),
       _OnboardingData(
-        topType: _TopType.cocoIntro,
+        topType: _TopType.robotOnly,
         cardIcon: Icons.check_circle_outline_rounded,
         cardTitle: 'Task Management',
         cardSubtitle: 'Seamless organization and tracking of tasks.',
       ),
       _OnboardingData(
-        topType: _TopType.mascotLarge,
+        topType: _TopType.robotOnly,
         cardIcon: Icons.trending_up_rounded,
         cardTitle: 'Analytics and Insights',
         cardSubtitle: 'Understand your productivity patterns.',
+      ),
+      _OnboardingData(
+        topType: _TopType.questionPrompt,
+        cardIcon: Icons.question_answer_rounded,
+        cardTitle: 'Quick Questions',
+        cardSubtitle: 'Let me ask you few questions before we start, shall we?',
       ),
     ];
   }
@@ -51,11 +56,24 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      _goToDashboard();
+      _goToQuiz();
     }
   }
 
-  void _goToDashboard() {
+  void _previousPage() {
+    if (_currentPage > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    }
+    else{
+      // on first page, go back to name screen
+      Navigator.pop(context);
+    }
+  }
+
+  void _goToQuiz() {
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
         pageBuilder: (_, __, ___) =>
@@ -85,34 +103,43 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       child: Scaffold(
         backgroundColor: Colors.white,
         body: SafeArea(
-          bottom: false,
           child: Column(
             children: [
-              // Skip button top right
-              Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: TextButton(
-                    onPressed: _goToDashboard,
-                    child: const Text(
-                      'Skip',
-                      style: TextStyle(
-                        color: AppColors.grayText,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
+              // Top row with back button (only on pages > 0)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    if (_currentPage > 0)// only show on pages after the first one
+                      GestureDetector(
+                        onTap: _previousPage,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F4FF),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back_ios_new,
+                            size: 16,
+                            color: AppColors.primaryBlue,
+                          ),
+                        ),
+                      )
+                      else 
+                      const SizedBox(width: 40), // placeholder to keep title centered
+                    const Spacer(),
+                  ],
                 ),
               ),
 
-              // PageView
+              // Page content - Expanded with MainAxisAlignment.center
               Expanded(
                 child: PageView.builder(
                   controller: _pageController,
                   itemCount: _pages.length,
+                  physics: const NeverScrollableScrollPhysics(),
                   onPageChanged: (i) => setState(() => _currentPage = i),
                   itemBuilder: (_, i) => _buildPage(_pages[i]),
                 ),
@@ -152,7 +179,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
 
-              // Bottom padding respecting system nav bar — no yellow line
               SizedBox(
                 height: MediaQuery.of(context).padding.bottom + 16,
               ),
@@ -167,17 +193,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,  // ← CENTER VERTICALLY
         children: [
-          const SizedBox(height: 8),
           _buildTopSection(data.topType),
-          const Spacer(),
+          // only show feature card if not question prompt page
+          if (data.topType != _TopType.questionPrompt) ...[
+          const SizedBox(height: 40),
           _FeatureCard(
             icon: data.cardIcon,
             title: data.cardTitle,
             subtitle: data.cardSubtitle,
           ),
-          const Spacer(flex: 2),
+        ],
         ],
       ),
     );
@@ -185,63 +212,41 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _buildTopSection(_TopType type) {
     switch (type) {
-      case _TopType.nameGreeting:
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
+      case _TopType.welcomeWithCoco:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _SmallMascot(),
-            const SizedBox(width: 14),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Hi, ${widget.userName}',
-                  style: const TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkText,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Meet your AI productivity partner',
-                  style: TextStyle(fontSize: 13, color: AppColors.grayText),
-                ),
-              ],
-            ),
-          ],
-        );
-
-      case _TopType.cocoIntro:
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            _SmallMascot(),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Hey ${widget.userName}, I'm CoCo",
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.darkText,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    "Nice to meet you! I'm your AI Productivity Assistant",
-                    style: TextStyle(fontSize: 13, color: AppColors.grayText),
-                  ),
-                ],
+            Container(
+              width: 100,
+              height: 100,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFFF0F4FF),
+              ),
+              child: const Center(
+                child: Text('🤖', style: TextStyle(fontSize: 52)),
               ),
             ),
+            const SizedBox(height: 24),
+            Text(
+              'Hey ${widget.userName}, I\'m Coco',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: AppColors.darkText,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Nice to meet you! I\'m your AI Productivity Assistant',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, color: AppColors.grayText),
+            ),
           ],
         );
 
-      case _TopType.mascotLarge:
+      case _TopType.robotOnly:
         return Center(
           child: Container(
             width: 150,
@@ -255,13 +260,52 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ),
         );
+
+      case _TopType.questionPrompt:
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            //large robot icon 
+            Container(
+              width: 160,
+              height: 160,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+              color: Color(0xFFF0F4FF),
+            ),
+            child: const Center(
+              child: Text('🤖', style: TextStyle(fontSize: 64)),
+            ),
+          ),
+          const Text(
+            'Quick Questions',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize:20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkText,
+            ),
+          ),
+          const SizedBox(height: 12),
+      const Text(
+        'Let me ask you few questions\nbefore we start, shall we?',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 16,
+          color: AppColors.grayText,
+          height: 1.4,
+          
+        ),
+        ),
+        ],
+        );
     }
   }
 }
 
 // ─── Data model ───────────────────────────────────────────────────────────────
 
-enum _TopType { nameGreeting, cocoIntro, mascotLarge }
+enum _TopType { welcomeWithCoco, robotOnly, questionPrompt }
 
 class _OnboardingData {
   final _TopType topType;
@@ -278,23 +322,6 @@ class _OnboardingData {
 }
 
 // ─── Reusable widgets ─────────────────────────────────────────────────────────
-
-class _SmallMascot extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 68,
-      height: 68,
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: Color(0xFFF0F4FF),
-      ),
-      child: const Center(
-        child: Text('🤖', style: TextStyle(fontSize: 36)),
-      ),
-    );
-  }
-}
 
 class _FeatureCard extends StatelessWidget {
   final IconData icon;
@@ -325,7 +352,6 @@ class _FeatureCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          // Icon box
           Container(
             width: 64,
             height: 64,
@@ -336,7 +362,6 @@ class _FeatureCard extends StatelessWidget {
             child: Icon(icon, color: AppColors.primaryBlue, size: 30),
           ),
           const SizedBox(width: 18),
-          // Text
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

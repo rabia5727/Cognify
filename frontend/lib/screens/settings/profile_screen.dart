@@ -1,24 +1,25 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/settings/profile_screen.dart
 // CHANGES:
-//   - Removed `userName` constructor param → reads AuthProvider
-//   - _saveName / _saveEmail now call AuthProvider.updateUserInfo()
-//     so the name updates everywhere in the app instantly
-//   - All dialog and photo logic unchanged
+//   - Edit Name navigates to separate EditNameScreen
+//   - Change Password navigates to separate ChangePasswordScreen
+//   - Removed arrow from Email (cannot be changed)
+//   - Email now shows as non-editable info
+//   - Added showArrow parameter to _ActionRow
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
-import '../../constants/app_constant.dart';
+
 import '../../providers/auth_provider.dart';
-import '../../utils/validators.dart';
 import '../../utils/ui_feedback.dart';
-import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/layout/section_card.dart';
 import '../../widgets/layout/row_divider.dart';
+import 'edit_name_screen.dart';
+import 'change_password_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -35,38 +36,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _lastSyncGmail = 'Never synced';
   bool _isSaving = false;
 
-  // ─── Save actions ─────────────────────────────────────────────────
-
-  Future<void> _saveName(String newName) async {
-    setState(() => _isSaving = true);
-    // TODO: Replace with → await AuthRepository.updateName(newName);
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      // Update AuthProvider so the name propagates to all screens
-      context.read<AuthProvider>().updateUserInfo(name: newName.trim());
-      setState(() => _isSaving = false);
-      UIFeedback.showSuccess(context, 'Name saved successfully!');
-    }
+  void _navigateToEditName() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EditNameScreen()),
+    );
   }
 
-  Future<void> _saveEmail(String newEmail) async {
-    setState(() => _isSaving = true);
-    // TODO: Replace with → await AuthRepository.updateEmail(newEmail);
-    await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      context.read<AuthProvider>().updateUserInfo(email: newEmail.trim());
-      setState(() => _isSaving = false);
-      UIFeedback.showSuccess(context, 'Email saved successfully!');
-    }
-  }
-
-  Future<void> _savePassword(String currentPassword, String newPassword) async {
-    setState(() => _isSaving = true);
-    // TODO: Replace with → await AuthRepository.changePassword(currentPassword, newPassword);
-    await Future.delayed(const Duration(seconds: 1));
-    setState(() => _isSaving = false);
-    if (mounted)
-      UIFeedback.showSuccess(context, 'Password changed successfully!');
+  void _navigateToChangePassword() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+    );
   }
 
   Future<void> _toggleConnection(String platform, bool current) async {
@@ -82,240 +63,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       _isSaving = false;
     });
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(
           context, current ? '$platform disconnected' : '$platform connected!');
-  }
-
-  // ─── Dialogs — unchanged from original ───────────────────────────
-
-  void _editName() {
-    final auth = context.read<AuthProvider>();
-    final formKey = GlobalKey<FormState>();
-    final controller = TextEditingController(text: auth.userName);
-    _showFieldDialog(
-      title: 'Edit Name',
-      formKey: formKey,
-      child: TextFormField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.name,
-          textCapitalization: TextCapitalization.words,
-          validator: Validators.name,
-          decoration: _inputDecoration('Your name')),
-      onSave: () async {
-        if (!formKey.currentState!.validate()) return;
-        Navigator.pop(context);
-        await _saveName(controller.text);
-      },
-    );
-  }
-
-  void _editEmail() {
-    final auth = context.read<AuthProvider>();
-    final formKey = GlobalKey<FormState>();
-    final controller = TextEditingController(text: auth.userEmail);
-    _showFieldDialog(
-      title: 'Edit Email',
-      formKey: formKey,
-      child: TextFormField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.emailAddress,
-          validator: Validators.email,
-          decoration: _inputDecoration('your@email.com')),
-      onSave: () async {
-        if (!formKey.currentState!.validate()) return;
-        Navigator.pop(context);
-        await _saveEmail(controller.text);
-      },
-    );
-  }
-
-  void _changePassword() {
-    final formKey = GlobalKey<FormState>();
-    final currentCtrl = TextEditingController();
-    final newCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
-    bool obscureCurrent = true, obscureNew = true, obscureConfirm = true;
-    String? passwordStrength;
-    Color strengthColor = Colors.grey;
-
-    void updateStrength(String value, StateSetter setDialogState) {
-      setDialogState(() {
-        if (value.isEmpty) {
-          passwordStrength = null;
-          strengthColor = Colors.grey;
-        } else if (value.length < 6) {
-          passwordStrength = 'Weak';
-          strengthColor = Colors.red;
-        } else if (value.length < 10) {
-          passwordStrength = 'Medium';
-          strengthColor = Colors.orange;
-        } else {
-          passwordStrength = 'Strong';
-          strengthColor = Colors.green;
-        }
-      });
     }
-
-    final theme = Theme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (_, setDialogState) => Dialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.75),
-            child: SingleChildScrollView(
-              child: Form(
-                key: formKey,
-                child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Change Password',
-                          style: theme.textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 20),
-                      TextFormField(
-                          controller: currentCtrl,
-                          obscureText: obscureCurrent,
-                          validator: Validators.password,
-                          decoration: _inputDecoration('Current password')
-                              .copyWith(
-                                  suffixIcon: _toggleIcon(
-                                      obscureCurrent,
-                                      () => setDialogState(() =>
-                                          obscureCurrent = !obscureCurrent)))),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                          controller: newCtrl,
-                          obscureText: obscureNew,
-                          onChanged: (v) => updateStrength(v, setDialogState),
-                          validator: (v) =>
-                              Validators.newPassword(v, currentCtrl.text),
-                          decoration: _inputDecoration('New password').copyWith(
-                              suffixIcon: _toggleIcon(
-                                  obscureNew,
-                                  () => setDialogState(
-                                      () => obscureNew = !obscureNew)))),
-                      if (passwordStrength != null)
-                        Padding(
-                            padding: const EdgeInsets.only(
-                                left: 4, top: 6, bottom: 4),
-                            child: Row(children: [
-                              Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                      color: strengthColor,
-                                      shape: BoxShape.circle)),
-                              const SizedBox(width: 6),
-                              Text('Strength: $passwordStrength',
-                                  style: TextStyle(
-                                      fontSize: 12, color: strengthColor))
-                            ])),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                          controller: confirmCtrl,
-                          obscureText: obscureConfirm,
-                          validator: (v) =>
-                              Validators.confirmPassword(v, newCtrl.text),
-                          decoration: _inputDecoration('Confirm new password')
-                              .copyWith(
-                                  suffixIcon: _toggleIcon(
-                                      obscureConfirm,
-                                      () => setDialogState(() =>
-                                          obscureConfirm = !obscureConfirm)))),
-                      const SizedBox(height: 24),
-                      Row(children: [
-                        Expanded(
-                            child: OutlinedButton(
-                                onPressed: () => Navigator.pop(ctx),
-                                style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12))),
-                                child: const Text('Cancel'))),
-                        const SizedBox(width: 12),
-                        Expanded(
-                            child: ElevatedButton(
-                          onPressed: _isSaving
-                              ? null
-                              : () async {
-                                  if (!formKey.currentState!.validate()) return;
-                                  Navigator.pop(ctx);
-                                  await _savePassword(
-                                      currentCtrl.text, newCtrl.text);
-                                },
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              elevation: 0),
-                          child: _isSaving
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2, color: Colors.white))
-                              : const Text('Save',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600)),
-                        )),
-                      ]),
-                    ]),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showFieldDialog(
-      {required String title,
-      required GlobalKey<FormState> formKey,
-      required Widget child,
-      required VoidCallback onSave}) {
-    final theme = Theme.of(context);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, style: theme.textTheme.titleMedium),
-        content: Form(key: formKey, child: child),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel',
-                  style: TextStyle(color: theme.textTheme.bodySmall?.color))),
-          ElevatedButton(
-            onPressed: _isSaving ? null : onSave,
-            style: ElevatedButton.styleFrom(
-                backgroundColor: theme.colorScheme.primary,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                elevation: 0),
-            child: _isSaving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
-                : const Text('Save', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showDeleteDialog() {
@@ -343,8 +94,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       autofocus: true,
                       decoration: _inputDecoration('Type DELETE to confirm'),
                       validator: (v) {
-                        if (v == null || v.trim().toUpperCase() != 'DELETE')
+                        if (v == null || v.trim().toUpperCase() != 'DELETE') {
                           return 'Type DELETE exactly to confirm';
+                        }
                         return null;
                       }),
                 ])),
@@ -372,7 +124,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ─── Photo picker — unchanged ─────────────────────────────────────
+  // ─── Photo picker ─────────────────────────────────────────────────
 
   Future<void> _pickPhoto() async {
     final theme = Theme.of(context);
@@ -465,10 +217,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _toggleIcon(bool obscure, VoidCallback onToggle) => IconButton(
-      icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
-      onPressed: onToggle);
-
   // ─── Build ────────────────────────────────────────────────────────
 
   @override
@@ -508,28 +256,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 fontWeight: FontWeight.w500)),
                       ),
                       const SizedBox(height: 28),
+
+                      // Account Section
                       SectionCard(children: [
                         _ActionRow(
                             icon: Icons.edit_outlined,
                             label: 'Edit Name',
                             subtitle: auth.userName,
-                            onTap: _editName,
-                            isLoading: _isSaving),
+                            onTap: _navigateToEditName,
+                            isLoading: _isSaving,
+                            showArrow: true),
                         const RowDivider(),
-                        _ActionRow(
+                        // Email Row - NO ARROW, cannot be changed
+                        _InfoRow(
                             icon: Icons.email_outlined,
-                            label: 'Edit Email',
-                            subtitle: auth.userEmail,
-                            onTap: _editEmail,
-                            isLoading: _isSaving),
+                            label: 'Email',
+                            value: auth.userEmail),
                         const RowDivider(),
                         _ActionRow(
                             icon: Icons.lock_outline_rounded,
                             label: 'Change Password',
-                            onTap: _changePassword,
-                            isLoading: _isSaving),
+                            onTap: _navigateToChangePassword,
+                            isLoading: _isSaving,
+                            showArrow: true),
                       ]),
                       const SizedBox(height: 24),
+
+                      // Connected Accounts Section
                       Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -568,13 +321,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ]),
                           ]),
                       const SizedBox(height: 24),
+
+                      // Delete Account Section
                       SectionCard(children: [
                         _ActionRow(
                             icon: Icons.delete_outline_rounded,
                             label: 'Delete Account',
                             labelColor: Colors.red.shade400,
                             iconColor: Colors.red.shade400,
-                            onTap: _showDeleteDialog)
+                            onTap: _showDeleteDialog,
+                            showArrow: true),
                       ]),
                     ],
                   ),
@@ -588,7 +344,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// Private widgets — unchanged from original
+// Private widgets
 class _ProfilePhoto extends StatelessWidget {
   final VoidCallback onTap;
   final File? profileImage;
@@ -657,6 +413,42 @@ class _PhotoOption extends StatelessWidget {
   }
 }
 
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _InfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: theme.colorScheme.primary),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 2),
+                Text(value, style: theme.textTheme.labelSmall),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ActionRow extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -664,14 +456,19 @@ class _ActionRow extends StatelessWidget {
   final VoidCallback onTap;
   final Color? labelColor, iconColor;
   final bool isLoading;
-  const _ActionRow(
-      {required this.icon,
-      required this.label,
-      required this.onTap,
-      this.subtitle,
-      this.labelColor,
-      this.iconColor,
-      this.isLoading = false});
+  final bool showArrow;
+
+  const _ActionRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.subtitle,
+    this.labelColor,
+    this.iconColor,
+    this.isLoading = false,
+    this.showArrow = true,
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -707,7 +504,7 @@ class _ActionRow extends StatelessWidget {
                     height: 20,
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: theme.colorScheme.primary))
-              else
+              else if (showArrow)
                 Icon(Icons.chevron_right_rounded,
                     size: 20, color: theme.textTheme.bodySmall?.color),
             ])));

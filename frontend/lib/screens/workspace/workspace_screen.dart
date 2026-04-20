@@ -1,6 +1,6 @@
 // lib/screens/workspace/workspace_screen.dart
 // FIXES:
-//   - Replaced all deprecated .withOpacity() with .withValues(alpha:)
+//   - Replaced ALL deprecated .withOpacity() with .withValues(alpha:)
 //   - Fixed overlay dispose in _SortButtonState
 //   - Optimized consumers
 
@@ -743,7 +743,7 @@ class _SortButtonState extends State<_SortButton> {
                             _hideDropdown();
                           },
                         );
-                      }).toList(),
+                      }),
                       const Divider(height: 1),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -778,7 +778,7 @@ class _SortButtonState extends State<_SortButton> {
                             _hideDropdown();
                           },
                         );
-                      }).toList(),
+                      }),
                       const SizedBox(height: 8),
                     ],
                   ),
@@ -797,7 +797,6 @@ class _SortButtonState extends State<_SortButton> {
   void _hideDropdown() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    // Only call setState if widget is still mounted
     if (mounted) setState(() => _isOpen = false);
   }
 
@@ -1154,7 +1153,7 @@ class _TaskCard extends StatelessWidget {
     final hour = task.dueDate.hour;
     final minute = task.dueDate.minute;
     final period = hour >= 12 ? 'pm' : 'am';
-    final displayHour = (hour == 0) ? 12 : (hour > 12 ? hour - 12 : hour);
+    final displayHour = hour == 0 ? 12 : (hour > 12 ? hour - 12 : hour);
     return '$displayHour:${minute.toString().padLeft(2, '0')}$period';
   }
 

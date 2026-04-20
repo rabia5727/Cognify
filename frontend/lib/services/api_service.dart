@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:frontend/config/app_config.dart';
 import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 import 'token_storage.dart';

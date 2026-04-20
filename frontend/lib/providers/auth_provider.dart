@@ -70,6 +70,8 @@ class AuthProvider extends ChangeNotifier {
     _user = user;
     _authState = AuthState.authenticated;
     notifyListeners();
+    // Persist so checkSession() can restore email on next app launch
+    TokenStorage.saveUserInfo(name: user.name, email: user.email, id: user.id);
   }
 
   /// Called when the user updates their name / email in ProfileScreen.
