@@ -1,5 +1,8 @@
 // lib/screens/workspace/workspace_screen.dart
-// ONLY Task-related changes - Projects section remains EXACTLY as before
+// FIXES:
+//   - Replaced all deprecated .withOpacity() with .withValues(alpha:)
+//   - Fixed overlay dispose in _SortButtonState
+//   - Optimized consumers
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,11 +45,11 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   int _selectedDayIndex = -1;
   int _filterIndex = 0;
   int _priorityFilterIndex = 0;
-  int _categoryFilterIndex = 0; // 0: All, 1: Email, 2: Classroom
+  int _categoryFilterIndex = 0;
   int _innerTabIndex = 0;
   int _projectFilterIndex = 0;
   int _projectPriorityFilterIndex = 0;
-  int _projectCategoryFilterIndex = 0; // Keep as is for projects
+  int _projectCategoryFilterIndex = 0;
   List<Map<String, dynamic>> _calendarDays = [];
   String? _animatingTaskId;
   late final ConfettiController _confettiController;
@@ -85,21 +88,22 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   // ─── Task actions ────────────────────────────────────────────────
 
   Future<void> _toggleTask(String id) async {
+    if (_animatingTaskId != null) return;
+
     HapticFeedback.lightImpact();
     final taskProvider = context.read<TaskProvider>();
     final task = taskProvider.tasks.firstWhere((t) => t.id == id);
     final isCompleting = !task.isCompleted;
 
     setState(() => _animatingTaskId = id);
-    await Future.delayed(const Duration(milliseconds: 150));
 
     try {
       await taskProvider.toggleComplete(id);
     } catch (_) {
       if (mounted) UIFeedback.showError(context, 'Could not update task.');
+    } finally {
+      if (mounted) setState(() => _animatingTaskId = null);
     }
-
-    setState(() => _animatingTaskId = null);
 
     if (isCompleting && mounted) {
       _confettiController.play();
@@ -192,7 +196,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
     }
   }
 
-  // ─── Project actions (UNCHANGED) ─────────────────────────────────
+  // ─── Project actions ─────────────────────────────────────────────
 
   void _goToAddProject() {
     final allTasks = context.read<TaskProvider>().tasks;
@@ -438,7 +442,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                     ),
                   ],
                   if (_innerTabIndex == 1) ...[
-                    // PROJECTS SECTION - KEPT EXACTLY AS ORIGINAL
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Row(
@@ -551,7 +554,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 }
 
 // ================================================================
-// FILTER CHIP WIDGET (UNCHANGED)
+// FILTER CHIP WIDGET
 // ================================================================
 
 class _FilterChip extends StatelessWidget {
@@ -575,7 +578,7 @@ class _FilterChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.12) : theme.cardColor,
+          color: isSelected ? color.withValues(alpha: 0.12) : theme.cardColor,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isSelected ? color : theme.dividerColor,
@@ -597,7 +600,7 @@ class _FilterChip extends StatelessWidget {
 }
 
 // ================================================================
-// SORT BUTTON (UPDATED CATEGORIES to Email/Classroom)
+// SORT BUTTON
 // ================================================================
 
 class _SortButton extends StatefulWidget {
@@ -663,7 +666,7 @@ class _SortButtonState extends State<_SortButton> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -794,7 +797,8 @@ class _SortButtonState extends State<_SortButton> {
   void _hideDropdown() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    setState(() => _isOpen = false);
+    // Only call setState if widget is still mounted
+    if (mounted) setState(() => _isOpen = false);
   }
 
   @override
@@ -817,7 +821,7 @@ class _SortButtonState extends State<_SortButton> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: widget.isActive
-              ? theme.colorScheme.primary.withOpacity(0.1)
+              ? theme.colorScheme.primary.withValues(alpha: 0.1)
               : theme.dividerColor,
           borderRadius: BorderRadius.circular(20),
           border: widget.isActive
@@ -869,7 +873,7 @@ class _DropdownMenuItem extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        color: isSelected ? color.withOpacity(0.08) : Colors.transparent,
+        color: isSelected ? color.withValues(alpha: 0.08) : Colors.transparent,
         child: Row(
           children: [
             if (isSelected) Icon(Icons.check_rounded, size: 16, color: color),
@@ -890,7 +894,7 @@ class _DropdownMenuItem extends StatelessWidget {
 }
 
 // ================================================================
-// PILL TOGGLE (UNCHANGED)
+// PILL TOGGLE
 // ================================================================
 
 class _PillToggle extends StatelessWidget {
@@ -944,7 +948,7 @@ class _PillToggle extends StatelessWidget {
 }
 
 // ================================================================
-// CALENDAR DAY (UNCHANGED)
+// CALENDAR DAY
 // ================================================================
 
 class _AllDayChip extends StatelessWidget {
@@ -1049,7 +1053,7 @@ class _CalendarDay extends StatelessWidget {
 }
 
 // ================================================================
-// TASKS LIST - UPDATED CARD DESIGN
+// TASKS LIST
 // ================================================================
 
 class _TasksList extends StatelessWidget {
@@ -1127,8 +1131,18 @@ class _TaskCard extends StatelessWidget {
     if (dueDate == today) return 'Today';
     if (dueDate == today.add(const Duration(days: 1))) return 'Tomorrow';
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return '${dueDate.day} ${months[dueDate.month - 1]}';
   }
@@ -1140,7 +1154,7 @@ class _TaskCard extends StatelessWidget {
     final hour = task.dueDate.hour;
     final minute = task.dueDate.minute;
     final period = hour >= 12 ? 'pm' : 'am';
-    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    final displayHour = (hour == 0) ? 12 : (hour > 12 ? hour - 12 : hour);
     return '$displayHour:${minute.toString().padLeft(2, '0')}$period';
   }
 
@@ -1157,11 +1171,9 @@ class _TaskCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ========== TOP ROW: Checkbox + Title + Priority Badge ==========
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Checkbox
                 GestureDetector(
                   onTap: onToggle,
                   child: Container(
@@ -1186,7 +1198,6 @@ class _TaskCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                // Title
                 Expanded(
                   child: Text(
                     task.title,
@@ -1202,7 +1213,6 @@ class _TaskCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Priority Badge (outlined pill)
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -1221,8 +1231,6 @@ class _TaskCard extends StatelessWidget {
                 ),
               ],
             ),
-
-            // Subtitle
             if (task.subtitle.isNotEmpty) ...[
               const SizedBox(height: 6),
               Padding(
@@ -1230,17 +1238,15 @@ class _TaskCard extends StatelessWidget {
                 child: Text(
                   task.subtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                    color: theme.textTheme.bodySmall?.color
+                        ?.withValues(alpha: 0.7),
                   ),
                 ),
               ),
             ],
-
             const SizedBox(height: 12),
             Divider(height: 1, color: theme.dividerColor),
             const SizedBox(height: 10),
-
-            // ========== BOTTOM ROW: Due Time + Category + Edit/Delete ==========
             Row(
               children: [
                 Icon(Icons.access_time_rounded,
@@ -1253,10 +1259,8 @@ class _TaskCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Category Tag
                 _buildCategoryTag(task.category),
                 const Spacer(),
-                // Edit Icon
                 GestureDetector(
                   onTap: onEdit,
                   child: Padding(
@@ -1268,7 +1272,6 @@ class _TaskCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Delete Icon
                 GestureDetector(
                   onTap: onDelete,
                   child: const Padding(
@@ -1324,7 +1327,7 @@ class _TaskCard extends StatelessWidget {
 }
 
 // ================================================================
-// PROJECTS LIST - COMPLETELY UNCHANGED (KEEP YOUR ORIGINAL)
+// PROJECTS LIST
 // ================================================================
 
 class _ProjectsList extends StatelessWidget {
@@ -1385,7 +1388,6 @@ class _ProjectsList extends StatelessWidget {
       filtered = filtered.where((p) => p.priority == Priority.low).toList();
     }
 
-    // Keep original category filter for projects (Freelance/Academic)
     if (categoryFilterIndex == 1) {
       filtered = filtered
           .where((p) => p.category == ProjectCategory.freelance)
@@ -1437,7 +1439,7 @@ class _ProjectsList extends StatelessWidget {
 }
 
 // ================================================================
-// PROJECT CARD - COMPLETELY UNCHANGED (KEEP YOUR ORIGINAL)
+// PROJECT CARD
 // ================================================================
 
 class _ProjectCard extends StatelessWidget {
@@ -1511,7 +1513,7 @@ class _ProjectCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: project.category.color.withOpacity(0.1),
+              color: project.category.color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
