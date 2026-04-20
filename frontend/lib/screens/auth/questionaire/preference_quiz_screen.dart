@@ -1,0 +1,258 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../../theme/app_theme.dart';
+import '../../../widgets/common/auth_components.dart';
+import '../../home_screen.dart';
+import 'q1_goals_screen.dart';
+import 'q2_schedule_screen.dart';
+import 'q3_taskload_screen.dart';
+import 'q4_challenges_screen.dart';
+
+class UserPreferences {
+  List<String> goals = [];
+  List<String> scheduleType = [];
+  int dailyTaskLoad = 5;
+  List<String> productivityChallenge = [];
+}
+
+class PreferenceQuizScreen extends StatefulWidget {
+  final String userName;
+  const PreferenceQuizScreen({super.key, required this.userName});
+
+  @override
+  State<PreferenceQuizScreen> createState() => _PreferenceQuizScreenState();
+}
+
+class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
+  final UserPreferences _prefs = UserPreferences();
+  final int _totalPages = 4;
+
+  bool _isCurrentPageValid() {
+    switch (_currentPage) {
+      case 0:
+        return _prefs.goals.length >= 1 && _prefs.goals.length <= 2;
+      case 1:
+        return _prefs.scheduleType.isNotEmpty;
+      case 2:
+        return true;
+      case 3:
+        return _prefs.productivityChallenge.isNotEmpty;
+      default:
+        return true;
+    }
+  }
+
+  String? _getValidationMessage() {
+    switch (_currentPage) {
+      case 0:
+        if (_prefs.goals.isEmpty) {
+          return 'Please select at least one goal';
+        }
+        if (_prefs.goals.length > 2) {
+          return 'Please select at most 2 goals';
+        }
+        return null;
+      case 1:
+        if (_prefs.scheduleType.isEmpty) {
+          return 'Please select your schedule type';
+        }
+        return null;
+      case 3:
+        if (_prefs.productivityChallenge.isEmpty) {
+          return 'Please select your productivity challenge';
+        }
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  void _next() {
+    final validationMessage = _getValidationMessage();
+    if (validationMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(validationMessage),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: AppColors.primaryBlue,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    if (_currentPage < _totalPages - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _finish();
+    }
+  }
+
+  void _skip() {
+    if (_currentPage < _totalPages - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    } else {
+      _finish();
+    }
+  }
+
+  void _back() {
+    if (_currentPage > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _finish() {
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => const HomeScreen(),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              // Top bar: back + progress indicator
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                child: Row(
+                  children: [
+                    // Back button (only on pages > 0)
+                    if (_currentPage > 0)
+                      GestureDetector(
+                        onTap: _back,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F4FF),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.arrow_back_ios_new,
+                              size: 16, color: AppColors.primaryBlue),
+                        ),
+                      ),
+                      //addes spacing only if back button exists 
+                      if (_currentPage > 0) const SizedBox(width: 12),
+
+                    // Progress bar
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '${_currentPage + 1} of $_totalPages',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.grayText,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: (_currentPage + 1) / _totalPages,
+                              backgroundColor: const Color(0xFFE8F0FE),
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                  AppColors.primaryBlue),
+                              minHeight: 6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Page content
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (i) => setState(() => _currentPage = i),
+                  children: [
+                    Q1GoalsScreen(
+                      selected: _prefs.goals,
+                      onChanged: (val) => setState(() => _prefs.goals = val),
+                    ),
+                    Q2ScheduleScreen(
+                      selected: _prefs.scheduleType,
+                      onChanged: (val) => setState(() => _prefs.scheduleType = val),
+                    ),
+                    Q3TaskloadScreen(
+                      value: _prefs.dailyTaskLoad,
+                      onChanged: (val) => setState(() => _prefs.dailyTaskLoad = val),
+                    ),
+                    Q4ChallengesScreen(
+                      selected: _prefs.productivityChallenge,
+                      onChanged: (val) => setState(() => _prefs.productivityChallenge = val),
+                    ),
+                  ],
+                ),
+              ),
+              //flexible space before buttons
+              // Next Button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
+                child: PrimaryButton(
+                  label: _currentPage == _totalPages - 1 ? "All Done" : 'Next',
+                  onPressed: _next,
+                ),
+              ),
+
+              // Skip Button (BELOW Next button)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: TextButton(
+                  onPressed: _skip,
+                  child: Text(
+                    'Skip',
+                    style: TextStyle(
+                      color: AppColors.grayText,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

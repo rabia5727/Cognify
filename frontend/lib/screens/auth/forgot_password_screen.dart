@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/screens/auth/verfication_screen.dart';
 import '../../theme/app_theme.dart';
 import 'auth_screen.dart';
 
@@ -12,7 +13,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
-  bool _isEmailSent = false;
+  final bool _isEmailSent = false;
 
   @override
   void dispose() {
@@ -30,13 +31,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
     
-    // Simulate API call
+    // TODO: Call API to send verification code
     await Future.delayed(const Duration(seconds: 1));
-    
-    setState(() {
-      _isLoading = false;
-      _isEmailSent = true;
-    });
+      
+    setState(() => _isLoading = false);
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VerificationScreen(email: _emailController.text.trim()),
+        ),
+      );
+    }
   }
 
   @override

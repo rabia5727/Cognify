@@ -64,8 +64,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // TODO: Replace with → await AuthRepository.changePassword(currentPassword, newPassword);
     await Future.delayed(const Duration(seconds: 1));
     setState(() => _isSaving = false);
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(context, 'Password changed successfully!');
+    }
   }
 
   Future<void> _toggleConnection(String platform, bool current) async {
@@ -81,9 +82,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       _isSaving = false;
     });
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(
           context, current ? '$platform disconnected' : '$platform connected!');
+    }
   }
 
   // ─── Dialogs — unchanged from original ───────────────────────────
@@ -342,8 +344,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       autofocus: true,
                       decoration: _inputDecoration('Type DELETE to confirm'),
                       validator: (v) {
-                        if (v == null || v.trim().toUpperCase() != 'DELETE')
+                        if (v == null || v.trim().toUpperCase() != 'DELETE') {
                           return 'Type DELETE exactly to confirm';
+                        }
                         return null;
                       }),
                 ])),

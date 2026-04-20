@@ -325,8 +325,9 @@ class _WeeklyBarChart extends StatelessWidget {
                 showTitles: true,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
-                  if (index < 0 || index >= labels.length)
+                  if (index < 0 || index >= labels.length) {
                     return const SizedBox();
+                  }
                   return Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(labels[index],
@@ -382,8 +383,9 @@ class _MonthlyLineChart extends StatelessWidget {
                 interval: 1,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
-                  if (index < 0 || index >= labels.length || index % 2 != 0)
+                  if (index < 0 || index >= labels.length || index % 2 != 0) {
                     return const SizedBox();
+                  }
                   return Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(labels[index],

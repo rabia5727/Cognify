@@ -740,7 +740,7 @@ class _SortButtonState extends State<_SortButton> {
                             _hideDropdown();
                           },
                         );
-                      }).toList(),
+                      }),
                       const Divider(height: 1),
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -775,7 +775,7 @@ class _SortButtonState extends State<_SortButton> {
                             _hideDropdown();
                           },
                         );
-                      }).toList(),
+                      }),
                       const SizedBox(height: 8),
                     ],
                   ),

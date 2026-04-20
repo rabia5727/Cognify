@@ -60,18 +60,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _notificationsEnabled = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notifications_enabled', value);
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(
           context, value ? 'Notifications enabled!' : 'Notifications disabled');
+    }
   }
 
   Future<void> _toggleVoicePermission(bool value) async {
     setState(() => _voicePermissionEnabled = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('voice_permission_enabled', value);
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(context,
           value ? 'Microphone access granted!' : 'Voice permission disabled');
+    }
   }
 
   bool get _isDark => themeNotifier.value == ThemeMode.dark;
@@ -80,9 +82,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', value);
-    if (mounted)
+    if (mounted) {
       UIFeedback.showSuccess(
           context, value ? 'Dark mode enabled' : 'Light mode enabled');
+    }
   }
 
   void _copyToClipboard(String text) {
@@ -96,8 +99,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // No navigation needed — _AppEntryPoint in main.dart reacts to
       // AuthProvider.authState changing to unauthenticated automatically.
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         UIFeedback.showError(context, 'Logout failed. Please try again.');
+      }
     }
   }
 
@@ -510,7 +514,7 @@ class _ToggleRow extends StatelessWidget {
         Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: theme.colorScheme.primary,
+            activeThumbColor: theme.colorScheme.primary,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
       ]),
     );
