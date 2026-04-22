@@ -1,7 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, Depends
+from pydantic import BaseModel
 from app.utils.dependencies import get_current_user
-from app.models.user import UserUpdate, UserResponse, UserPreferences
+from app.utils.auth import verify_password, hash_password
+from app.models.user import UserUpdate, UserResponse, UserPreferences, UserPreferencesUpdate
 from app.crud.user import update_user, delete_user
+from app.db.connection import get_database
+from bson import ObjectId
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -82,3 +86,55 @@ async def delete_me(
         )
 
     return {"message": "Account deleted successfully"}
+
+
+# PATCH preferences (partial update — only provided fields change)
+@router.patch("/me/preferences")
+async def update_preferences(
+    body: UserPreferencesUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    db = get_database()
+    patch = {
+        f"preferences.{k}": v
+        for k, v in body.model_dump(exclude_none=True).items()
+    }
+    if patch:
+        await db["users"].update_one(
+            {"_id": ObjectId(str(current_user["_id"]))},
+            {"$set": patch},
+        )
+    return {"message": "Preferences updated"}
+
+
+# CHANGE PASSWORD
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@router.patch("/me/password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    if current_user.get("is_google_user"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google accounts cannot change password here"
+        )
+    if not verify_password(body.current_password, current_user["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+    if len(body.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters"
+        )
+    db = get_database()
+    await db["users"].update_one(
+        {"_id": ObjectId(str(current_user["_id"]))},
+        {"$set": {"password_hash": hash_password(body.new_password)}}
+    )
+    return {"message": "Password changed successfully"}

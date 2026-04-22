@@ -3,6 +3,7 @@ import '../../utils/validators.dart';
 import '../../utils/ui_feedback.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common/auth_components.dart';
+import '../../services/user_service.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
   const ChangePasswordScreen({super.key});
@@ -23,7 +24,6 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   bool _isSaving = false;
   String? _passwordStrength;
   Color _strengthColor = Colors.grey;
-  double _strengthProgress = 0;
 
   @override
   void dispose() {
@@ -38,19 +38,15 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       if (value.isEmpty) {
         _passwordStrength = null;
         _strengthColor = Colors.grey;
-        _strengthProgress = 0;
       } else if (value.length < 6) {
         _passwordStrength = 'Weak';
         _strengthColor = Colors.red;
-        _strengthProgress = 0.33;
       } else if (value.length < 10) {
         _passwordStrength = 'Medium';
         _strengthColor = Colors.orange;
-        _strengthProgress = 0.66;
       } else {
         _passwordStrength = 'Strong';
         _strengthColor = Colors.green;
-        _strengthProgress = 1.0;
       }
     });
   }
@@ -60,14 +56,21 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
     setState(() => _isSaving = true);
 
-    // TODO: Replace with API call
-    await Future.delayed(const Duration(seconds: 1));
+    final error = await UserService.changePassword(
+      currentPassword: _currentPasswordController.text,
+      newPassword: _newPasswordController.text,
+    );
 
-    if (mounted) {
-      setState(() => _isSaving = false);
-      UIFeedback.showSuccess(context, 'Password changed successfully!');
-      Navigator.pop(context);
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (error != null) {
+      UIFeedback.showError(context, error);
+      return;
     }
+
+    UIFeedback.showSuccess(context, 'Password changed successfully!');
+    Navigator.pop(context);
   }
 
   @override
@@ -91,6 +94,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Form(
             key: _formKey,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -163,32 +167,17 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   ),
                 ),
                 if (_passwordStrength != null) ...[
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: _strengthProgress,
-                            backgroundColor: isDark
-                                ? AppColors.darkBorder
-                                : AppColors.lightGray,
-                            valueColor: AlwaysStoppedAnimation(_strengthColor),
-                            minHeight: 4,
-                          ),
-                        ),
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Password strength: $_passwordStrength',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: _strengthColor,
                       ),
-                      const SizedBox(width: 10),
-                      Text(
-                        _passwordStrength!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _strengthColor,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
                 const SizedBox(height: 16),

@@ -14,12 +14,13 @@
 import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../services/token_storage.dart';
+import '../services/user_service.dart';
 
 enum AuthState { unknown, authenticated, unauthenticated }
 
 class AuthProvider extends ChangeNotifier {
   AuthState _authState = AuthState.unknown;
-  UserModel? _user; // ✅ Changed from AppUser to UserModel
+  UserModel? _user;
   bool _isLoading = false;
 
   AuthState get authState => _authState;
@@ -33,8 +34,6 @@ class AuthProvider extends ChangeNotifier {
 
   // ─── Session bootstrap ────────────────────────────────────────────
 
-  /// Called once at app start in main.dart.
-  /// Checks stored token → sets authenticated if valid.
   Future<void> checkSession() async {
     _isLoading = true;
     notifyListeners();
@@ -42,17 +41,18 @@ class AuthProvider extends ChangeNotifier {
     try {
       final token = await TokenStorage.getToken();
       if (token != null && token.isNotEmpty) {
-        // TODO: Replace with → _user = await AuthRepository.getProfile();
-        // For now use a placeholder user from stored prefs
-        final name = await TokenStorage.getUserName() ?? 'User';
-        final email = await TokenStorage.getUserEmail() ?? '';
-
-        _user = UserModel(
-          id: 'local',
-          name: name,
-          email: email,
-        );
-        _authState = AuthState.authenticated;
+        final profile = await UserService.getProfile();
+        if (profile != null) {
+          _user = UserModel.fromJson(profile);
+          await TokenStorage.saveUserInfo(
+            name: _user!.name,
+            email: _user!.email,
+            id: _user!.id,
+          );
+          _authState = AuthState.authenticated;
+        } else {
+          _authState = AuthState.unauthenticated;
+        }
       } else {
         _authState = AuthState.unauthenticated;
       }
@@ -83,6 +83,18 @@ class AuthProvider extends ChangeNotifier {
       email: email ?? _user!.email,
     );
     notifyListeners();
+  }
+
+  // ─── Delete account ───────────────────────────────────────────────
+
+  Future<String?> deleteAccount() async {
+    final error = await UserService.deleteAccount();
+    if (error != null) return error;
+    await TokenStorage.clearAll();
+    _user = null;
+    _authState = AuthState.unauthenticated;
+    notifyListeners();
+    return null;
   }
 
   // ─── Logout ───────────────────────────────────────────────────────

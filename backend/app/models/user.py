@@ -53,6 +53,16 @@ class UserUpdate(BaseModel):
 
 
 # --------------------------
+# Partial preferences update (only provided fields are changed)
+# --------------------------
+class UserPreferencesUpdate(BaseModel):
+    notifications_enabled: Optional[bool] = None
+    daily_work_hours: Optional[int] = None
+    categories: Optional[list[str]] = None
+    theme: Optional[str] = None
+
+
+# --------------------------
 # What we send back to user (never expose password_hash)
 # --------------------------
 class UserResponse(BaseModel):

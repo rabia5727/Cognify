@@ -33,6 +33,8 @@ class _AuthScreenState extends State<AuthScreen>
   bool _obscureConfirm = true;
   bool _agreedToTerms = false;
   bool _isLoading = false;
+  String? _loginError;
+  bool _termsError = false;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -54,19 +56,17 @@ class _AuthScreenState extends State<AuthScreen>
   }
 
   Future<void> _handleSubmit() async {
-    // Validate based on current mode
+    setState(() {
+      _loginError = null;
+      _termsError = false;
+    });
+
     if (_isLogin) {
       if (!_loginFormKey.currentState!.validate()) return;
     } else {
       if (!_signupFormKey.currentState!.validate()) return;
       if (!_agreedToTerms) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please agree to the Terms & Conditions'),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() => _termsError = true);
         return;
       }
     }
@@ -83,33 +83,21 @@ class _AuthScreenState extends State<AuthScreen>
       setState(() => _isLoading = false);
 
       if (result.isSuccess && result.data != null) {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
         final userResult = await ApiService.getMe();
         if (!mounted) return;
-
-        final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
         final user = UserModel(
-          id: userResult.data?.id ?? 'local',
-          name: userResult.data?.name ?? _emailController.text.split('@')[0],
-          email: _emailController.text.trim(),
+          id: userResult.data?.id ?? '',
+          name: userResult.data?.name ?? '',
+          email: userResult.data?.email ?? '',
         );
-
         final token =
             result.data?.accessToken ?? await TokenStorage.getToken() ?? '';
-
-        // This will trigger navigation to HomeScreen via _AppEntryPoint
         authProvider.onLoginSuccess(user, token);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result.error ?? 'Login failed'),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        setState(() => _loginError = result.error ?? 'Incorrect email or password.');
       }
     } else {
-      // Sign up: go to NameScreen
       setState(() => _isLoading = false);
       if (!mounted) return;
       Navigator.of(context).push(
@@ -157,7 +145,7 @@ class _AuthScreenState extends State<AuthScreen>
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // Welcome Text - Centered
               const Center(
                 child: Text('Welcome Back!!',
@@ -172,18 +160,18 @@ class _AuthScreenState extends State<AuthScreen>
                     style: TextStyle(fontSize: 14, color: AppColors.grayText)),
               ),
               const SizedBox(height: 32),
-              
+
               // Tab Bar
               AuthTabBar(isLogin: _isLogin, onToggle: _toggleTab),
               const SizedBox(height: 28),
-              
+
               // Form
               FadeTransition(
                 opacity: _fadeAnim,
                 child: _isLogin ? _buildLoginForm() : _buildSignUpForm(),
               ),
               const SizedBox(height: 28),
-              
+
               // Primary Button
               PrimaryButton(
                 label: _isLogin ? 'Log in' : 'Sign Up',
@@ -191,11 +179,11 @@ class _AuthScreenState extends State<AuthScreen>
                 isLoading: _isLoading,
               ),
               const SizedBox(height: 28),
-              
+
               // Or Divider
               const OrDivider(),
               const SizedBox(height: 20),
-              
+
               // Google Button
               Row(children: [
                 Expanded(
@@ -210,7 +198,7 @@ class _AuthScreenState extends State<AuthScreen>
                 )
               ]),
               const SizedBox(height: 24),
-              
+
               // Toggle Login/Signup
               Center(
                 child: RichText(
@@ -249,6 +237,7 @@ class _AuthScreenState extends State<AuthScreen>
   Widget _buildLoginForm() {
     return Form(
       key: _loginFormKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -295,6 +284,29 @@ class _AuthScreenState extends State<AuthScreen>
                       fontWeight: FontWeight.w600)),
             ),
           ),
+          if (_loginError != null) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red.shade600, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _loginError!,
+                      style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -357,7 +369,10 @@ class _AuthScreenState extends State<AuthScreen>
             children: [
               Checkbox(
                 value: _agreedToTerms,
-                onChanged: (v) => setState(() => _agreedToTerms = v ?? false),
+                onChanged: (v) => setState(() {
+                  _agreedToTerms = v ?? false;
+                  if (_agreedToTerms) _termsError = false;
+                }),
                 activeColor: AppColors.primaryBlue,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4)),
@@ -373,6 +388,16 @@ class _AuthScreenState extends State<AuthScreen>
               ),
             ],
           ),
+          if (_termsError) ...[
+            const SizedBox(height: 6),
+            Padding(
+              padding: const EdgeInsets.only(left: 4),
+              child: Text(
+                'You must agree to the Terms & Conditions to continue.',
+                style: TextStyle(color: Colors.red.shade700, fontSize: 12),
+              ),
+            ),
+          ],
         ],
       ),
     );

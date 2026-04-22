@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constant.dart';
 import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
@@ -13,6 +14,7 @@ import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/voice_fab.dart';
 import '../../widgets/common/priority_badge.dart';
+import '../../widgets/common/notification_permission_sheet.dart';
 import '../../widgets/empty_states/empty_dashboard.dart';
 import '../../widgets/layout/refresh_wrapper.dart';
 import '../../widgets/loading/shimmer_loading.dart';
@@ -50,13 +52,25 @@ class _DashboardScreenState extends State<DashboardScreen>
     _scoreAnimation = Tween<double>(begin: 0, end: 0).animate(
       CurvedAnimation(parent: _scoreController, curve: Curves.easeOutCubic),
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) => _animateScore());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _animateScore();
+      _maybeShowNotificationPermission();
+    });
   }
 
   @override
   void dispose() {
     _scoreController.dispose();
     super.dispose();
+  }
+
+  Future<void> _maybeShowNotificationPermission() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('notification_permission_shown') ?? false;
+    if (!shown && mounted) {
+      await showNotificationPermissionSheet(context);
+      await prefs.setBool('notification_permission_shown', true);
+    }
   }
 
   void _animateScore() {

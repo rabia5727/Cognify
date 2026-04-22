@@ -18,6 +18,7 @@ from app.crud.workflow import (
     complete_milestone
 )
 from app.utils.dependencies import get_current_user
+from app.crud.notifications_triggers import check_workflow_progress
 
 router = APIRouter(prefix="/workflows", tags=["Workflows"])
 
@@ -179,4 +180,11 @@ async def mark_milestone_complete(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Milestone {milestone_id} not found"
         )
+    # Fire progress notification if a threshold was crossed
+    await check_workflow_progress(
+        workflow_id=workflow_id,
+        user_id=user_id,
+        workflow_title=workflow.title,
+        progress=workflow.progress,
+    )
     return workflow

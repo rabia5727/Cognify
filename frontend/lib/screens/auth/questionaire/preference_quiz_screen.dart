@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import '../../../theme/app_theme.dart';
 import '../../../widgets/common/auth_components.dart';
-import '../../home_screen.dart';
+import '../../../providers/auth_provider.dart';
+import '../../../services/user_service.dart';
+import '../../../models/user_model.dart';
+import '../../../services/token_storage.dart';
 import 'q1_goals_screen.dart';
 import 'q2_schedule_screen.dart';
 import 'q3_taskload_screen.dart';
@@ -113,12 +117,23 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
     }
   }
 
-  void _finish() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => const HomeScreen(),
+  Future<void> _finish() async {
+    final profile = await UserService.getProfile();
+    final token = await TokenStorage.getToken() ?? '';
+
+    if (!mounted) return;
+
+    context.read<AuthProvider>().onLoginSuccess(
+      UserModel(
+        id: profile?['id'] ?? '',
+        name: profile?['name'] ?? widget.userName,
+        email: profile?['email'] ?? '',
       ),
+      token,
     );
+
+    // Pop all pushed routes back to _AppEntryPoint, which now shows HomeScreen
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override

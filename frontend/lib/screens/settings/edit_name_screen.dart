@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/user_service.dart';
 import '../../utils/ui_feedback.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common/auth_components.dart';
@@ -46,16 +47,19 @@ class _EditNameScreenState extends State<EditNameScreen> {
         '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}'
             .trim();
 
-    // TODO: Replace with API call
-    await Future.delayed(const Duration(seconds: 1));
+    final error = await UserService.updateName(newName);
+
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+
+    if (error != null) {
+      UIFeedback.showError(context, error);
+      return;
+    }
 
     context.read<AuthProvider>().updateUserInfo(name: newName);
-
-    if (mounted) {
-      setState(() => _isSaving = false);
-      UIFeedback.showSuccess(context, 'Name updated successfully!');
-      Navigator.pop(context);
-    }
+    UIFeedback.showSuccess(context, 'Name updated successfully!');
+    Navigator.pop(context);
   }
 
   @override

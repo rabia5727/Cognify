@@ -106,11 +106,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Text('Cancel',
                   style: TextStyle(color: theme.textTheme.bodySmall?.color))),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (!formKey.currentState!.validate()) return;
-              Navigator.pop(ctx);
-              // TODO: await AuthRepository.deleteAccount();
-              context.read<AuthProvider>().logout();
+              final auth = context.read<AuthProvider>();
+              Navigator.pop(ctx); // close dialog
+
+              final error = await auth.deleteAccount();
+
+              if (error != null && mounted) {
+                UIFeedback.showError(context, error);
+                return;
+              }
+
+              if (mounted) {
+                Navigator.of(context).popUntil((route) => route.isFirst);
+              }
             },
             style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red.shade500,

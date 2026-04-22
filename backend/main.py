@@ -2,13 +2,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.db.connection import connect_db, close_db
-from app.routes import auth, users, task, workflow
+from app.routes import auth, users, task, workflow, notification
+from app.crud.notification import setup_indexes
+from app.schedular import start_notification_scheduler, stop_notification_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
+    await setup_indexes() 
+    start_notification_scheduler()
     yield
     await close_db()
+    stop_notification_scheduler()   
 
 app = FastAPI(
     title="Cognify API",
@@ -17,7 +22,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ✅ Fix CORS — allows Flutter web and mobile to connect
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -30,6 +35,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(task.router)
 app.include_router(workflow.router)
+app.include_router(notification.router)
 
 @app.get("/")
 async def root():

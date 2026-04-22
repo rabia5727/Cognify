@@ -60,7 +60,6 @@ class _NameScreenState extends State<NameScreen> {
     setState(() => _isLoading = false);
 
     if (result.isSuccess) {
-      // Registration successful — proceed to onboarding
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => OnboardingScreen(userName: name),
