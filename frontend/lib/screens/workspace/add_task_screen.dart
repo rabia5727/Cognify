@@ -11,8 +11,13 @@ import '../../widgets/common/app_header.dart';
 class AddTaskScreen extends StatefulWidget {
   // Callback — called with the new task when user taps Save
   final Function(Task) onTaskAdded;
+  final String? initialProjectId;
 
-  const AddTaskScreen({super.key, required this.onTaskAdded});
+  const AddTaskScreen({
+    super.key,
+    required this.onTaskAdded,
+    this.initialProjectId,
+  });
 
   @override
   State<AddTaskScreen> createState() => _AddTaskScreenState();
@@ -88,18 +93,19 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     final newTask = Task(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleCtrl.text.trim(),
-      subtitle: _descCtrl.text.trim(),
+      description: _descCtrl.text.trim(),
       dueDate: _dueDate!,
       dueTime: _dueTime != null ? _timeDisplay : null,
       priority: _priority,
       status: TaskStatus.todo,
       category: TaskCategory.general,
+      projectId: widget.initialProjectId,
     );
 
     try {
       await widget.onTaskAdded(newTask);
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, newTask);
       }
     } catch (e) {
       if (mounted) {

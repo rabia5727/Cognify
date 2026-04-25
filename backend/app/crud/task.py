@@ -24,8 +24,10 @@ async def create_task(task_data: TaskCreate, user_id: str) -> TaskResponse:
         "title": task_data.title,
         "description": task_data.description,
         "priority": task_data.priority,
-        "category": task_data.category,  # academic/freelance/personal
+        "category": task_data.category,
         "due_date": task_data.due_date,
+        "due_time": task_data.due_time,
+        "project_id": task_data.project_id,
         # System fields (user doesn't set these)
         "status": "pending",              # New tasks always start as pending
         "created_at": datetime.utcnow(),  # Set creation timestamp
@@ -208,15 +210,19 @@ async def update_task(task_id: str, user_id: str, task_data: TaskUpdate) -> Task
     if task_data.title is not None:
         update_fields["title"] = task_data.title          # Update title
     if task_data.description is not None:
-        update_fields["description"] = task_data.description  # Update description
+        update_fields["description"] = task_data.description
     if task_data.status is not None:
-        update_fields["status"] = task_data.status        # Update status
+        update_fields["status"] = task_data.status
     if task_data.priority is not None:
-        update_fields["priority"] = task_data.priority      # Update priority
+        update_fields["priority"] = task_data.priority
     if task_data.category is not None:
-        update_fields["category"] = task_data.category    # Update category
+        update_fields["category"] = task_data.category
     if task_data.due_date is not None:
-        update_fields["due_date"] = task_data.due_date    # Update due date
+        update_fields["due_date"] = task_data.due_date
+    if task_data.due_time is not None:
+        update_fields["due_time"] = task_data.due_time
+    if task_data.project_id is not None:
+        update_fields["project_id"] = task_data.project_id
 
     # Step 3: ALWAYS update the timestamp
     # This helps track when task was last modified

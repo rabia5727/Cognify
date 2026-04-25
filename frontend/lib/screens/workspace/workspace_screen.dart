@@ -223,11 +223,12 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
     );
   }
 
-  void _goToEditProject(String id) {
+  Future<void> _goToEditProject(String id) async {
     final project =
         context.read<ProjectProvider>().projects.firstWhere((p) => p.id == id);
     final allTasks = context.read<TaskProvider>().tasks;
-    Navigator.push(
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => EditProjectScreen(
@@ -249,18 +250,23 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
         ),
       ),
     );
+
+    if (mounted) {
+      await context.read<TaskProvider>().refreshTasks();
+      await context.read<ProjectProvider>().refreshProjects();
+    }
   }
 
-  void _goToProjectDetail(String id) {
+  Future<void> _goToProjectDetail(String id) async {
     final project =
         context.read<ProjectProvider>().projects.firstWhere((p) => p.id == id);
     final allTasks = context.read<TaskProvider>().tasks;
-    Navigator.push(
+
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ProjectDetailScreen(
           project: project,
-          allTasks: allTasks,
           onProjectUpdated: (updated) async {
             try {
               await context.read<ProjectProvider>().updateProject(updated);
@@ -275,6 +281,11 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
         ),
       ),
     );
+
+    // ✅ Refresh after returning so workspace list is current
+    if (mounted) {
+      await context.read<ProjectProvider>().refreshProjects();
+    }
   }
 
   Future<void> _deleteProject(String id) async {
@@ -461,7 +472,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: _FilterChip(
-                                    label: 'In Progress',
+                                    label: 'Active',
                                     isSelected: _projectFilterIndex == 1,
                                     onTap: () =>
                                         setState(() => _projectFilterIndex = 1),
@@ -498,6 +509,18 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                                 _projectCategoryFilterIndex = 0;
                               });
                             },
+                            categoryLabels: const [
+                              'All',
+                              'Academic',
+                              'Freelance',
+                              'Personal',
+                            ],
+                            categoryColors: const [
+                              Color(0xFF1360E2),
+                              Color(0xFF1360E2),
+                              Color(0xFF7B61FF),
+                              Color(0xFF26A69A),
+                            ],
                           ),
                         ],
                       ),
@@ -610,6 +633,8 @@ class _SortButton extends StatefulWidget {
   final ValueChanged<int> onPriorityChanged;
   final ValueChanged<int> onCategoryChanged;
   final VoidCallback onReset;
+  final List<String> categoryLabels;
+  final List<Color> categoryColors;
 
   const _SortButton({
     required this.isActive,
@@ -618,6 +643,13 @@ class _SortButton extends StatefulWidget {
     required this.onPriorityChanged,
     required this.onCategoryChanged,
     required this.onReset,
+    this.categoryLabels = const ['All', 'Email', 'Classroom', 'General'],
+    this.categoryColors = const [
+      Color(0xFF1360E2),
+      Color(0xFF7B61FF),
+      Color(0xFF1360E2),
+      Color(0xFF9E9E9E),
+    ],
   });
 
   @override
@@ -755,20 +787,11 @@ class _SortButtonState extends State<_SortButton> {
                                   ),
                         ),
                       ),
-                      ...['All', 'Email', 'Classroom', 'General']
-                          .asMap()
-                          .entries
-                          .map((entry) {
+                      ...widget.categoryLabels.asMap().entries.map((entry) {
                         final index = entry.key;
                         final label = entry.value;
                         final isSelected = widget.categoryIndex == index;
-                        final colors = [
-                          const Color(0xFF1360E2),
-                          const Color(0xFF7B61FF),
-                          const Color(0xFF1360E2),
-                          const Color(0xFF9E9E9E),
-                        ];
-                        final color = colors[index];
+                        final color = widget.categoryColors[index];
                         return _DropdownMenuItem(
                           label: label,
                           isSelected: isSelected,
@@ -1230,12 +1253,12 @@ class _TaskCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (task.subtitle.isNotEmpty) ...[
+            if (task.description.isNotEmpty) ...[
               const SizedBox(height: 6),
               Padding(
                 padding: const EdgeInsets.only(left: 34),
                 child: Text(
-                  task.subtitle,
+                  task.description,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.textTheme.bodySmall?.color
                         ?.withValues(alpha: 0.7),
@@ -1389,11 +1412,15 @@ class _ProjectsList extends StatelessWidget {
 
     if (categoryFilterIndex == 1) {
       filtered = filtered
-          .where((p) => p.category == ProjectCategory.freelance)
+          .where((p) => p.category == ProjectCategory.academic)
           .toList();
     } else if (categoryFilterIndex == 2) {
       filtered = filtered
-          .where((p) => p.category == ProjectCategory.academic)
+          .where((p) => p.category == ProjectCategory.freelance)
+          .toList();
+    } else if (categoryFilterIndex == 3) {
+      filtered = filtered
+          .where((p) => p.category == ProjectCategory.personal)
           .toList();
     }
 

@@ -34,7 +34,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   void initState() {
     super.initState();
     _titleCtrl = TextEditingController(text: widget.task.title);
-    _descCtrl = TextEditingController(text: widget.task.subtitle);
+    _descCtrl = TextEditingController(text: widget.task.description);
     _priority = widget.task.priority;
     _dueDate = widget.task.dueDate;
 
@@ -100,7 +100,7 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
 
     final updated = widget.task.copyWith(
       title: _titleCtrl.text.trim(),
-      subtitle: _descCtrl.text.trim(),
+      description: _descCtrl.text.trim(),
       dueDate: _dueDate,
       dueTime: _dueTime != null ? _timeDisplay : widget.task.dueTime,
       priority: _priority,

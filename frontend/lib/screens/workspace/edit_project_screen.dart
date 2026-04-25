@@ -1,13 +1,5 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/workspace/edit_project_screen.dart
-// PURPOSE: Full screen for editing an existing project
-// FIXES:
-//   - Added Category selector
-//   - Added loading state (Save button shows loader, disabled while saving)
-//   - Fixed date picker - firstDate is DateTime.now() (not 2020)
-//   - Properly await callback before popping
-//   - Uses Priority.color getter from model
-//   - Uses ProjectCategory.color getter from model
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -43,6 +35,10 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
   late ProjectCategory _category;
   late DateTime _dueDate;
   late List<String> _selectedTaskIds;
+
+  // ✅ KEY FIX: local mutable copy of tasks — grows as new tasks are created
+  late List<Task> _localAllTasks;
+
   bool _isSaving = false;
 
   @override
@@ -54,6 +50,8 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     _category = widget.project.category;
     _dueDate = widget.project.dueDate;
     _selectedTaskIds = List.from(widget.project.taskIds);
+    // ✅ Initialize local task list from prop
+    _localAllTasks = List.from(widget.allTasks);
   }
 
   @override
@@ -67,7 +65,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _dueDate,
-      firstDate: DateTime.now(), // FIXED: Was DateTime(2020)
+      firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
     if (picked != null) setState(() => _dueDate = picked);
@@ -93,9 +91,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     try {
       await widget.onProjectUpdated(updated);
-      if (mounted) {
-        Navigator.pop(context);
-      }
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -103,24 +99,54 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
-  Future<void> _openTaskPicker(List<Task> allTasks) async {
+  Future<void> _openTaskPicker() async {
     if (_isSaving) return;
+
     final result = await Navigator.push<List<String>>(
       context,
       MaterialPageRoute(
         builder: (_) => TaskPickerScreen(
-          allTasks: allTasks,
+          // ✅ Pass the local list (includes any newly created tasks)
+          allTasks: _localAllTasks,
           initialSelected: _selectedTaskIds,
+          projectId: widget.project.id,
+          onTaskCreated: (newTask) {
+            // ✅ When a task is created inside picker, add it to local list
+            // so that when picker returns, we can find the task object by ID
+            setState(() {
+              if (!_localAllTasks.any((t) => t.id == newTask.id)) {
+                _localAllTasks.add(newTask);
+              }
+              if (!_selectedTaskIds.contains(newTask.id)) {
+                _selectedTaskIds.add(newTask.id);
+              }
+            });
+          },
         ),
       ),
     );
-    if (result != null && mounted) {
+
+    if (!mounted) return;
+
+    // ✅ After picker closes, refresh provider so liveTasks is up to date
+    await context.read<TaskProvider>().refreshTasks();
+
+    if (!mounted) return;
+
+    if (result != null) {
+      // ✅ Merge any IDs from result that we might not have locally yet
+      final freshTasks = context.read<TaskProvider>().tasks;
+      for (final id in result) {
+        if (!_localAllTasks.any((t) => t.id == id)) {
+          final match = freshTasks.where((t) => t.id == id).firstOrNull
+              ?? _localAllTasks.where((t) => t.id == id).firstOrNull;
+          if (match != null) _localAllTasks.add(match);
+        }
+      }
       setState(() => _selectedTaskIds = result);
     }
   }
@@ -128,11 +154,24 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    // Watch so that task completion state refreshes live
-    final liveTasks = context.watch<TaskProvider>().tasks;
-    final linkedTasks =
-        liveTasks.where((t) => _selectedTaskIds.contains(t.id)).toList();
+
+    // ✅ Still watch provider for completion toggles — but use _localAllTasks
+    // to resolve task objects, falling back to provider for completion state
+    final providerTasks = context.watch<TaskProvider>().tasks;
+
+    // ✅ Build linkedTasks from _localAllTasks first, then merge completion
+    // state from provider so toggles reflect live
+    final linkedTasks = _selectedTaskIds
+        .map((id) {
+          // Try provider first (has latest completion state)
+          final fromProvider =
+              providerTasks.where((t) => t.id == id).firstOrNull;
+          // Fall back to local list (has newly created tasks not yet in provider)
+          final fromLocal = _localAllTasks.where((t) => t.id == id).firstOrNull;
+          return fromProvider ?? fromLocal;
+        })
+        .whereType<Task>()
+        .toList();
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -151,7 +190,6 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title
                       const _Label('Project Title'),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -161,10 +199,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                             ? 'Title is required'
                             : null,
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Description
                       const _Label('Description'),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -172,10 +207,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                         maxLines: 3,
                         decoration: _inputDecoration(context, 'No description'),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Due Date
                       const _Label('Due Date'),
                       const SizedBox(height: 8),
                       _PickerRow(
@@ -184,33 +216,23 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                         hasValue: true,
                         onTap: _pickDate,
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Priority
                       const _Label('Priority'),
                       const SizedBox(height: 8),
                       _PrioritySelector(
                         selected: _priority,
                         onSelected: (p) => setState(() => _priority = p),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Category
                       const _Label('Category'),
                       const SizedBox(height: 8),
                       _CategorySelector(
                         selected: _category,
                         onSelected: (c) => setState(() => _category = c),
                       ),
-
-                      // Linked tasks section
                       const SizedBox(height: 20),
                       const _Label('Linked Tasks'),
                       const SizedBox(height: 8),
-
-                      // Linked task rows (with completion toggle)
                       if (linkedTasks.isNotEmpty) ...[
                         _LinkedTasksEditor(
                           tasks: linkedTasks,
@@ -222,11 +244,8 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                         ),
                         const SizedBox(height: 12),
                       ],
-
-                      // "Link Existing Tasks" button
                       GestureDetector(
-                        onTap:
-                            _isSaving ? null : () => _openTaskPicker(liveTasks),
+                        onTap: _isSaving ? null : _openTaskPicker,
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           decoration: BoxDecoration(
@@ -258,10 +277,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 32),
-
-                      // Action buttons
                       Row(
                         children: [
                           Expanded(
@@ -450,7 +466,6 @@ class _PrioritySelector extends StatelessWidget {
   }
 }
 
-// Category selector widget for projects
 class _CategorySelector extends StatelessWidget {
   final ProjectCategory selected;
   final Function(ProjectCategory) onSelected;
@@ -503,7 +518,6 @@ class _CategorySelector extends StatelessWidget {
   }
 }
 
-// Linked tasks list with per-task completion toggle and unlink button
 class _LinkedTasksEditor extends StatelessWidget {
   final List<Task> tasks;
   final Function(String id) onToggleComplete;
@@ -539,7 +553,6 @@ class _LinkedTasksEditor extends StatelessWidget {
           ),
           child: Row(
             children: [
-              // Completion toggle
               GestureDetector(
                 onTap: () => onToggleComplete(task.id),
                 child: AnimatedSwitcher(
@@ -557,8 +570,6 @@ class _LinkedTasksEditor extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-
-              // Task info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -589,8 +600,6 @@ class _LinkedTasksEditor extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // Priority badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
@@ -605,8 +614,6 @@ class _LinkedTasksEditor extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-
-              // Unlink button
               GestureDetector(
                 onTap: () => onRemove(task.id),
                 child: Icon(Icons.close_rounded,

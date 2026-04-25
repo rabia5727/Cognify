@@ -205,8 +205,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                 icon: Icons.notes_rounded,
                                 iconColor: const Color(0xFFEFA535),
                                 label: 'Description',
-                                value: task.subtitle.isNotEmpty
-                                    ? task.subtitle
+                                value: task.description.isNotEmpty
+                                    ? task.description
                                     : 'No description',
                               ),
                               _DetailDivider(),

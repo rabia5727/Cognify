@@ -13,13 +13,15 @@ import 'add_task_screen.dart';
 class TaskPickerScreen extends StatefulWidget {
   final List<Task> allTasks;
   final List<String> initialSelected;
-  final Function(Task)? onTaskCreated; // Callback when a new task is created
+  final Function(Task)? onTaskCreated;
+  final String? projectId;
 
   const TaskPickerScreen({
     super.key,
     required this.allTasks,
     required this.initialSelected,
     this.onTaskCreated,
+    this.projectId,
   });
 
   @override
@@ -59,35 +61,50 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => AddTaskScreen(
-          onTaskAdded: (_) {
-            // Task is captured via Navigator.push result below
+          initialProjectId: widget.projectId,
+          onTaskAdded: (newTask) {
+            // This callback is called before Navigator.pop
           },
         ),
       ),
     );
 
-    if (result != null && mounted) {
-      // Persist to global TaskProvider so it appears on the workspace task screen
-      context.read<TaskProvider>().addTask(result);
+    if (result == null || !mounted) return;
 
-      // Add to the local picker list and auto-select it
-      setState(() {
-        _tasks.add(result);
-        _selected.add(result.id);
-      });
+    // addTask returns the server-assigned task (backend generates its own UUID)
+    final serverTask = await context.read<TaskProvider>().addTask(result);
+    if (!mounted) return;
 
-      if (widget.onTaskCreated != null) {
-        widget.onTaskCreated!(result);
+    await context.read<TaskProvider>().refreshTasks();
+    if (!mounted) return;
+
+    // Use server UUID to find the fresh task; fall back to serverTask directly
+    final freshTask = context.read<TaskProvider>().tasks.firstWhere(
+          (t) => t.id == serverTask.id,
+          orElse: () => serverTask,
+        );
+
+    // Add to the local picker list and auto-select it
+    setState(() {
+      if (!_tasks.any((t) => t.id == freshTask.id)) {
+        _tasks.add(freshTask);
       }
+      if (!_selected.contains(freshTask.id)) {
+        _selected.add(freshTask.id);
+      }
+    });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Task "${result.title}" created and linked'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+    if (widget.onTaskCreated != null) {
+      widget.onTaskCreated!(freshTask);
     }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Task "${result.title}" created and linked'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
@@ -208,10 +225,10 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                                               theme.textTheme.bodyLarge?.color,
                                         ),
                                       ),
-                                      if (task.subtitle.isNotEmpty) ...[
+                                      if (task.description.isNotEmpty) ...[
                                         const SizedBox(height: 2),
                                         Text(
-                                          task.subtitle,
+                                          task.description,
                                           style: TextStyle(
                                             fontSize: 12,
                                             color: theme
@@ -244,7 +261,7 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                                                 horizontal: 7, vertical: 2),
                                             decoration: BoxDecoration(
                                               color: theme.colorScheme.primary
-                                                  .withOpacity(0.1),
+                                                  .withValues(alpha: 0.1),
                                               borderRadius:
                                                   BorderRadius.circular(20),
                                             ),
@@ -269,10 +286,10 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: pColor.withOpacity(0.12),
+                                    color: pColor.withValues(alpha: 0.12),
                                     borderRadius: BorderRadius.circular(20),
                                     border: Border.all(
-                                        color: pColor.withOpacity(0.4)),
+                                        color: pColor.withValues(alpha: 0.4)),
                                   ),
                                   child: Text(
                                     task.priority.label,

@@ -18,7 +18,7 @@ class VoiceFab extends StatelessWidget {
       width: 64,
       height: 64,
       child: FloatingActionButton(
-        heroTag: heroTag,
+        heroTag: heroTag ?? Object(),
         onPressed: onPressed ??
             () {
               // Navigate to voice assistant screen

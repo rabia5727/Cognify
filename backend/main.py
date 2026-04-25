@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.db.connection import connect_db, close_db
-from app.routes import auth, users, task, workflow, notification
+from app.routes import auth, users, task, project, notification
 from app.crud.notification import setup_indexes
 from app.schedular import start_notification_scheduler, stop_notification_scheduler
 
@@ -34,7 +34,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(task.router)
-app.include_router(workflow.router)
+app.include_router(project.router)
 app.include_router(notification.router)
 
 @app.get("/")

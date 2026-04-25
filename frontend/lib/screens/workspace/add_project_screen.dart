@@ -1,18 +1,12 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/workspace/add_project_screen.dart
-// PURPOSE: Full screen for creating a new project
-// FIXES:
-//   - Added Category selector
-//   - Added loading state (Create button shows loader, disabled while saving)
-//   - Removed client-generated ID (backend will provide)
-//   - Properly await callback before popping
-//   - Uses Priority.color getter from model
-//   - Uses ProjectCategory.color getter from model
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/project_model.dart';
 import '../../models/task_model.dart';
+import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import 'task_picker_screen.dart';
 
@@ -36,10 +30,21 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
   final _descCtrl = TextEditingController();
 
   Priority _priority = Priority.medium;
-  ProjectCategory _category = ProjectCategory.general;
+  ProjectCategory _category = ProjectCategory.academic;
   DateTime? _dueDate;
   List<String> _selectedTaskIds = [];
+
+  // ✅ KEY FIX: local mutable task list — grows as new tasks are created
+  late List<Task> _localAllTasks;
+
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ Initialize from prop
+    _localAllTasks = List.from(widget.allTasks);
+  }
 
   @override
   void dispose() {
@@ -63,6 +68,51 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
     return '${_dueDate!.day}/${_dueDate!.month}/${_dueDate!.year}';
   }
 
+  Future<void> _openTaskPicker() async {
+    if (_isSaving) return;
+
+    final result = await Navigator.push<List<String>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TaskPickerScreen(
+          // ✅ Use local list so newly created tasks are included
+          allTasks: _localAllTasks,
+          initialSelected: _selectedTaskIds,
+          onTaskCreated: (newTask) {
+            // ✅ Append new task to local list immediately
+            setState(() {
+              if (!_localAllTasks.any((t) => t.id == newTask.id)) {
+                _localAllTasks.add(newTask);
+              }
+              if (!_selectedTaskIds.contains(newTask.id)) {
+                _selectedTaskIds.add(newTask.id);
+              }
+            });
+          },
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    // ✅ Refresh provider after picker closes
+    await context.read<TaskProvider>().refreshTasks();
+
+    if (!mounted) return;
+
+    if (result != null) {
+      // ✅ Ensure all returned IDs have task objects in local list
+      final freshTasks = context.read<TaskProvider>().tasks;
+      for (final id in result) {
+        if (!_localAllTasks.any((t) => t.id == id)) {
+          final match = freshTasks.where((t) => t.id == id).firstOrNull;
+          if (match != null) _localAllTasks.add(match);
+        }
+      }
+      setState(() => _selectedTaskIds = result);
+    }
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_dueDate == null) {
@@ -74,9 +124,8 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
     setState(() => _isSaving = true);
 
-    // Create project WITHOUT an ID - backend will assign one
     final project = Project(
-      id: '', // Empty ID - backend will assign
+      id: '',
       title: _titleCtrl.text.trim(),
       description: _descCtrl.text.trim(),
       taskIds: _selectedTaskIds,
@@ -88,9 +137,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
     try {
       await widget.onProjectAdded(project);
-      if (mounted) {
-        Navigator.pop(context);
-      }
+      if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -98,16 +145,19 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+
+    // ✅ Linked tasks resolved from local list (has newly created tasks)
+    final linkedTasks = _selectedTaskIds
+        .map((id) => _localAllTasks.where((t) => t.id == id).firstOrNull)
+        .whereType<Task>()
+        .toList();
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -126,7 +176,6 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Project title
                       const _Label('Project Title'),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -141,7 +190,6 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Description
                       const _Label('Description'),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -153,7 +201,6 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Due Date
                       const _Label('Due Date'),
                       const SizedBox(height: 8),
                       _PickerRow(
@@ -165,7 +212,6 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Priority
                       const _Label('Priority'),
                       const SizedBox(height: 8),
                       _PrioritySelector(
@@ -175,7 +221,6 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Category
                       const _Label('Category'),
                       const SizedBox(height: 8),
                       _CategorySelector(
@@ -185,47 +230,25 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Link tasks section
-                      // Selected tasks preview
-                      if (_selectedTaskIds.isNotEmpty) ...[
+                      // ✅ Use linkedTasks derived from _localAllTasks
+                      if (linkedTasks.isNotEmpty) ...[
                         const _Label('Linked Tasks'),
                         const SizedBox(height: 8),
                         _LinkedTasksList(
-                          tasks: widget.allTasks
-                              .where((t) => _selectedTaskIds.contains(t.id))
-                              .toList(),
+                          tasks: linkedTasks,
                           onRemove: (id) =>
                               setState(() => _selectedTaskIds.remove(id)),
                         ),
                         const SizedBox(height: 12),
                       ],
 
-                      // Link / Create tasks button
                       GestureDetector(
-                        onTap: _isSaving
-                            ? null
-                            : () async {
-                                final result =
-                                    await Navigator.push<List<String>>(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TaskPickerScreen(
-                                      allTasks: widget.allTasks,
-                                      initialSelected: _selectedTaskIds,
-                                    ),
-                                  ),
-                                );
-                                if (result != null && mounted) {
-                                  setState(() => _selectedTaskIds = result);
-                                }
-                              },
+                        onTap: _openTaskPicker,
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: Theme.of(context).dividerColor,
-                            ),
+                            border: Border.all(color: theme.dividerColor),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -255,7 +278,6 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
                       const SizedBox(height: 32),
 
-                      // Action buttons
                       Row(
                         children: [
                           Expanded(
@@ -444,7 +466,6 @@ class _PrioritySelector extends StatelessWidget {
   }
 }
 
-// Category selector widget for projects
 class _CategorySelector extends StatelessWidget {
   final ProjectCategory selected;
   final Function(ProjectCategory) onSelected;
@@ -497,7 +518,6 @@ class _CategorySelector extends StatelessWidget {
   }
 }
 
-// Shows the already-selected tasks as removable chips in the form
 class _LinkedTasksList extends StatelessWidget {
   final List<Task> tasks;
   final Function(String) onRemove;

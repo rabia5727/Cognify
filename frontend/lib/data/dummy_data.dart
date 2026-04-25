@@ -12,7 +12,7 @@ class DummyData {
         Task(
           id: '1',
           title: 'Complete Maths Assignment',
-          subtitle: 'sir kashif assignment',
+          description: 'sir kashif assignment',
           dueDate: DateTime.now().copyWith(hour: 22, minute: 0),
           dueTime: '10:00pm',
           priority: Priority.high,
@@ -22,7 +22,7 @@ class DummyData {
         Task(
           id: '2',
           title: 'ML assignment submit',
-          subtitle: 'sir kashif assignment',
+          description: 'sir kashif assignment',
           dueDate: DateTime.now().copyWith(hour: 18, minute: 30),
           dueTime: '6:30pm',
           priority: Priority.medium,
@@ -32,7 +32,7 @@ class DummyData {
         Task(
           id: '3',
           title: 'Email reports',
-          subtitle: 'sir kashif assignment',
+          description: 'sir kashif assignment',
           dueDate: DateTime.now().copyWith(hour: 19, minute: 0),
           dueTime: '7:00pm',
           priority: Priority.low,
@@ -42,7 +42,7 @@ class DummyData {
         Task(
           id: '4',
           title: 'Quiz preparation of AI subject',
-          subtitle: 'for ai assignment',
+          description: 'for ai assignment',
           dueDate: DateTime.now().copyWith(hour: 17, minute: 0),
           dueTime: '5:00pm',
           priority: Priority.high,
@@ -52,7 +52,7 @@ class DummyData {
         Task(
           id: '5',
           title: 'Design review meeting',
-          subtitle: 'with design team',
+          description: 'with design team',
           dueDate: DateTime.now()
               .add(const Duration(days: 1))
               .copyWith(hour: 14, minute: 0),
@@ -64,7 +64,7 @@ class DummyData {
         Task(
           id: '6',
           title: 'Update documentation',
-          subtitle: 'API documentation',
+          description: 'API documentation',
           dueDate: DateTime.now()
               .add(const Duration(days: 2))
               .copyWith(hour: 23, minute: 59),
@@ -85,7 +85,7 @@ class DummyData {
           taskIds: ['1', '2'],
           dueDate: DateTime.now().add(const Duration(days: 5)),
           priority: Priority.high,
-          colorValue: 0xFFFFE8D6,
+          category: ProjectCategory.academic,
         ),
         Project(
           id: '2',
@@ -94,7 +94,7 @@ class DummyData {
           taskIds: ['3', '4'],
           dueDate: DateTime.now().add(const Duration(days: 10)),
           priority: Priority.medium,
-          colorValue: 0xFFDCEAFF,
+          category: ProjectCategory.freelance,
         ),
         Project(
           id: '3',
@@ -103,7 +103,7 @@ class DummyData {
           taskIds: ['5', '6'],
           dueDate: DateTime.now().add(const Duration(days: 15)),
           priority: Priority.low,
-          colorValue: 0xFFF0E6FF,
+          category: ProjectCategory.academic,
         ),
       ];
 

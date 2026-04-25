@@ -1,11 +1,15 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/workspace/project_detail_screen.dart
 // PURPOSE: Full screen showing project details + linked tasks
+// FIXES: Real-time updates using providers
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../models/project_model.dart';
 import '../../models/task_model.dart';
+import '../../providers/project_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/priority_badge.dart';
@@ -13,14 +17,12 @@ import 'edit_project_screen.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final Project project;
-  final List<Task> allTasks;
   final Function(Project) onProjectUpdated;
   final Function(String) onProjectDeleted;
 
   const ProjectDetailScreen({
     super.key,
     required this.project,
-    required this.allTasks,
     required this.onProjectUpdated,
     required this.onProjectDeleted,
   });
@@ -38,27 +40,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     _project = widget.project;
   }
 
-  List<Task> get _linkedTasks =>
-      widget.allTasks.where((t) => _project.taskIds.contains(t.id)).toList();
-
-  double get _progress {
-    if (_linkedTasks.isEmpty) return 0.0;
-    final done = _linkedTasks.where((t) => t.isCompleted).length;
-    return done / _linkedTasks.length;
-  }
-
-  int get _progressPercent => (_progress * 100).round();
-
-  void _goToEdit() {
-    Navigator.push(
+  void _goToEdit() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => EditProjectScreen(
           project: _project,
-          allTasks: widget.allTasks,
-          onProjectUpdated: (updated) {
+          allTasks: context.read<TaskProvider>().tasks,
+          onProjectUpdated: (updated) async {
             setState(() => _project = updated);
-            widget.onProjectUpdated(updated);
+            await widget.onProjectUpdated(updated);
           },
         ),
       ),
@@ -82,7 +73,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             onPressed: () {
               Navigator.pop(ctx);
               widget.onProjectDeleted(_project.id);
-              Navigator.pop(context);
+              if (mounted) {
+                Navigator.pop(context);
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red.shade500,
@@ -101,18 +94,34 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
     switch (s) {
       case ProjectStatus.active:
         return const Color(0xFF4CAF50);
-      case ProjectStatus.onHold:
-        return const Color(0xFFEFA535);
       case ProjectStatus.completed:
         return const Color(0xFF1360E2);
-      case ProjectStatus.archived:
-        return const Color(0xFF9EA3B8);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // ✅ Watch both providers for real-time updates
+    final taskProvider = context.watch<TaskProvider>();
+    final projectProvider = context.watch<ProjectProvider>();
+
+    // Always prefer provider data; _project acts as fallback until provider syncs
+    final currentProject = projectProvider.projects.firstWhere(
+      (p) => p.id == _project.id,
+      orElse: () => _project,
+    );
+
+    final linkedTasks = taskProvider.tasks
+        .where((t) => currentProject.taskIds.contains(t.id))
+        .toList();
+
+    // ✅ Recalculate progress in real-time
+    final progress = linkedTasks.isEmpty
+        ? 0.0
+        : linkedTasks.where((t) => t.isCompleted).length / linkedTasks.length;
+    final progressPercent = (progress * 100).round();
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -139,21 +148,19 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             children: [
                               Expanded(
                                 child: Text(
-                                  _project.title,
+                                  currentProject.title,
                                   style: theme.textTheme.titleLarge?.copyWith(
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
-                              PriorityBadge(
-                                  priority: _project
-                                      .priority), // ✅ Fixed: Pass enum directly
+                              PriorityBadge(priority: currentProject.priority),
                             ],
                           ),
                           const SizedBox(height: 8),
-                          if (_project.description.isNotEmpty)
+                          if (currentProject.description.isNotEmpty)
                             Text(
-                              _project.description,
+                              currentProject.description,
                               style: TextStyle(
                                 fontSize: 13,
                                 color: theme.textTheme.bodySmall?.color,
@@ -167,16 +174,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
-                                  color: _statusColor(_project.status)
-                                      .withOpacity(0.12),
+                                  color: _statusColor(currentProject.status)
+                                      .withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  _project.status.label,
+                                  currentProject.status.label,
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
-                                    color: _statusColor(_project.status),
+                                    color: _statusColor(currentProject.status),
                                   ),
                                 ),
                               ),
@@ -186,13 +193,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                   color: theme.textTheme.bodySmall?.color),
                               const SizedBox(width: 4),
                               Text(
-                                _project.dueDateDisplay,
+                                currentProject.dueDateDisplay,
                                 style: TextStyle(
                                   fontSize: 13,
-                                  color: _project.isOverdue
+                                  color: currentProject.isOverdue
                                       ? Colors.red
                                       : theme.textTheme.bodySmall?.color,
-                                  fontWeight: _project.isOverdue
+                                  fontWeight: currentProject.isOverdue
                                       ? FontWeight.w600
                                       : FontWeight.normal,
                                 ),
@@ -216,7 +223,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                               color: theme
                                                   .textTheme.bodySmall?.color,
                                             )),
-                                        Text('$_progressPercent%',
+                                        Text('$progressPercent%',
                                             style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w700,
@@ -229,12 +236,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                     ClipRRect(
                                       borderRadius: BorderRadius.circular(10),
                                       child: LinearProgressIndicator(
-                                        value: _progress,
+                                        value: progress,
                                         minHeight: 10,
                                         backgroundColor: theme.dividerColor,
                                         valueColor:
                                             AlwaysStoppedAnimation<Color>(
-                                          _progress == 1.0
+                                          progress == 1.0
                                               ? Colors.green
                                               : theme.colorScheme.primary,
                                         ),
@@ -252,14 +259,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                     const SizedBox(height: 24),
 
                     Text(
-                      'Linked Tasks (${_linkedTasks.length})',
+                      'Linked Tasks (${linkedTasks.length})',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     const SizedBox(height: 12),
 
-                    if (_linkedTasks.isEmpty)
+                    if (linkedTasks.isEmpty)
                       AppCard(
                         child: Center(
                           child: Padding(
@@ -275,7 +282,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         ),
                       )
                     else
-                      ..._linkedTasks.map((task) => _LinkedTaskRow(task: task)),
+                      ...linkedTasks.map((task) => _LinkedTaskRow(task: task)),
 
                     const SizedBox(height: 24),
 
@@ -388,7 +395,7 @@ class _LinkedTaskRow extends StatelessWidget {
               ],
             ),
           ),
-          PriorityBadge(priority: task.priority), // ✅ Fixed: Pass enum directly
+          PriorityBadge(priority: task.priority),
         ],
       ),
     );

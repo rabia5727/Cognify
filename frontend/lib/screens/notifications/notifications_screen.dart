@@ -97,7 +97,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (_, i) => _NotificationTile(
                         notification: provider.notifications[i],
-                        onTap: () => provider.markAsRead(
+                        onTap: () => provider.deleteNotification(
                           provider.notifications[i].id,
                         ),
                         onDelete: () => provider.deleteNotification(

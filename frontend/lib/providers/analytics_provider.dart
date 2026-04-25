@@ -2,15 +2,9 @@
 // FILE: lib/providers/analytics_provider.dart
 // ═══════════════════════════════════════════════════════════════════
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import '../models/task_model.dart';
 import '../data/dummy_data.dart';
-
-// Rename custom Color to avoid conflict
-class AppColor {
-  final int value;
-  const AppColor(this.value);
-}
 
 class AnalyticsProvider extends ChangeNotifier {
   List<Task> _tasks = [];
@@ -88,7 +82,7 @@ class AnalyticsProvider extends ChangeNotifier {
     };
   }
 
-  // ─── Achievements — using AppColor (custom) for pure Dart ─────────
+  // ─── Achievements — using Color (custom) for pure Dart ─────────
 
   List<Map<String, dynamic>> get achievements {
     if (_tasks.isEmpty) return DummyData.achievements;
@@ -98,28 +92,28 @@ class AnalyticsProvider extends ChangeNotifier {
     if (completedCount >= 1) {
       result.add({
         'icon': '🎯',
-        'iconColor': const AppColor(0xFF1360E2), // ✅ Using AppColor
+        'iconColor': const Color(0xFF1360E2), // ✅ Using Color
         'title': 'First task completed!',
         'subtitle': 'You\'re on your way.',
-        'borderColor': const AppColor(0xFFB5D4F4), // ✅ Using AppColor
+        'borderColor': const Color(0xFFB5D4F4), // ✅ Using Color
       });
     }
     if (weeklyCompletionRate >= 0.8) {
       result.add({
         'icon': '🔥',
-        'iconColor': const AppColor(0xFFEFA535),
+        'iconColor': const Color(0xFFEFA535),
         'title': 'Weekly streak',
         'subtitle': '80%+ completion this week.',
-        'borderColor': const AppColor(0xFFFAC775),
+        'borderColor': const Color(0xFFFAC775),
       });
     }
     if (completedCount >= 10) {
       result.add({
         'icon': '⭐',
-        'iconColor': const AppColor(0xFF639922),
+        'iconColor': const Color(0xFF639922),
         'title': 'Power user',
         'subtitle': '10 tasks completed.',
-        'borderColor': const AppColor(0xFFC0DD97),
+        'borderColor': const Color(0xFFC0DD97),
       });
     }
 
