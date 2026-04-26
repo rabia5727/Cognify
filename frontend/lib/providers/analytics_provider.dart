@@ -5,7 +5,18 @@
 import 'package:flutter/material.dart';
 import '../models/task_model.dart';
 import '../data/dummy_data.dart';
+import 'dart:ui';
+import 'package:flutter/foundation.dart';
+import '../models/task_model.dart';
+import '../data/dummy_data.dart';
 
+// Rename custom Color to avoid conflict
+
+/*class AppColor {
+  final int value;
+  const AppColor(this.value);
+}
+*/
 class AnalyticsProvider extends ChangeNotifier {
   List<Task> _tasks = [];
 
@@ -97,10 +108,11 @@ class AnalyticsProvider extends ChangeNotifier {
         'subtitle': 'You\'re on your way.',
         'borderColor': const Color(0xFFB5D4F4), // ✅ Using Color
       });
-    }
+    } 
     if (weeklyCompletionRate >= 0.8) {
       result.add({
         'icon': '🔥',
+
         'iconColor': const Color(0xFFEFA535),
         'title': 'Weekly streak',
         'subtitle': '80%+ completion this week.',
