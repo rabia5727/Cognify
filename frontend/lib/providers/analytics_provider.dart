@@ -25,22 +25,19 @@ class AnalyticsProvider extends ChangeNotifier {
 
   // ─── Stat card values ─────────────────────────────────────────────
 
-  Map<String, String> get weeklyStats =>
-      _summary != null
-          ? {
-              'focusHours': _summary!.weeklyStats['focus_hours'] ?? '0h',
-              'avgTime': _summary!.weeklyStats['avg_time'] ?? '–',
-            }
-          : {'focusHours': '0h', 'avgTime': '–'};
+  Map<String, String> get weeklyStats => _summary != null
+      ? {
+          'focusHours': _summary!.weeklyStats['focus_hours'] ?? '0h',
+          'avgTime': _summary!.weeklyStats['avg_time'] ?? '–',
+        }
+      : {'focusHours': '0h', 'avgTime': '–'};
 
-  Map<String, String> get monthlyStats =>
-      _summary != null
-          ? {
-              'tasksCompleted':
-                  _summary!.monthlyStats['tasks_completed'] ?? '0',
-              'efficiency': _summary!.monthlyStats['efficiency'] ?? '0%',
-            }
-          : {'tasksCompleted': '0', 'efficiency': '0%'};
+  Map<String, String> get monthlyStats => _summary != null
+      ? {
+          'tasksCompleted': _summary!.monthlyStats['tasks_completed'] ?? '0',
+          'efficiency': _summary!.monthlyStats['efficiency'] ?? '0%',
+        }
+      : {'tasksCompleted': '0', 'efficiency': '0%'};
 
   // ─── Achievements ─────────────────────────────────────────────────
   // Maps the icon string returned by the backend to the correct Flutter Colors.
