@@ -1,16 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════
-// FILE: lib/providers/auth_provider.dart
-// PURPOSE:
-//   Replaces the manual `userName` String being passed as a prop
-//   through HomeScreen → DashboardScreen → SettingsScreen etc.
-//   Every screen that needs user info reads from this provider instead.
-//
-// BACKEND INTEGRATION:
-//   Your team's auth screens already talk to the backend.
-//   This provider just needs to receive the result (user + token)
-//   after a successful login and store it.
-// ═══════════════════════════════════════════════════════════════════
-
 import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../services/token_storage.dart';
@@ -104,7 +91,6 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // TODO: Replace with → await AuthRepository.logout();
       await TokenStorage.clearAll();
       _user = null;
       _authState = AuthState.unauthenticated;

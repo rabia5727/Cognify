@@ -1,7 +1,8 @@
 // lib/screens/dashboard/dashboard_screen.dart
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constant.dart';
@@ -18,6 +19,7 @@ import '../../widgets/common/notification_permission_sheet.dart';
 import '../../widgets/empty_states/empty_dashboard.dart';
 import '../../widgets/layout/refresh_wrapper.dart';
 import '../../widgets/loading/shimmer_loading.dart';
+import '../assistant/voice_assistant_screen.dart';
 import '../settings/profile_screen.dart';
 import '../workspace/task_detail_screen.dart';
 
@@ -35,33 +37,16 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen>
-    with SingleTickerProviderStateMixin {
+class _DashboardScreenState extends State<DashboardScreen> {
   bool _showProactiveCard = true;
-  late AnimationController _scoreController;
-  late Animation<double> _scoreAnimation;
   String? _animatingTaskId;
 
   @override
   void initState() {
     super.initState();
-    _scoreController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    _scoreAnimation = Tween<double>(begin: 0, end: 0).animate(
-      CurvedAnimation(parent: _scoreController, curve: Curves.easeOutCubic),
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _animateScore();
       _maybeShowNotificationPermission();
     });
-  }
-
-  @override
-  void dispose() {
-    _scoreController.dispose();
-    super.dispose();
   }
 
   Future<void> _maybeShowNotificationPermission() async {
@@ -73,47 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     }
   }
 
-  void _animateScore() {
-    final score = context.read<TaskProvider>().completionRate;
-    _scoreAnimation = Tween<double>(
-      begin: 0,
-      end: score,
-    ).animate(
-      CurvedAnimation(parent: _scoreController, curve: Curves.easeOutCubic),
-    );
-    _scoreController.forward(from: 0);
-  }
-
-  void _animateScoreFrom(double from, double to) {
-    _scoreAnimation = Tween<double>(begin: from, end: to).animate(
-      CurvedAnimation(parent: _scoreController, curve: Curves.easeOutCubic),
-    );
-    _scoreController.forward(from: 0);
-  }
-
-  Future<void> _markTaskComplete(String taskId) async {
-    HapticFeedback.lightImpact();
-    setState(() => _animatingTaskId = taskId);
-    await Future.delayed(const Duration(milliseconds: 200));
-
-    final taskProvider = context.read<TaskProvider>();
-    final previousScore = taskProvider.completionRate;
-
-    try {
-      await taskProvider.toggleComplete(taskId);
-    } catch (_) {
-      if (mounted) UIFeedback.showError(context, 'Could not update task.');
-    }
-
-    setState(() => _animatingTaskId = null);
-
-    if (mounted) {
-      _animateScoreFrom(previousScore, taskProvider.completionRate);
-      UIFeedback.showSuccess(context, '🎉 Great job! Task completed!');
-    }
-  }
-
-  void _navigateToTaskDetail(Task task) {
+void _navigateToTaskDetail(Task task) {
     final taskProvider = context.read<TaskProvider>();
     Navigator.push(
       context,
@@ -140,10 +85,14 @@ class _DashboardScreenState extends State<DashboardScreen>
     try {
       await context.read<TaskProvider>().refreshTasks();
     } catch (_) {}
-    if (mounted) {
-      _animateScore();
-      UIFeedback.showInfo(context, 'Dashboard refreshed!');
-    }
+    if (mounted) UIFeedback.showInfo(context, 'Dashboard refreshed!');
+  }
+
+  void _navigateToVoice() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const VoiceAssistantScreen()),
+    );
   }
 
   void _navigateToProfile() {
@@ -164,10 +113,11 @@ class _DashboardScreenState extends State<DashboardScreen>
           builder: (context, auth, taskProvider, _) {
             final tasks = taskProvider.tasks;
             final hasNoTasks = tasks.isEmpty;
-            final completedCount = taskProvider.completedCount;
-            final totalCount = taskProvider.totalCount;
-            final score = taskProvider.completionRate;
             final todayTasks = taskProvider.todayTasks;
+            final score = taskProvider.dailyCompletionRate;
+            final completedCount =
+                todayTasks.where((t) => t.isCompleted).length;
+            final totalCount = todayTasks.length;
             final isLoading = taskProvider.isLoading && tasks.isEmpty;
 
             return Column(
@@ -214,7 +164,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                           ),
                           const SizedBox(height: 14),
                           SizedBox(
-                            height: 180,
+                            height: 185,
                             child: isLoading
                                 ? const TaskCardShimmer()
                                 : _buildTaskArea(
@@ -225,17 +175,13 @@ class _DashboardScreenState extends State<DashboardScreen>
                           const SizedBox(height: 16),
                           isLoading
                               ? const ProductivityCardShimmer()
-                              : AnimatedBuilder(
-                                  animation: _scoreAnimation,
-                                  builder: (context, _) =>
-                                      _buildProductivitySection(
-                                    hasNoTasks: hasNoTasks,
-                                    score: score,
-                                    completedCount: completedCount,
-                                    totalCount: totalCount,
-                                  ),
+                              : _buildProductivitySection(
+                                  hasNoTasks: hasNoTasks,
+                                  score: score,
+                                  completedCount: completedCount,
+                                  totalCount: totalCount,
                                 ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 8),
                         ],
                       ),
                     ),
@@ -281,9 +227,10 @@ class _DashboardScreenState extends State<DashboardScreen>
       );
     }
 
+    final activeTodayTasks = todayTasks.where((t) => !t.isCompleted).toList();
     return _TaskList(
-      tasks: todayTasks,
-      onStartTask: _markTaskComplete,
+      tasks: activeTodayTasks,
+      onStartTask: (_) => _navigateToVoice(),
       onTaskTap: _navigateToTaskDetail,
       animatingTaskId: _animatingTaskId,
     );
@@ -303,7 +250,6 @@ class _DashboardScreenState extends State<DashboardScreen>
 
     return _ProductivityCard(
       score: score,
-      animatedScore: _scoreAnimation.value,
       completedCount: completedCount,
       totalCount: totalCount,
     );
@@ -375,17 +321,17 @@ class _TaskCard extends StatelessWidget {
                   alignment: Alignment.topRight,
                   child: PriorityBadge(priority: task.priority),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   task.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
+                  style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     height: 1.3,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Icon(
@@ -400,30 +346,31 @@ class _TaskCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 300),
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: task.isCompleted
-                        ? Colors.green.withOpacity(0.2)
-                        : theme.colorScheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: GestureDetector(
-                    onTap: task.isCompleted ? null : onStart,
+                const Spacer(),
+                GestureDetector(
+                  onTap: task.isCompleted ? null : onStart,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: task.isCompleted
+                          ? Colors.green.withValues(alpha: 0.15)
+                          : theme.colorScheme.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
                       child: Text(
                         task.isCompleted ? '✓ Done' : 'Start Task >',
                         key: ValueKey(task.isCompleted),
                         textAlign: TextAlign.center,
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
                           color: task.isCompleted
                               ? Colors.green
-                              : theme.colorScheme.primary,
+                              : Colors.white,
                         ),
                       ),
                     ),
@@ -440,13 +387,11 @@ class _TaskCard extends StatelessWidget {
 
 class _ProductivityCard extends StatelessWidget {
   final double score;
-  final double animatedScore;
   final int completedCount;
   final int totalCount;
 
   const _ProductivityCard({
     required this.score,
-    required this.animatedScore,
     required this.completedCount,
     required this.totalCount,
   });
@@ -454,53 +399,49 @@ class _ProductivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final animatedPercentage = (animatedScore * 100).toInt();
     return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 110,
-            height: 110,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 110,
-                  height: 110,
-                  child: CircularProgressIndicator(
-                    value: 1.0,
-                    strokeWidth: 11,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(theme.dividerColor),
-                  ),
-                ),
-                SizedBox(
-                  width: 110,
-                  height: 110,
-                  child: CircularProgressIndicator(
-                    value: animatedScore,
-                    strokeWidth: 11,
-                    strokeCap: StrokeCap.round,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      theme.colorScheme.primary,
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: score),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (context, animated, _) {
+              final percent = (animated * 100).toInt();
+              return SizedBox(
+                width: 120,
+                height: 120,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CustomPaint(
+                      size: const Size(120, 120),
+                      painter: _GradientArcPainter(
+                        progress: animated,
+                        strokeWidth: 14,
+                        trackColor: theme.dividerColor,
+                        startColor: const Color(0xFF1360E2),
+                        endColor: const Color(0xFF9B5FFF),
+                      ),
                     ),
-                  ),
+                    Text(
+                      '$percent%',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '$animatedPercentage%',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
+              );
+            },
           ),
-          const SizedBox(width: 22),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   'PRODUCTIVITY SCORE',
@@ -509,12 +450,12 @@ class _ProductivityCard extends StatelessWidget {
                     letterSpacing: 0.4,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Text(
                   AppConstants.productivityMessage(score),
-                  style: theme.textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall?.copyWith(height: 1.4),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Row(
                   children: [
                     Icon(
@@ -543,4 +484,61 @@ class _ProductivityCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _GradientArcPainter extends CustomPainter {
+  final double progress;
+  final double strokeWidth;
+  final Color trackColor;
+  final Color startColor;
+  final Color endColor;
+
+  const _GradientArcPainter({
+    required this.progress,
+    required this.strokeWidth,
+    required this.trackColor,
+    required this.startColor,
+    required this.endColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.width - strokeWidth) / 2;
+    final rect = Rect.fromCircle(center: center, radius: radius);
+
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..color = trackColor
+        ..strokeWidth = strokeWidth
+        ..style = PaintingStyle.stroke,
+    );
+
+    if (progress <= 0) return;
+
+    canvas.drawArc(
+      rect,
+      -math.pi / 2,
+      2 * math.pi * progress,
+      false,
+      Paint()
+        ..shader = SweepGradient(
+          startAngle: -math.pi / 2,
+          endAngle: 3 * math.pi / 2,
+          colors: [startColor, endColor, startColor],
+          stops: const [0.0, 0.6, 1.0],
+        ).createShader(rect)
+        ..strokeWidth = strokeWidth
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_GradientArcPainter old) =>
+      old.progress != progress ||
+      old.startColor != startColor ||
+      old.endColor != endColor;
 }

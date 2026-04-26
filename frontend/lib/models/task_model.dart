@@ -184,6 +184,7 @@ class Task {
   final TaskStatus status;
   final String? projectId;
   final TaskCategory category;
+  final DateTime? completedAt;
 
   const Task({
     required this.id,
@@ -195,13 +196,36 @@ class Task {
     this.status = TaskStatus.todo,
     this.projectId,
     this.category = TaskCategory.general,
+    this.completedAt,
   });
 
   bool get isCompleted => status.isCompleted;
 
   bool get isOverdue {
     if (isCompleted) return false;
-    return dueDate.isBefore(DateTime.now());
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final due = DateTime(dueDate.year, dueDate.month, dueDate.day);
+
+    // Due date is before today → always overdue
+    if (due.isBefore(today)) return true;
+
+    // Due date is today → overdue only if the due time has passed
+    if (due.isAtSameMomentAs(today) && dueTime != null && dueTime!.isNotEmpty) {
+      final parts = RegExp(r'(\d+):(\d+)\s*(am|pm)?', caseSensitive: false)
+          .firstMatch(dueTime!);
+      if (parts != null) {
+        int hour = int.parse(parts.group(1)!);
+        final minute = int.parse(parts.group(2)!);
+        final ampm = parts.group(3)?.toLowerCase();
+        if (ampm == 'pm' && hour != 12) hour += 12;
+        if (ampm == 'am' && hour == 12) hour = 0;
+        final dueDateTime = DateTime(now.year, now.month, now.day, hour, minute);
+        return now.isAfter(dueDateTime);
+      }
+    }
+
+    return false;
   }
 
   String get formattedDueDate =>
@@ -232,6 +256,9 @@ class Task {
       projectId: json['project_id'] as String?,
       category: TaskCategoryExtension.fromString(
           json['category'] as String? ?? 'general'),
+      completedAt: json['completed_at'] != null
+          ? DateTime.parse(json['completed_at'] as String).toLocal()
+          : null,
     );
   }
 
@@ -260,6 +287,7 @@ class Task {
     TaskStatus? status,
     String? projectId,
     TaskCategory? category,
+    DateTime? completedAt,
   }) {
     return Task(
       id: id ?? this.id,
@@ -271,6 +299,7 @@ class Task {
       status: status ?? this.status,
       projectId: projectId ?? this.projectId,
       category: category ?? this.category,
+      completedAt: completedAt ?? this.completedAt,
     );
   }
 }

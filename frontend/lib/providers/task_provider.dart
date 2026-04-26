@@ -29,6 +29,16 @@ class TaskProvider extends ChangeNotifier {
   double get completionRate =>
       _tasks.isEmpty ? 0.0 : completedCount / _tasks.length;
 
+  double get dailyCompletionRate {
+    final today = DateTime.now();
+    final todayTasks = _tasks.where((t) =>
+        t.dueDate.year == today.year &&
+        t.dueDate.month == today.month &&
+        t.dueDate.day == today.day).toList();
+    if (todayTasks.isEmpty) return 0.0;
+    return todayTasks.where((t) => t.isCompleted).length / todayTasks.length;
+  }
+
   List<Task> get todayTasks {
     final today = DateTime.now();
     return _tasks.where((t) {
@@ -58,11 +68,18 @@ class TaskProvider extends ChangeNotifier {
 
     switch (statusIndex) {
       case 1:
-        result =
-            result.where((t) => t.status == TaskStatus.inProgress).toList();
+        // Completed tab: completed tasks only, hide after 48 hours
+        final cutoff = DateTime.now().subtract(const Duration(hours: 48));
+        result = result.where((t) {
+          if (!t.isCompleted) return false;
+          if (t.completedAt == null) return true;
+          return t.completedAt!.isAfter(cutoff);
+        }).toList();
         break;
-      case 2:
-        result = result.where((t) => t.isCompleted).toList();
+      case 0:
+      default:
+        // All tab: active tasks only (exclude completed)
+        result = result.where((t) => !t.isCompleted).toList();
         break;
     }
 

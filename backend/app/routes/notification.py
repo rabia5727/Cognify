@@ -39,6 +39,7 @@ async def create_new_notification(
 
 
 # GET /notifications/
+# routes/notification.py — GET / route, confirm it looks like this:
 @router.get("/")
 async def get_all_notifications(
     unread_only: bool = Query(False),
@@ -48,7 +49,14 @@ async def get_all_notifications(
 ):
     user_id = str(current_user["_id"])
     skip = (page - 1) * page_size
-    return await get_notifications(user_id, unread_only=unread_only, skip=skip, limit=page_size)
+    # This already returns the dict with pagination — just return it directly
+    return await get_notifications(
+        user_id,
+        unread_only=unread_only,
+        skip=skip,
+        limit=page_size
+    )
+
 
 
 # GET /notifications/unread-count
@@ -97,13 +105,15 @@ async def batch_delete(
 
 
 # GET /notifications/reminders/upcoming  ← BEFORE /{id} routes
-@router.get("/reminders/upcoming", response_model=list[NotificationResponse])
+
+@router.get("/reminders/upcoming")  
 async def upcoming_reminders(
     hours_ahead: int = Query(24, ge=1, le=168),
     current_user: dict = Depends(get_current_user),
 ):
     user_id = str(current_user["_id"])
-    return await get_upcoming_reminders(user_id, hours_ahead=hours_ahead)
+    reminders = await get_upcoming_reminders(user_id, hours_ahead=hours_ahead)
+    return {"reminders": reminders}
 
 
 # ── Dynamic routes LAST ───────────────────────────────────────────────────────

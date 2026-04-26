@@ -1,10 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
+import '../screens/auth/auth_screen.dart';
 import 'token_storage.dart';
 
 class ApiService {
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
   // ── Change this to your machine's IP if testing on a physical device ───────
   // For emulator use 10.0.2.2, for physical device use your local IP e.g. 192.168.1.x
   static const String baseUrl = 'http://127.0.0.1:8000';
@@ -36,6 +40,16 @@ class ApiService {
       }
     } catch (_) {}
     return 'Error ${response.statusCode}: ${response.reasonPhrase}';
+  }
+
+  static Future<void> _check401(http.Response response) async {
+    if (response.statusCode == 401) {
+      await TokenStorage.clearAll();
+      navigatorKey.currentState?.pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthScreen()),
+        (route) => false,
+      );
+    }
   }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -130,6 +144,8 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 30));
 
+      await _check401(response);
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final user = UserModel.fromJson(data);
@@ -139,9 +155,6 @@ class ApiService {
           id: user.id,
         );
         return UserResult.success(user);
-      } else if (response.statusCode == 401) {
-        await TokenStorage.clearAll();
-        return UserResult.failure('Session expired. Please log in again.');
       } else {
         return UserResult.failure(_parseError(response));
       }
@@ -162,6 +175,8 @@ class ApiService {
             body: jsonEncode(data),
           )
           .timeout(const Duration(seconds: 15));
+
+      await _check401(response);
 
       if (response.statusCode == 200) {
         final body = jsonDecode(response.body);

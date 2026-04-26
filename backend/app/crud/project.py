@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from app.db.connection import get_database
 from app.models.project import ProjectCreate, ProjectUpdate, ProjectResponse
 
@@ -33,21 +33,52 @@ async def create_project(project_data: ProjectCreate, user_id: str) -> ProjectRe
         "status": "active",
         "due_date": project_data.due_date,
         "priority": project_data.priority or "medium",
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
     }
     await db["projects"].insert_one(project_dict)
     project_dict.pop("_id", None)
     return ProjectResponse(**project_dict, progress=0.0)
 
 
+# crud/project.py — REPLACE get_projects() entirely
+
 async def get_projects(user_id: str) -> list[ProjectResponse]:
     db = get_database()
-    cursor = db["projects"].find({"user_id": user_id})
-    projects = await cursor.to_list(length=100)
+    
+    # Query 1: all projects
+    projects = await db["projects"].find({"user_id": user_id}).to_list(length=100)
+    if not projects:
+        return []
+
+    # Collect all task_ids across all projects
+    all_task_ids = []
+    for p in projects:
+        all_task_ids.extend(p.get("task_ids", []))
+
+    # Query 2: ALL tasks in ONE query using $in
+    all_tasks = []
+    if all_task_ids:
+        all_tasks = await db["tasks"].find(
+            {"id": {"$in": all_task_ids}}
+        ).to_list(length=None)
+
+    # Group tasks by id for fast lookup
+    task_map = {t["id"]: t for t in all_tasks}
+
+    # Build responses without any more DB calls
     result = []
     for p in projects:
-        result.append(await build_project_response(db, p))
+        p.pop("_id", None)
+        task_ids = p.get("task_ids", [])
+        project_tasks = [task_map[tid] for tid in task_ids if tid in task_map]
+        
+        total = len(project_tasks)
+        completed = sum(1 for t in project_tasks if t.get("status") == "completed")
+        progress = round((completed / total) * 100, 1) if total > 0 else 0.0
+        
+        result.append(ProjectResponse(**p, progress=progress))
+    
     return result
 
 
@@ -76,7 +107,7 @@ async def update_project(project_id: str, user_id: str, update_data: ProjectUpda
         update_fields["priority"] = update_data.priority
     if update_data.task_ids is not None:
         update_fields["task_ids"] = update_data.task_ids
-    update_fields["updated_at"] = datetime.utcnow()
+    update_fields["updated_at"] = datetime.now(timezone.utc)
 
     result = await db["projects"].update_one(
         {"id": project_id, "user_id": user_id},
@@ -99,7 +130,7 @@ async def add_task_to_project(project_id: str, user_id: str, task_id: str) -> Pr
         {"id": project_id, "user_id": user_id},
         {
             "$addToSet": {"task_ids": task_id},
-            "$set": {"updated_at": datetime.utcnow()},
+            "$set": {"updated_at": datetime.now(timezone.utc)},
         },
     )
     if result.matched_count == 0:

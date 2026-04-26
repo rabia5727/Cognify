@@ -6,11 +6,17 @@ from app.crud.user import create_user, get_user_by_email
 from app.utils.auth import hash_password, verify_password, create_access_token
 from app.models.user import UserInDB
 from pydantic import BaseModel
+from app.limiter import limiter
+from fastapi import Request
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 @router.post("/register")
-async def register(user: UserRegister):
+@limiter.limit("3/minute")
+async def register(
+    request: Request,
+    user: UserRegister
+    ):
     # check if email already exists
     existing = await get_user_by_email(user.email)
     if existing:
@@ -37,7 +43,11 @@ async def register(user: UserRegister):
     }
 
 @router.post("/login")
-async def login(user: UserLogin):
+@limiter.limit("5/minute")
+async def login(
+    request: Request, 
+    user: UserLogin
+    ):
     # find user
     db_user = await get_user_by_email(user.email)
     if not db_user:

@@ -18,6 +18,7 @@ import 'providers/notification_provider.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/auth_screen.dart';
+import 'services/api_service.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,17 +36,12 @@ class CognifyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TaskProvider()),
         ChangeNotifierProvider(create: (_) => ProjectProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
-        ChangeNotifierProxyProvider<TaskProvider, AnalyticsProvider>(
-          create: (_) => AnalyticsProvider(),
-          update: (_, taskProvider, analytics) {
-            analytics!.updateTasks(taskProvider.tasks);
-            return analytics;
-          },
-        ),
+        ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
       ],
       child: ValueListenableBuilder<ThemeMode>(
         valueListenable: themeNotifier,
         builder: (_, mode, __) => MaterialApp(
+          navigatorKey: ApiService.navigatorKey,
           title: 'Cognify',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
@@ -113,8 +109,9 @@ class _DataLoaderState extends State<_DataLoader> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<TaskProvider>().loadTasks();
-      context.read<ProjectProvider>().loadProjects();
+      context.read<TaskProvider>().refreshTasks();
+      context.read<ProjectProvider>().refreshProjects();
+      context.read<AnalyticsProvider>().loadSummary();
       final notif = context.read<NotificationProvider>();
       notif.loadEnabledState().then((_) => notif.refreshAndFetch());
     });

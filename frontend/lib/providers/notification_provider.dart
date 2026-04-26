@@ -12,7 +12,13 @@ class NotificationProvider extends ChangeNotifier {
   String? _error;
   bool _enabled = true;
 
+  // Pagination state
+  int _totalNotifications = 0;
+  int _totalPages = 1;
+  int _currentPage = 1;
+
   // ── Getters ───────────────────────────────────────────────────────────────
+
   List<AppNotification> get notifications => _notifications;
   List<AppNotification> get upcomingReminders => _upcomingReminders;
   int get unreadCount => _enabled ? _unreadCount : 0;
@@ -20,7 +26,14 @@ class NotificationProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isEnabled => _enabled;
 
+  // Pagination getters
+  int get totalNotifications => _totalNotifications;
+  int get totalPages => _totalPages;
+  int get currentPage => _currentPage;
+  bool get hasMorePages => _currentPage < _totalPages;
+
   // ── Enable / disable notifications ───────────────────────────────────────
+
   Future<void> setEnabled(bool value) async {
     _enabled = value;
     final prefs = await SharedPreferences.getInstance();
@@ -50,24 +63,36 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Refresh proactive notifications then fetch ────────────────────────────
+
   Future<void> refreshAndFetch() async {
     await NotificationService.refresh();
     await fetchNotifications();
   }
 
   // ── Fetch all notifications ───────────────────────────────────────────────
-  Future<void> fetchNotifications({bool unreadOnly = false}) async {
+
+  Future<void> fetchNotifications({
+    bool unreadOnly = false,
+    int page = 1,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     final result = await NotificationService.getNotifications(
       unreadOnly: unreadOnly,
+      page: page,
     );
 
     if (result.isSuccess) {
       _notifications = result.data!;
       _unreadCount = _notifications.where((n) => !n.isRead).length;
+
+      // Store pagination metadata
+      _totalNotifications = result.total;
+      _totalPages = result.totalPages;
+      _currentPage = result.page;
+
       _error = null;
     } else {
       _error = result.error;
@@ -77,13 +102,21 @@ class NotificationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Load next page and append to existing list
+  Future<void> fetchNextPage() async {
+    if (!hasMorePages || _isLoading) return;
+    await fetchNotifications(page: _currentPage + 1);
+  }
+
   // ── Refresh unread count only ─────────────────────────────────────────────
+
   Future<void> refreshUnreadCount() async {
     _unreadCount = await NotificationService.getUnreadCount();
     notifyListeners();
   }
 
   // ── Fetch upcoming reminders ──────────────────────────────────────────────
+
   Future<void> fetchUpcomingReminders({int hoursAhead = 24}) async {
     final result = await NotificationService.getUpcomingReminders(
       hoursAhead: hoursAhead,
@@ -95,6 +128,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Create notification / reminder ────────────────────────────────────────
+
   Future<String?> createNotification({
     required String title,
     required String message,
@@ -112,6 +146,7 @@ class NotificationProvider extends ChangeNotifier {
     if (result.isSuccess) {
       _notifications.insert(0, result.data!.first);
       _unreadCount++;
+      _totalNotifications++;
       notifyListeners();
       return null;
     }
@@ -119,6 +154,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Mark one as read ──────────────────────────────────────────────────────
+
   Future<void> markAsRead(String id) async {
     final success = await NotificationService.markAsRead(id);
     if (success) {
@@ -132,6 +168,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Mark all as read ──────────────────────────────────────────────────────
+
   Future<void> markAllRead() async {
     final success = await NotificationService.markAllRead();
     if (success) {
@@ -143,6 +180,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Delete one ────────────────────────────────────────────────────────────
+
   Future<void> deleteNotification(String id) async {
     final success = await NotificationService.deleteNotification(id);
     if (success) {
@@ -152,12 +190,15 @@ class NotificationProvider extends ChangeNotifier {
           _unreadCount = (_unreadCount - 1).clamp(0, _unreadCount);
         }
         _notifications.removeAt(index);
+        _totalNotifications =
+            (_totalNotifications - 1).clamp(0, _totalNotifications);
         notifyListeners();
       }
     }
   }
 
   // ── Batch delete ──────────────────────────────────────────────────────────
+
   Future<void> deleteMultipleNotifications(List<String> ids) async {
     final success = await NotificationService.deleteMultiple(ids);
     if (success) {
@@ -170,11 +211,14 @@ class NotificationProvider extends ChangeNotifier {
         }
       }
       _unreadCount = (_unreadCount - removedUnread).clamp(0, _unreadCount);
+      _totalNotifications =
+          (_totalNotifications - ids.length).clamp(0, _totalNotifications);
       notifyListeners();
     }
   }
 
   // ── Batch mark as read ────────────────────────────────────────────────────
+
   Future<void> markMultipleAsRead(List<String> ids) async {
     final success = await NotificationService.markMultipleAsRead(ids);
     if (success) {
@@ -190,6 +234,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Snooze reminder ───────────────────────────────────────────────────────
+
   Future<bool> snoozeReminder(String id, int minutes) async {
     final success =
         await NotificationService.snoozeReminder(id, minutes: minutes);
@@ -201,6 +246,7 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Error recovery ────────────────────────────────────────────────────────
+
   Future<void> retryLastAction() async {
     _error = null;
     notifyListeners();
@@ -208,10 +254,14 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   // ── Clear local state (call on logout) ───────────────────────────────────
+
   void clearLocalNotifications() {
     _notifications.clear();
     _upcomingReminders.clear();
     _unreadCount = 0;
+    _totalNotifications = 0;
+    _totalPages = 1;
+    _currentPage = 1;
     _error = null;
     notifyListeners();
   }

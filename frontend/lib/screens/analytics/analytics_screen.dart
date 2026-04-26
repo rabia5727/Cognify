@@ -36,6 +36,14 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   bool _isWeekly = true;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AnalyticsProvider>().loadSummary();
+    });
+  }
+
   bool _hasNoData(List<double> chartData) {
     if (chartData.isEmpty) return true;
     return chartData.every((value) => value == 0);
@@ -82,7 +90,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ? analytics.weeklyChartData
                       : analytics.monthlyChartData;
 
-                  // Use real labels from DummyData or derive from dates
                   final chartLabels = _isWeekly
                       ? const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
                       : const [

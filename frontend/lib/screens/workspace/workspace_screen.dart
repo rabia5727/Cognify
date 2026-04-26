@@ -1272,28 +1272,41 @@ class _TaskCard extends StatelessWidget {
             Row(
               children: [
                 Icon(Icons.access_time_rounded,
-                    size: 14, color: theme.textTheme.bodySmall?.color),
+                    size: 14,
+                    color: task.isOverdue
+                        ? Colors.red
+                        : theme.textTheme.bodySmall?.color),
                 const SizedBox(width: 5),
-                Text(
-                  'Due ${_formatDueDate()} · ${_formatDueTime()}',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w500,
+                if (task.isOverdue)
+                  Text(
+                    'Overdue',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.red,
+                    ),
+                  )
+                else
+                  Text(
+                    'Due ${_formatDueDate()} · ${_formatDueTime()}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
                 const SizedBox(width: 10),
                 _buildCategoryTag(task.category),
                 const Spacer(),
-                GestureDetector(
-                  onTap: onEdit,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Icon(
-                      Icons.edit_outlined,
-                      size: 20,
-                      color: theme.colorScheme.primary,
+                if (!isCompleted)
+                  GestureDetector(
+                    onTap: onEdit,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        Icons.edit_outlined,
+                        size: 20,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ),
-                ),
                 GestureDetector(
                   onTap: onDelete,
                   child: const Padding(
@@ -1386,7 +1399,14 @@ class _ProjectsList extends StatelessWidget {
       return allTasks.where((t) => p.taskIds.contains(t.id)).toList().length;
     }
 
-    if (filterIndex == 1) {
+    if (filterIndex == 0) {
+      // All: exclude 100% completed projects (they belong in Completed tab)
+      filtered = filtered.where((p) {
+        final total = getTotalCount(p);
+        if (total == 0) return true;
+        return getCompletedCount(p) < total;
+      }).toList();
+    } else if (filterIndex == 1) {
       filtered = filtered.where((p) {
         final total = getTotalCount(p);
         if (total == 0) return false;

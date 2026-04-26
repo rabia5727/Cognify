@@ -15,6 +15,7 @@ import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/priority_badge.dart';
+import '../assistant/voice_assistant_screen.dart';
 import 'edit_task_screen.dart';
 
 class TaskDetailScreen extends StatefulWidget {
@@ -35,23 +36,19 @@ class TaskDetailScreen extends StatefulWidget {
 
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
   Future<void> _goToEdit(Task task) async {
-    final result = await Navigator.push<Task>(
+    await Navigator.push<Task>(
       context,
       MaterialPageRoute(
         builder: (_) => EditTaskScreen(
           task: task,
           onTaskUpdated: (updated) async {
-            // Update the provider
             await context.read<TaskProvider>().updateTask(updated);
-            // Notify parent
+            if (!mounted) return; // ADD THIS
             widget.onTaskUpdated(updated);
           },
         ),
       ),
     );
-
-    // No need to do anything else - the Consumer will automatically
-    // show the updated task from the provider
   }
 
   void _confirmDelete(String taskId) {
@@ -72,6 +69,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               Navigator.pop(ctx);
               // Delete from provider
               await context.read<TaskProvider>().deleteTask(taskId);
+              if (!mounted) return;
               // Notify parent
               widget.onTaskDeleted(taskId);
               if (mounted) {
@@ -91,69 +89,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 
-  void _showAIPrompt() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Theme.of(context).cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: theme.dividerColor,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'How would you like to\ncontinue ?',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 24),
-              _AIOption(
-                icon: Icons.auto_awesome_rounded,
-                title: 'User AI Assistant',
-                subtitle: 'Get smart suggestions or next step',
-                isPrimary: true,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('AI Assistant coming soon!')),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              _AIOption(
-                icon: Icons.edit_outlined,
-                title: 'Manual Edit',
-                subtitle: 'Update progress or add notes',
-                isPrimary: false,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  // Get fresh task from provider before editing
-                  final freshTask = context
-                      .read<TaskProvider>()
-                      .tasks
-                      .firstWhere((t) => t.id == widget.taskId);
-                  _goToEdit(freshTask);
-                },
-              ),
-            ],
-          ),
-        );
-      },
+  void _goToVoiceAssistant() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const VoiceAssistantScreen()),
     );
   }
 
@@ -261,7 +200,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
-                            onPressed: _showAIPrompt,
+                            onPressed: _goToVoiceAssistant,
                             icon: Icon(Icons.auto_awesome_rounded,
                                 size: 16, color: theme.colorScheme.primary),
                             label: Text('Continue with AI',
@@ -390,73 +329,5 @@ class _DetailDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Divider(height: 1, color: Theme.of(context).dividerColor);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: AI continue option button
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _AIOption extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool isPrimary;
-  final VoidCallback onTap;
-
-  const _AIOption({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.isPrimary,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        decoration: BoxDecoration(
-          color: isPrimary ? theme.colorScheme.primary : theme.cardColor,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isPrimary ? Colors.transparent : theme.dividerColor,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(icon,
-                size: 20,
-                color: isPrimary ? Colors.white : theme.colorScheme.primary),
-            const SizedBox(width: 14),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isPrimary
-                          ? Colors.white
-                          : theme.textTheme.bodyLarge?.color,
-                    )),
-                const SizedBox(height: 2),
-                Text(subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isPrimary
-                          ? Colors.white70
-                          : theme.textTheme.bodySmall?.color,
-                    )),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

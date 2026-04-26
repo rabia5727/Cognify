@@ -2,7 +2,7 @@
 # USER ACTION → API ROUTE → CRUD FUNCTION → DATABASE → RESPONSE BACK
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from app.db.connection import get_database
 from app.models.task import TaskCreate, TaskUpdate, TaskResponse
@@ -30,8 +30,8 @@ async def create_task(task_data: TaskCreate, user_id: str) -> TaskResponse:
         "project_id": task_data.project_id,
         # System fields (user doesn't set these)
         "status": "pending",              # New tasks always start as pending
-        "created_at": datetime.utcnow(),  # Set creation timestamp
-        "updated_at": datetime.utcnow()   # Initially same as created_at
+        "created_at": datetime.now(timezone.utc),  # Set creation timestamp
+        "updated_at": datetime.now(timezone.utc)   # Initially same as created_at
     }
 
     # Step 3: Save to MongoDB
@@ -123,11 +123,11 @@ async def get_tasks(
     # ── Step 3: Run query with sort + pagination ─────────────────
     # Chain MongoDB methods: find → sort → skip → limit
     cursor = (
-             db["tasks"]
-             .find(query) 
-             .sort(sort_by, sort_order)   # Sort results
-             .skip(skip)               # Skip N items (pagination)
-             .limit(limit)   
+            db["tasks"]
+            .find(query) 
+            .sort(sort_by, sort_order)   # Sort results
+            .skip(skip)               # Skip N items (pagination)
+            .limit(limit)   
              )                # Take only N items
 
     # Step 4: Convert cursor to actual list of tasks
@@ -203,8 +203,12 @@ async def update_task(task_id: str, user_id: str, task_data: TaskUpdate) -> Task
     # Step 1: Get database connection
     db = get_database()
 
-    # Step 2: Build update dictionary with ONLY provided fields
-    # We check each field - if it's None, user didn't send it
+    # Step 2: Fetch current task to check existing status before updating
+    current = await db["tasks"].find_one({"id": task_id, "user_id": user_id})
+    if not current:
+        return None
+
+    # Step 3: Build update dictionary with ONLY provided fields
     update_fields = {}
 
     if task_data.title is not None:
@@ -224,26 +228,21 @@ async def update_task(task_id: str, user_id: str, task_data: TaskUpdate) -> Task
     if task_data.project_id is not None:
         update_fields["project_id"] = task_data.project_id
 
-    # Step 3: ALWAYS update the timestamp
-    # This helps track when task was last modified
-    update_fields["updated_at"] = datetime.utcnow()
+    # Set completed_at once — only when transitioning TO completed for the first time
+    if task_data.status == "completed" and current.get("status") != "completed":
+        update_fields["completed_at"] = datetime.now(timezone.utc)
 
-    # Step 4: Perform the update in MongoDB
-    # update_one() finds ONE document and updates it
+    # Step 4: ALWAYS update the timestamp
+    update_fields["updated_at"] = datetime.now(timezone.utc)
+
+    # Step 5: Perform the update in MongoDB
     # $set means "set these fields" (leaves other fields unchanged)
-    result = await db["tasks"].update_one(
-        {"id": task_id, "user_id": user_id},  # Find this task (security check)
-        {"$set": update_fields}                # Update only these fields
+    await db["tasks"].update_one(
+        {"id": task_id, "user_id": user_id},
+        {"$set": update_fields}
     )
 
-    # Step 5: Check if task was found
-    # matched_count = 1 means task existed and was updated
-    # matched_count = 0 means task not found (wrong id or wrong user)
-    if result.matched_count == 0:
-        return None  # Route will handle 404
-
     # Step 6: Return the updated task
-    # We reuse get_task_by_id to fetch the fresh data
     return await get_task_by_id(task_id, user_id)
 
 

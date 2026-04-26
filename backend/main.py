@@ -2,9 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.db.connection import connect_db, close_db
-from app.routes import auth, users, task, project, notification
+from app.routes import auth, users, task, project, notification, analytics
 from app.crud.notification import setup_indexes
 from app.schedular import start_notification_scheduler, stop_notification_scheduler
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from app.limiter import limiter
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,13 +25,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 app.include_router(auth.router)
@@ -36,6 +41,7 @@ app.include_router(users.router)
 app.include_router(task.router)
 app.include_router(project.router)
 app.include_router(notification.router)
+app.include_router(analytics.router)
 
 @app.get("/")
 async def root():

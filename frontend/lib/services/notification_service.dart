@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/notification_model.dart';
+import '../config/app_config.dart';
 import 'token_storage.dart';
 
 class NotificationService {
-  static const String _base = 'http://127.0.0.1:8000/notifications';
+  // Uses AppConfig.baseUrl — change IP in app_config.dart only
+  static String get _base => '${AppConfig.baseUrl}/notifications';
 
-  static Future<Map<String, String>> get _headers async {
+  // Changed from getter to method so await works correctly inside
+  static Future<Map<String, String>> _getHeaders() async {
     final token = await TokenStorage.getToken();
     return {
       'Content-Type': 'application/json',
@@ -19,18 +23,53 @@ class NotificationService {
   static String _parseError(http.Response res) {
     try {
       final body = jsonDecode(res.body);
-      if (body is Map)
+      if (body is Map) {
         return body['detail']?.toString() ?? 'Something went wrong';
+      }
     } catch (_) {}
     return 'Error ${res.statusCode}';
   }
 
-  // ── GET /notifications/ ────────────────────────────────────────────────────
+  // ── Retry wrapper ─────────────────────────────────────────────────────────
+  // Retries up to 2 times on network failure or 5xx server errors.
+  // Waits 1s before first retry, 2s before second.
+
+  static Future<http.Response> _withRetry(
+    Future<http.Response> Function() request,
+  ) async {
+    int attempt = 0;
+    const maxRetries = 2;
+
+    while (true) {
+      try {
+        final response = await request();
+
+        // Only retry on server-side errors (500+), not client errors (4xx)
+        if (response.statusCode >= 500 && attempt < maxRetries) {
+          attempt++;
+          await Future.delayed(Duration(seconds: attempt));
+          continue;
+        }
+
+        return response;
+      } on SocketException {
+        if (attempt >= maxRetries) rethrow;
+        attempt++;
+        await Future.delayed(Duration(seconds: attempt));
+      } on TimeoutException {
+        if (attempt >= maxRetries) rethrow;
+        attempt++;
+        await Future.delayed(Duration(seconds: attempt));
+      }
+    }
+  }
+
+  // ── GET /notifications/ ───────────────────────────────────────────────────
 
   static Future<NotificationResult> getNotifications({
     bool unreadOnly = false,
     String? type,
-    int skip = 0,
+    int page = 1,
     int limit = 20,
   }) async {
     try {
@@ -38,42 +77,62 @@ class NotificationService {
         queryParameters: {
           'unread_only': unreadOnly.toString(),
           if (type != null) 'type': type,
-          'skip': skip.toString(),
-          'limit': limit.toString(),
+          'page': page.toString(),
+          'page_size': limit.toString(),
         },
       );
-      final res = await http
-          .get(uri, headers: await _headers)
-          .timeout(const Duration(seconds: 15));
+
+      // Fetch headers before passing into lambda — avoids await inside non-async lambda
+      final headers = await _getHeaders();
+      final res = await _withRetry(
+        () => http
+            .get(uri, headers: headers)
+            .timeout(const Duration(seconds: 15)),
+      );
+
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
-        final list = ((body['notifications'] ?? body) as List)
-            .map((e) => AppNotification.fromJson(e))
-            .toList();
-        return NotificationResult.success(list);
+
+        // Handle both raw list (old) and dict with pagination (new)
+        final List rawList =
+            body is List ? body : (body['notifications'] as List? ?? []);
+
+        final list = rawList.map((e) => AppNotification.fromJson(e)).toList();
+
+        return NotificationResult.success(
+          list,
+          total: body is Map ? (body['total'] ?? list.length) : list.length,
+          totalPages: body is Map ? (body['total_pages'] ?? 1) : 1,
+          page: body is Map ? (body['page'] ?? page) : page,
+          pageSize: body is Map ? (body['page_size'] ?? limit) : limit,
+        );
       }
       return NotificationResult.failure(_parseError(res));
     } on SocketException {
       return NotificationResult.failure('Cannot connect to server.');
+    } on TimeoutException {
+      return NotificationResult.failure('Request timed out. Please try again.');
     } catch (e) {
       return NotificationResult.failure('Unexpected error: $e');
     }
   }
 
-  // ── GET /notifications/unread-count ───────────────────────────────────────
+  // ── GET /notifications/unread-count ──────────────────────────────────────
 
   static Future<int> getUnreadCount() async {
     try {
+      final headers = await _getHeaders();
       final res = await http
-          .get(Uri.parse('$_base/unread-count'), headers: await _headers)
+          .get(Uri.parse('$_base/unread-count'), headers: headers)
           .timeout(const Duration(seconds: 15));
-      if (res.statusCode == 200)
+      if (res.statusCode == 200) {
         return jsonDecode(res.body)['unread_count'] ?? 0;
+      }
     } catch (_) {}
     return 0;
   }
 
-  // ── POST /notifications/ ──────────────────────────────────────────────────
+  // ── POST /notifications/ ─────────────────────────────────────────────────
 
   static Future<NotificationResult> createNotification({
     required String title,
@@ -83,10 +142,11 @@ class NotificationService {
     DateTime? remindAt,
   }) async {
     try {
+      final headers = await _getHeaders();
       final res = await http
           .post(
             Uri.parse('$_base/'),
-            headers: await _headers,
+            headers: headers,
             body: jsonEncode({
               'title': title,
               'message': message,
@@ -96,6 +156,7 @@ class NotificationService {
             }),
           )
           .timeout(const Duration(seconds: 15));
+
       if (res.statusCode == 201) {
         return NotificationResult.success(
             [AppNotification.fromJson(jsonDecode(res.body))]);
@@ -103,6 +164,8 @@ class NotificationService {
       return NotificationResult.failure(_parseError(res));
     } on SocketException {
       return NotificationResult.failure('Cannot connect to server.');
+    } on TimeoutException {
+      return NotificationResult.failure('Request timed out. Please try again.');
     } catch (e) {
       return NotificationResult.failure('Unexpected error: $e');
     }
@@ -112,8 +175,9 @@ class NotificationService {
 
   static Future<bool> markAsRead(String id) async {
     try {
+      final headers = await _getHeaders();
       final res = await http
-          .patch(Uri.parse('$_base/$id/read'), headers: await _headers)
+          .patch(Uri.parse('$_base/$id/read'), headers: headers)
           .timeout(const Duration(seconds: 15));
       return res.statusCode == 200;
     } catch (_) {
@@ -121,13 +185,16 @@ class NotificationService {
     }
   }
 
-  // ── PATCH /notifications/read-all ─────────────────────────────────────────
+  // ── PATCH /notifications/read-all ────────────────────────────────────────
 
   static Future<bool> markAllRead() async {
     try {
-      final res = await http
-          .patch(Uri.parse('$_base/read-all'), headers: await _headers)
-          .timeout(const Duration(seconds: 15));
+      final headers = await _getHeaders();
+      final res = await _withRetry(
+        () => http
+            .patch(Uri.parse('$_base/read-all'), headers: headers)
+            .timeout(const Duration(seconds: 15)),
+      );
       return res.statusCode == 200;
     } catch (_) {
       return false;
@@ -138,8 +205,9 @@ class NotificationService {
 
   static Future<bool> deleteNotification(String id) async {
     try {
+      final headers = await _getHeaders();
       final res = await http
-          .delete(Uri.parse('$_base/$id'), headers: await _headers)
+          .delete(Uri.parse('$_base/$id'), headers: headers)
           .timeout(const Duration(seconds: 15));
       return res.statusCode == 204;
     } catch (_) {
@@ -151,9 +219,12 @@ class NotificationService {
 
   static Future<int> refresh() async {
     try {
-      final res = await http
-          .post(Uri.parse('$_base/refresh'), headers: await _headers)
-          .timeout(const Duration(seconds: 15));
+      final headers = await _getHeaders();
+      final res = await _withRetry(
+        () => http
+            .post(Uri.parse('$_base/refresh'), headers: headers)
+            .timeout(const Duration(seconds: 15)),
+      );
       if (res.statusCode == 200) {
         return jsonDecode(res.body)['new_notifications'] ?? 0;
       }
@@ -165,10 +236,11 @@ class NotificationService {
 
   static Future<bool> deleteMultiple(List<String> ids) async {
     try {
+      final headers = await _getHeaders();
       final res = await http
           .delete(
             Uri.parse('$_base/batch/'),
-            headers: await _headers,
+            headers: headers,
             body: jsonEncode({'ids': ids}),
           )
           .timeout(const Duration(seconds: 15));
@@ -180,10 +252,11 @@ class NotificationService {
 
   static Future<bool> markMultipleAsRead(List<String> ids) async {
     try {
+      final headers = await _getHeaders();
       final res = await http
           .patch(
             Uri.parse('$_base/batch/read'),
-            headers: await _headers,
+            headers: headers,
             body: jsonEncode({'ids': ids}),
           )
           .timeout(const Duration(seconds: 15));
@@ -201,19 +274,28 @@ class NotificationService {
       final uri = Uri.parse('$_base/reminders/upcoming').replace(
         queryParameters: {'hours_ahead': hoursAhead.toString()},
       );
+      final headers = await _getHeaders();
       final res = await http
-          .get(uri, headers: await _headers)
+          .get(uri, headers: headers)
           .timeout(const Duration(seconds: 15));
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        final list = (data['reminders'] as List)
-            .map((e) => AppNotification.fromJson(e))
-            .toList();
+
+        // Backend returns {"reminders": [...]} — safe null check
+        final raw = data['reminders'];
+        if (raw == null || raw is! List) {
+          return NotificationResult.success([]);
+        }
+        final list =
+            (raw as List).map((e) => AppNotification.fromJson(e)).toList();
         return NotificationResult.success(list);
       }
       return NotificationResult.failure(_parseError(res));
     } on SocketException {
       return NotificationResult.failure('Cannot connect to server.');
+    } on TimeoutException {
+      return NotificationResult.failure('Request timed out. Please try again.');
     } catch (e) {
       return NotificationResult.failure('Unexpected error: $e');
     }
@@ -221,10 +303,11 @@ class NotificationService {
 
   static Future<bool> snoozeReminder(String id, {int minutes = 10}) async {
     try {
+      final headers = await _getHeaders();
       final res = await http
           .patch(
             Uri.parse('$_base/$id/snooze'),
-            headers: await _headers,
+            headers: headers,
             body: jsonEncode({'minutes': minutes}),
           )
           .timeout(const Duration(seconds: 15));
@@ -240,11 +323,39 @@ class NotificationService {
 class NotificationResult {
   final List<AppNotification>? data;
   final String? error;
+
+  // Pagination fields
+  final int total;
+  final int totalPages;
+  final int page;
+  final int pageSize;
+
   bool get isSuccess => error == null;
 
-  NotificationResult._({this.data, this.error});
-  factory NotificationResult.success(List<AppNotification> data) =>
-      NotificationResult._(data: data);
+  NotificationResult._({
+    this.data,
+    this.error,
+    this.total = 0,
+    this.totalPages = 1,
+    this.page = 1,
+    this.pageSize = 20,
+  });
+
+  factory NotificationResult.success(
+    List<AppNotification> data, {
+    int total = 0,
+    int totalPages = 1,
+    int page = 1,
+    int pageSize = 20,
+  }) =>
+      NotificationResult._(
+        data: data,
+        total: total,
+        totalPages: totalPages,
+        page: page,
+        pageSize: pageSize,
+      );
+
   factory NotificationResult.failure(String error) =>
       NotificationResult._(error: error);
 }
