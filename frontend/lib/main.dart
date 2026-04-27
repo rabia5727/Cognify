@@ -7,6 +7,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:frontend/providers/classroom_provider.dart';
 import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_notifier.dart';
@@ -35,6 +36,7 @@ class CognifyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TaskProvider()),
         ChangeNotifierProvider(create: (_) => ProjectProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => ClassroomProvider()),
         ChangeNotifierProxyProvider<TaskProvider, AnalyticsProvider>(
           create: (_) => AnalyticsProvider(),
           update: (_, taskProvider, analytics) {
@@ -117,6 +119,7 @@ class _DataLoaderState extends State<_DataLoader> {
       context.read<ProjectProvider>().loadProjects();
       final notif = context.read<NotificationProvider>();
       notif.loadEnabledState().then((_) => notif.refreshAndFetch());
+      context.read<ClassroomProvider>().loadCourses();
     });
   }
 

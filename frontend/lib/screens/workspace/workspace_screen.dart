@@ -25,6 +25,7 @@ import 'task_detail_screen.dart';
 import 'add_project_screen.dart';
 import 'edit_project_screen.dart';
 import 'project_detail_screen.dart';
+import 'classroom_sync_screen.dart';
 
 class WorkSpaceScreen extends StatefulWidget {
   final int currentIndex;
@@ -359,6 +360,22 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                   AppHeader(
                     title: 'Workspace',
                     onBack: () => widget.onTabSelected(0),
+
+                    // actions temporarily removed - will add back after Classroom integration
+                    // actions: [
+                    //   IconButton(
+                    //     icon: const Icon(Icons.class_),
+                    //     onPressed: () {
+                    //       Navigator.push(
+                    //         context,
+                    //         MaterialPageRoute(
+                    //           builder: (_) => const ClassroomSyncScreen(),
+                    //         ),
+                    //       );
+                    //     },
+                    //     tooltip: 'Sync with Google Classroom',
+                    //   ),
+                    // ],
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),

@@ -49,9 +49,10 @@ class SocialButton extends StatelessWidget {
     required this.onPressed,
   });
 
-  @override
+ @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return SizedBox(
+      width: double.infinity,
       child: OutlinedButton.icon(
         onPressed: onPressed,
         icon: icon,

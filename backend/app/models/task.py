@@ -16,6 +16,10 @@ class TaskSchema(BaseModel):
     due_date: Optional[datetime] = None
     due_time: Optional[str] = None
     project_id: Optional[str] = None
+    # Google Classroom fields
+    source: Optional[str] = None
+    source_id: Optional[str] = None
+    course_id: Optional[str] = None
     user_id: str
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -29,6 +33,10 @@ class TaskCreate(BaseModel):
     due_date: Optional[datetime] = None
     due_time: Optional[str] = None
     project_id: Optional[str] = None
+    # Google Classroom fields
+    source: Optional[str] = None
+    source_id: Optional[str] = None
+    course_id: Optional[str] = None
 
     @field_validator("priority")
     def validate_priority(cls, v):
@@ -103,5 +111,9 @@ class TaskResponse(BaseModel):
     due_date: Optional[datetime]
     due_time: Optional[str] = None
     project_id: Optional[str] = None
+    # Google Classroom fields
+    source: Optional[str] = None
+    source_id: Optional[str] = None
+    course_id: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

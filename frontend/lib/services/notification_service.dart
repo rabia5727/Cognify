@@ -108,6 +108,98 @@ class NotificationService {
     }
   }
 
+// ── Google Classroom Specific Notifications ─────────────────────────────────
+
+/// Create notification for new classroom assignment
+static Future<NotificationResult> notifyNewAssignment({
+  required String courseName,
+  required String assignmentTitle,
+  required String assignmentId,
+  DateTime? dueDate,
+}) async {
+  return await createNotification(
+    title: '📚 New Assignment from $courseName',
+    message: '"$assignmentTitle" has been added to your tasks${dueDate != null ? ' - Due ${_formatDueDate(dueDate)}' : ''}',
+    type: 'classroom_assignment',
+    taskId: assignmentId,
+    remindAt: dueDate != null ? dueDate.subtract(const Duration(hours: 24)) : null,
+  );
+}
+
+/// Create notification for multiple new assignments (batch sync)
+static Future<NotificationResult> notifyMultipleNewAssignments({
+  required String courseName,
+  required int count,
+}) async {
+  return await createNotification(
+    title: '📚 $count New Assignments',
+    message: '$count new assignments from "$courseName" have been synced to your tasks',
+    type: 'classroom_batch',
+  );
+}
+
+/// Create deadline reminder notification
+static Future<NotificationResult> notifyDeadlineReminder({
+  required String taskTitle,
+  required String taskId,
+  required DateTime dueDate,
+  int hoursBefore = 24,
+}) async {
+  final reminderTime = dueDate.subtract(Duration(hours: hoursBefore));
+  final timeText = hoursBefore == 24 ? 'tomorrow' : 'in $hoursBefore hours';
+  
+  return await createNotification(
+    title: '⏰ Task Due $timeText!',
+    message: '"$taskTitle" is due ${_formatDueDate(dueDate)}',
+    type: 'deadline_reminder',
+    taskId: taskId,
+    remindAt: reminderTime,
+  );
+}
+
+/// Notify when assignment is successfully submitted
+static Future<NotificationResult> notifySubmissionSuccess({
+  required String assignmentTitle,
+  required String courseName,
+}) async {
+  return await createNotification(
+    title: '✅ Assignment Submitted!',
+    message: '"$assignmentTitle" has been submitted to $courseName',
+    type: 'submission_success',
+  );
+}
+
+/// Notify when sync completes
+static Future<NotificationResult> notifySyncComplete({
+  required int newTasksCount,
+  required int totalCourses,
+}) async {
+  if (newTasksCount == 0) {
+    return await createNotification(
+      title: '🔄 Classroom Sync Complete',
+      message: 'No new assignments found across $totalCourses courses',
+      type: 'sync_complete',
+    );
+  } else {
+    return await createNotification(
+      title: '🔄 Sync Complete!',
+      message: '$newTasksCount new assignments added from $totalCourses courses',
+      type: 'sync_complete',
+    );
+  }
+}
+
+// Helper to format due date
+static String _formatDueDate(DateTime date) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final dueDate = DateTime(date.year, date.month, date.day);
+  
+  if (dueDate == today) return 'today';
+  if (dueDate == today.add(const Duration(days: 1))) return 'tomorrow';
+  
+  return 'on ${date.day}/${date.month}/${date.year}';
+}
   // ── PATCH /notifications/{id}/read ────────────────────────────────────────
 
   static Future<bool> markAsRead(String id) async {

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.db.connection import connect_db, close_db
-from app.routes import auth, users, task, project, notification
+from app.routes import auth, users, task, project, notification, classroom
 from app.crud.notification import setup_indexes
 from app.schedular import start_notification_scheduler, stop_notification_scheduler
 
@@ -36,7 +36,7 @@ app.include_router(users.router)
 app.include_router(task.router)
 app.include_router(project.router)
 app.include_router(notification.router)
-
+app.include_router(classroom.router)
 @app.get("/")
 async def root():
     return {"message": "Cognify API is running 🚀"}
