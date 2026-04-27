@@ -113,6 +113,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       ? analytics.weeklyStats
                       : analytics.monthlyStats;
 
+                  if (analytics.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
                   // Show empty state when no data
                   if (_hasNoData(chartData)) {
                     return SingleChildScrollView(

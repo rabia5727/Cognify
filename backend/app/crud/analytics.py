@@ -38,15 +38,13 @@ async def get_analytics_summary(user_id: str) -> AnalyticsSummary:
     week_cutoff = now - timedelta(days=7)
     month_cutoff = now - timedelta(days=30)
 
-    # A task "belongs" to the period based on its due_date
-    week_tasks = [
-    t for t in tasks
-    if t.get("due_date") and _make_aware(t["due_date"]) >= week_cutoff
-    ]
-    month_tasks = [
-    t for t in tasks
-    if t.get("due_date") and _make_aware(t["due_date"]) >= month_cutoff
-    ]
+    # A task "belongs" to the period by due_date if set, otherwise created_at,
+    # so tasks without a due_date are still counted.
+    def _task_date(t: dict) -> datetime:
+        return _make_aware(t["due_date"] if t.get("due_date") else t["created_at"])
+
+    week_tasks = [t for t in tasks if _task_date(t) >= week_cutoff]
+    month_tasks = [t for t in tasks if _task_date(t) >= month_cutoff]
 
     week_completed = [t for t in week_tasks if t.get("status") == "completed"]
     month_completed = [t for t in month_tasks if t.get("status") == "completed"]
@@ -74,21 +72,20 @@ async def get_analytics_summary(user_id: str) -> AnalyticsSummary:
         weekly_chart.append(float(count))
 
     # ── Monthly line chart (Jan–Dec of the current year) ─────────
-    monthly_chart: list[float] = []
-    for month in range(1, 13):
-        count = sum(
-            1
-            for t in tasks
-            if t.get("completed_at")
-            and _make_aware(t["completed_at"]).year == now.year  # FIXED: Added _make_aware()
-            and _make_aware(t["completed_at"]).month == month    # FIXED: Added _make_aware()
-        )
-        monthly_chart.append(float(count))
+    completed_this_year = [
+        _make_aware(t["completed_at"])
+        for t in tasks
+        if t.get("completed_at") and _make_aware(t["completed_at"]).year == now.year
+    ]
+    monthly_chart: list[float] = [
+        float(sum(1 for ca in completed_this_year if ca.month == month))
+        for month in range(1, 13)
+    ]
 
     # ── Stat cards ────────────────────────────────────────────────
     n_week_done = len(week_completed)
     focus_hours = f"{n_week_done * hours_per_task:.1f}h"
-    avg_time = f"{7 / n_week_done:.1f}h" if n_week_done > 0 else "–"
+    avg_time = f"{7 / n_week_done:.1f}d" if n_week_done > 0 else "–"
 
     n_month_done = len(month_completed)
     n_month_total = len(month_tasks)

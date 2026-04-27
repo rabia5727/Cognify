@@ -17,8 +17,8 @@ class TaskSchema(BaseModel):
     due_time: Optional[str] = None
     project_id: Optional[str] = None
     user_id: str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class TaskCreate(BaseModel):
@@ -105,3 +105,4 @@ class TaskResponse(BaseModel):
     project_id: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None 
