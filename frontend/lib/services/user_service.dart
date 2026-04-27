@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'token_storage.dart';
+import '../config/app_config.dart';
 
 class UserService {
-  static const String _base = 'http://127.0.0.1:8000/users';
+  static String get _base => '${AppConfig.baseUrl}/users';
 
   static Future<Map<String, String>> get _headers async {
     final token = await TokenStorage.getToken();

@@ -5,13 +5,14 @@ import 'package:http/http.dart' as http;
 import '../models/user_model.dart';
 import '../screens/auth/auth_screen.dart';
 import 'token_storage.dart';
+import '../config/app_config.dart';
 
 class ApiService {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
   // ── Change this to your machine's IP if testing on a physical device ───────
   // For emulator use 10.0.2.2, for physical device use your local IP e.g. 192.168.1.x
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  static String get baseUrl => AppConfig.baseUrl;
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 

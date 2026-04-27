@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'token_storage.dart';
+import '../config/app_config.dart';
 
 class AnalyticsSummary {
   final double weeklyCompletionRate;
@@ -35,12 +36,14 @@ class AnalyticsSummary {
 
     final rawAchievements = json['achievements'] as List;
     final achievements = rawAchievements
-        .map((a) => (a as Map<String, dynamic>).map((k, v) => MapEntry(k, v.toString())))
+        .map((a) => (a as Map<String, dynamic>)
+            .map((k, v) => MapEntry(k, v.toString())))
         .toList();
 
     return AnalyticsSummary(
       weeklyCompletionRate: (json['weekly_completion_rate'] as num).toDouble(),
-      monthlyCompletionRate: (json['monthly_completion_rate'] as num).toDouble(),
+      monthlyCompletionRate:
+          (json['monthly_completion_rate'] as num).toDouble(),
       weeklyChartData: toDoubleList(json['weekly_chart_data']),
       monthlyChartData: toDoubleList(json['monthly_chart_data']),
       weeklyStats: toStringMap(json['weekly_stats']),
@@ -65,7 +68,7 @@ class AnalyticsResult {
 }
 
 class AnalyticsService {
-  static const String _base = 'http://127.0.0.1:8000/analytics';
+  static String get _base => '${AppConfig.baseUrl}/analytics';
 
   static Future<Map<String, String>> get _headers async {
     final token = await TokenStorage.getToken();

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/task_model.dart';
 import 'token_storage.dart';
+import '../config/app_config.dart';
 
 class TaskListResult {
   final List<Task>? tasks;
@@ -27,7 +28,7 @@ class TaskResult {
 }
 
 class TaskService {
-  static const String _base = 'http://127.0.0.1:8000/tasks';
+  static String get _base => '${AppConfig.baseUrl}/tasks';
 
   static Future<Map<String, String>> get _headers async {
     final token = await TokenStorage.getToken();

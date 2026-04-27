@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../models/project_model.dart';
 import 'token_storage.dart';
+import '../config/app_config.dart';
 
 class ProjectListResult {
   final List<Project>? projects;
@@ -24,12 +25,11 @@ class ProjectResult {
   ProjectResult._({this.project, this.error});
   factory ProjectResult.success(Project project) =>
       ProjectResult._(project: project);
-  factory ProjectResult.failure(String error) =>
-      ProjectResult._(error: error);
+  factory ProjectResult.failure(String error) => ProjectResult._(error: error);
 }
 
 class ProjectService {
-  static const String _base = 'http://127.0.0.1:8000/projects';
+  static String get _base => '${AppConfig.baseUrl}/projects';
 
   static Future<Map<String, String>> get _headers async {
     final token = await TokenStorage.getToken();
@@ -78,7 +78,9 @@ class ProjectService {
   /// POST /projects/ — create a new project
   static Future<ProjectResult> createProject(Project project) async {
     try {
-      final body = project.toJson()..remove('id')..remove('status');
+      final body = project.toJson()
+        ..remove('id')
+        ..remove('status');
       final res = await http
           .post(
             Uri.parse('$_base/'),
