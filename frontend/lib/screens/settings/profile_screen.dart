@@ -1,11 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/settings/profile_screen.dart
 // CHANGES:
-//   - Edit Name navigates to separate EditNameScreen
-//   - Change Password navigates to separate ChangePasswordScreen
-//   - Removed arrow from Email (cannot be changed)
-//   - Email now shows as non-editable info
-//   - Added showArrow parameter to _ActionRow
+//   - Added Google Drive to Connected Accounts section
+//   - Added _driveConnected and _lastSyncDrive state variables
+//   - Added Drive case to _toggleConnection method
+//   - All other logic unchanged
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -30,11 +29,20 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   File? _profileImage;
+
+  // ── Connected account state ────────────────────────────────────────
   bool _classroomConnected = false;
   bool _gmailConnected = false;
+  bool _driveConnected = false; // NEW: Google Drive
+
   String _lastSyncClassroom = 'Never synced';
   String _lastSyncGmail = 'Never synced';
-  bool _isSaving = false;
+  String _lastSyncDrive = 'Never synced'; // NEW: Google Drive last sync
+
+  // bool _isSaving = false;
+  bool _isClassroomLoading = false;
+  bool _isGmailLoading = false;
+  bool _isDriveLoading = false;
 
   void _navigateToEditName() {
     Navigator.push(
@@ -51,19 +59,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _toggleConnection(String platform, bool current) async {
-    setState(() => _isSaving = true);
-    await Future.delayed(const Duration(seconds: 1));
+    // Set loading for specific platform only
     setState(() {
       if (platform == 'Google Classroom') {
-        _classroomConnected = !current;
-        _lastSyncClassroom = _classroomConnected ? 'Just now' : 'Never synced';
-      } else {
-        _gmailConnected = !current;
-        _lastSyncGmail = _gmailConnected ? 'Just now' : 'Never synced';
+        _isClassroomLoading = true;
+      } else if (platform == 'Gmail') {
+        _isGmailLoading = true;
+      } else if (platform == 'Google Drive') {
+        _isDriveLoading = true;
       }
-      _isSaving = false;
     });
+
+    await Future.delayed(const Duration(seconds: 1)); // Simulate API call
+
     if (mounted) {
+      setState(() {
+        if (platform == 'Google Classroom') {
+          _classroomConnected = !current;
+          _lastSyncClassroom =
+              _classroomConnected ? 'Just now' : 'Never synced';
+          _isClassroomLoading = false;
+        } else if (platform == 'Gmail') {
+          _gmailConnected = !current;
+          _lastSyncGmail = _gmailConnected ? 'Just now' : 'Never synced';
+          _isGmailLoading = false;
+        } else if (platform == 'Google Drive') {
+          _driveConnected = !current;
+          _lastSyncDrive = _driveConnected ? 'Just now' : 'Never synced';
+          _isDriveLoading = false;
+        }
+      });
+
       UIFeedback.showSuccess(
           context, current ? '$platform disconnected' : '$platform connected!');
     }
@@ -109,7 +135,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: () async {
               if (!formKey.currentState!.validate()) return;
               final auth = context.read<AuthProvider>();
-              Navigator.pop(ctx); // close dialog
+              Navigator.pop(ctx);
 
               final error = await auth.deleteAccount();
 
@@ -267,32 +293,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 28),
 
-                      // Account Section
+                      // ── Account Section ───────────────────────
                       SectionCard(children: [
                         _ActionRow(
-                            icon: Icons.edit_outlined,
-                            label: 'Edit Name',
-                            subtitle: auth.userName,
-                            onTap: _navigateToEditName,
-                            isLoading: _isSaving,
-                            showArrow: true),
+                          icon: Icons.edit_outlined,
+                          label: 'Edit Name',
+                          subtitle: auth.userName,
+                          onTap: _navigateToEditName,
+                          isLoading: false,
+                          showArrow: true,
+                        ),
                         const RowDivider(),
-                        // Email Row - NO ARROW, cannot be changed
                         _InfoRow(
                             icon: Icons.email_outlined,
                             label: 'Email',
                             value: auth.userEmail),
                         const RowDivider(),
                         _ActionRow(
-                            icon: Icons.lock_outline_rounded,
-                            label: 'Change Password',
-                            onTap: _navigateToChangePassword,
-                            isLoading: _isSaving,
-                            showArrow: true),
+                          icon: Icons.lock_outline_rounded,
+                          label: 'Change Password',
+                          onTap: _navigateToChangePassword,
+                          isLoading: false, // ← CHANGE from _isSaving to false
+                          showArrow: true,
+                        ),
                       ]),
                       const SizedBox(height: 24),
 
-                      // Connected Accounts Section
+                      // ── Connected Accounts Section ────────────
                       Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -308,31 +335,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     'Connect your accounts to automatically sync tasks and deadlines.',
                                     style: theme.textTheme.labelSmall)),
                             SectionCard(children: [
+                              // Google Classroom
                               _ConnectedAccountRow(
-                                  icon: Icons.school_outlined,
-                                  label: 'Google Classroom',
-                                  description: 'Sync assignments & deadlines',
-                                  isConnected: _classroomConnected,
-                                  lastSync: _lastSyncClassroom,
-                                  onTap: () => _toggleConnection(
-                                      'Google Classroom', _classroomConnected),
-                                  isLoading: _isSaving),
+                                icon: Icons.school_outlined,
+                                label: 'Google Classroom',
+                                description: 'Sync assignments & deadlines',
+                                isConnected: _classroomConnected,
+                                lastSync: _lastSyncClassroom,
+                                onTap: () => _toggleConnection(
+                                    'Google Classroom', _classroomConnected),
+                                isLoading:
+                                    _isClassroomLoading, // ← Use specific loading variable
+                              ),
                               const RowDivider(),
+
+                              // Gmail
                               _ConnectedAccountRow(
-                                  icon: Icons.mail_outline_rounded,
-                                  label: 'Gmail',
-                                  description:
-                                      'Import task emails automatically',
-                                  isConnected: _gmailConnected,
-                                  lastSync: _lastSyncGmail,
-                                  onTap: () => _toggleConnection(
-                                      'Gmail', _gmailConnected),
-                                  isLoading: _isSaving),
+                                icon: Icons.mail_outline_rounded,
+                                label: 'Gmail',
+                                description: 'Import task emails automatically',
+                                isConnected: _gmailConnected,
+                                lastSync: _lastSyncGmail,
+                                onTap: () =>
+                                    _toggleConnection('Gmail', _gmailConnected),
+                                isLoading:
+                                    _isGmailLoading, // ← Use specific loading variable
+                              ),
+
+                              // Google Drive — NEW
+                              _ConnectedAccountRow(
+                                icon: Icons.folder_outlined,
+                                label: 'Google Drive',
+                                description: 'Attach files to tasks easily',
+                                isConnected: _driveConnected,
+                                lastSync: _lastSyncDrive,
+                                onTap: () => _toggleConnection(
+                                    'Google Drive', _driveConnected),
+                                isLoading:
+                                    _isDriveLoading, // ← Use specific loading variable
+                              ),
                             ]),
                           ]),
                       const SizedBox(height: 24),
 
-                      // Delete Account Section
+                      // ── Delete Account Section ────────────────
                       SectionCard(children: [
                         _ActionRow(
                             icon: Icons.delete_outline_rounded,
@@ -354,13 +400,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-// Private widgets
+// ═══════════════════════════════════════════════════════════════════
+// Private widgets — unchanged from original
+// ═══════════════════════════════════════════════════════════════════
+
 class _ProfilePhoto extends StatelessWidget {
   final VoidCallback onTap;
   final File? profileImage;
   final String initials;
   const _ProfilePhoto(
       {required this.onTap, this.profileImage, required this.initials});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -403,6 +453,7 @@ class _PhotoOption extends StatelessWidget {
   final VoidCallback onTap;
   const _PhotoOption(
       {required this.icon, required this.label, required this.onTap});
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -432,6 +483,7 @@ class _InfoRow extends StatelessWidget {
     required this.label,
     required this.value,
   });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -528,14 +580,17 @@ class _ConnectedAccountRow extends StatelessWidget {
   final String lastSync;
   final VoidCallback onTap;
   final bool isLoading;
-  const _ConnectedAccountRow(
-      {required this.icon,
-      required this.label,
-      required this.description,
-      required this.isConnected,
-      required this.lastSync,
-      required this.onTap,
-      this.isLoading = false});
+
+  const _ConnectedAccountRow({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.isConnected,
+    required this.lastSync,
+    required this.onTap,
+    this.isLoading = false,
+  });
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
