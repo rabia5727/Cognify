@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from app.db.connection import get_database
+from bson import ObjectId
 from app.models.analytics import (
     AnalyticsSummary,
     AchievementItem,
@@ -22,7 +23,7 @@ async def get_analytics_summary(user_id: str) -> AnalyticsSummary:
     now = datetime.now(timezone.utc)
 
     # Fetch user for their work hours setting
-    user = await db["users"].find_one({"id": user_id})
+    user = await db["users"].find_one({"_id": ObjectId(user_id)})
     hours_per_task = 1.5
     if user and user.get("preferences"):
         daily_work_hours = user["preferences"].get("daily_work_hours", 8)

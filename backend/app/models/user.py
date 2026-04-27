@@ -9,7 +9,7 @@ from datetime import datetime
 class UserPreferences(BaseModel):
     notifications_enabled: bool = True        # receive reminders?
     daily_work_hours: int = 8                 # how many hours per day?
-    categories: list[str] = ["academic", "freelance", "personal"]  # active categories
+    categories: list[str] = ["academic", "freelance", "general"]  # active categories
     theme: str = "light"                      # light or dark mode
 
 

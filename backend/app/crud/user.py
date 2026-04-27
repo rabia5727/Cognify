@@ -1,7 +1,17 @@
 from app.db.connection import get_database
 from app.models.user import UserInDB, UserUpdate
 from bson import ObjectId
-from datetime import datetime
+from bson.errors import InvalidId
+from datetime import datetime, timezone
+
+
+# Helper — safely converts string to ObjectId
+# Returns None if the string is malformed (protects against HTTP 500)
+def _to_object_id(user_id: str) -> ObjectId | None:
+    try:
+        return ObjectId(user_id)
+    except (InvalidId, Exception):
+        return None
 
 
 # CREATE a new user
@@ -20,9 +30,11 @@ async def get_user_by_email(email: str) -> dict | None:
 
 # GET user by ID
 async def get_user_by_id(user_id: str) -> dict | None:
+    oid = _to_object_id(user_id)
+    if oid is None:
+        return None  # malformed ID → return None → caller returns 401 not 500
     db = get_database()
-    user = await db["users"].find_one({"_id": ObjectId(user_id)})
-    return user
+    return await db["users"].find_one({"_id": oid})
 
 
 # GET user by Google ID
@@ -34,38 +46,39 @@ async def get_user_by_google_id(google_id: str) -> dict | None:
 
 # UPDATE user profile
 async def update_user(user_id: str, update_data: UserUpdate) -> dict | None:
+    oid = _to_object_id(user_id)
+    if oid is None:
+        return None
+    
     db = get_database()
-
-    # Build update dictionary with only provided fields
     update_fields = {}
 
     if update_data.name is not None:
         update_fields["name"] = update_data.name
 
     if update_data.preferences is not None:
-        # model_dump() converts pydantic model to dictionary
         update_fields["preferences"] = update_data.preferences.model_dump()
 
-    # If nothing to update, just return current user
+    # Nothing to update — return current user
     if not update_fields:
         return await get_user_by_id(user_id)
 
-    # Perform the update in MongoDB
+    update_fields["updated_at"] = datetime.now(timezone.utc)  # track updates
+
     await db["users"].update_one(
-        {"_id": ObjectId(user_id)},
+        {"_id": oid},
         {"$set": update_fields}
     )
 
-    # Return updated user
     return await get_user_by_id(user_id)
 
 
 # DELETE user account
 async def delete_user(user_id: str) -> bool:
+    oid = _to_object_id(user_id)
+    if oid is None:
+        return False
+    
     db = get_database()
-
-    # Delete user document from MongoDB
-    result = await db["users"].delete_one({"_id": ObjectId(user_id)})
-
-    # deleted_count = 1 means success
+    result = await db["users"].delete_one({"_id": oid})
     return result.deleted_count == 1

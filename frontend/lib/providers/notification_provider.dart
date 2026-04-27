@@ -103,9 +103,37 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   /// Load next page and append to existing list
+  // REPLACE fetchNextPage() — currently calls fetchNotifications which overwrites list
+
   Future<void> fetchNextPage() async {
     if (!hasMorePages || _isLoading) return;
-    await fetchNotifications(page: _currentPage + 1);
+
+    _isLoading = true;
+    notifyListeners();
+
+    final result = await NotificationService.getNotifications(
+      page: _currentPage + 1,
+    );
+
+    if (result.isSuccess) {
+      // APPEND to existing list instead of replacing
+      _notifications.addAll(result.data!);
+
+      // Update unread count from newly added items only
+      _unreadCount += result.data!.where((n) => !n.isRead).length;
+
+      // Update pagination state
+      _totalNotifications = result.total;
+      _totalPages = result.totalPages;
+      _currentPage = result.page;
+
+      _error = null;
+    } else {
+      _error = result.error;
+    }
+
+    _isLoading = false;
+    notifyListeners();
   }
 
   // ── Refresh unread count only ─────────────────────────────────────────────
