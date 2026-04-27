@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/theme/app_theme.dart';
-import '../../theme/app_theme.dart';
+import '../../../theme/app_theme.dart';
 
-class Q1GoalsScreen extends StatelessWidget {
+class Q1GoalsScreen extends StatefulWidget {
   final List<String> selected;
   final ValueChanged<List<String>> onChanged;
 
@@ -12,6 +11,11 @@ class Q1GoalsScreen extends StatelessWidget {
     required this.onChanged,
   });
 
+  @override
+  State<Q1GoalsScreen> createState() => _Q1GoalsScreenState();
+}
+
+class _Q1GoalsScreenState extends State<Q1GoalsScreen> {
   static const _options = [
     'Get more done in less time',
     'Improve work-life balance',
@@ -20,22 +24,26 @@ class Q1GoalsScreen extends StatelessWidget {
   ];
 
   void _toggle(String value) {
-    final updated = List<String>.from(selected);
+    final updated = List<String>.from(widget.selected);
     if (updated.contains(value)) {
       updated.remove(value);
     } else {
       if (updated.length < 2) {
         updated.add(value);
       } else {
-        _showMaxLimitDialog();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You can select at most 2 goals'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.primaryBlue,
+            duration: Duration(seconds: 2),
+          ),
+        );
         return;
       }
     }
-    onChanged(updated);
-  }
-
-  void _showMaxLimitDialog() {
-    // Show dialog or snackbar
+    widget.onChanged(updated);
   }
 
   @override
@@ -77,18 +85,23 @@ class Q1GoalsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 32),
           ..._options.map((option) {
-            final isSelected = selected.contains(option);
+            final isSelected = widget.selected.contains(option);
             return GestureDetector(
               onTap: () => _toggle(option),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primaryBlue : const Color(0xFFF5F7FF),
+                  color: isSelected
+                      ? AppColors.primaryBlue
+                      : const Color(0xFFF5F7FF),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isSelected ? AppColors.primaryBlue : const Color(0xFFE0E7FF),
+                    color: isSelected
+                        ? AppColors.primaryBlue
+                        : const Color(0xFFE0E7FF),
                     width: 1.5,
                   ),
                 ),
@@ -105,17 +118,18 @@ class Q1GoalsScreen extends StatelessWidget {
                       ),
                     ),
                     if (isSelected)
-                      const Icon(Icons.check_circle, color: Colors.white, size: 22),
+                      const Icon(Icons.check_circle,
+                          color: Colors.white, size: 22),
                   ],
                 ),
               ),
             );
           }),
-          if (selected.isNotEmpty)
+          if (widget.selected.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 16),
               child: Text(
-                'Selected: ${selected.length}/2',
+                'Selected: ${widget.selected.length}/2',
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.primaryBlue,

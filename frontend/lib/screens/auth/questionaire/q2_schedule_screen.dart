@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 
-class Q2ScheduleScreen extends StatelessWidget {
+class Q2ScheduleScreen extends StatefulWidget {
   final List<String> selected;
   final ValueChanged<List<String>> onChanged;
 
@@ -11,6 +11,11 @@ class Q2ScheduleScreen extends StatelessWidget {
     required this.onChanged,
   });
 
+  @override
+  State<Q2ScheduleScreen> createState() => _Q2ScheduleScreenState();
+}
+
+class _Q2ScheduleScreenState extends State<Q2ScheduleScreen> {
   static const _options = [
     'Fixed and Predictable',
     'Mostly predictable with some flexibility',
@@ -18,20 +23,11 @@ class Q2ScheduleScreen extends StatelessWidget {
     'Completely in my control',
   ];
 
-  static const _descriptions = [
-    'same structure daily',
-    '',
-    'things change last minute',
-    'I set my own hours',
-  ];
-
   void _select(String value) {
-    // Single-select: replace with new selection, not add
-    // If same option is clicked, deselect it (optional)
-    if (selected.contains(value)) {
-      onChanged([]); // Deselect if already selected
+    if (widget.selected.contains(value)) {
+      widget.onChanged([]);
     } else {
-      onChanged([value]); // Replace with new single selection
+      widget.onChanged([value]);
     }
   }
 
@@ -86,41 +82,46 @@ class Q2ScheduleScreen extends StatelessWidget {
             style: TextStyle(fontSize: 14, color: AppColors.grayText),
           ),
           const SizedBox(height: 32),
-          ..._options.asMap().entries.map((entry) {
-            final index = entry.key;
-            final option = entry.value;
-            final isSelected = selected.contains(option);
+          ..._options.map((option) {
+            final isSelected = widget.selected.contains(option);
             final description = _getDescription(option);
             return GestureDetector(
               onTap: () => _select(option),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
                 margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                 decoration: BoxDecoration(
-                  color: isSelected ? AppColors.primaryBlue : const Color(0xFFF5F7FF),
+                  color: isSelected
+                      ? AppColors.primaryBlue
+                      : const Color(0xFFF5F7FF),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: isSelected ? AppColors.primaryBlue : const Color(0xFFE0E7FF),
+                    color: isSelected
+                        ? AppColors.primaryBlue
+                        : const Color(0xFFE0E7FF),
                     width: 1.5,
                   ),
                 ),
                 child: Row(
                   children: [
-                    // Radio button indicator
                     Container(
                       width: 22,
                       height: 22,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isSelected ? AppColors.primaryBlue : Colors.transparent,
+                        color: isSelected
+                            ? AppColors.primaryBlue
+                            : Colors.transparent,
                         border: Border.all(
                           color: isSelected ? Colors.white : AppColors.grayText,
                           width: 2,
                         ),
                       ),
                       child: isSelected
-                          ? const Icon(Icons.check, size: 14, color: Colors.white)
+                          ? const Icon(Icons.check,
+                              size: 14, color: Colors.white)
                           : null,
                     ),
                     const SizedBox(width: 14),
@@ -133,7 +134,9 @@ class Q2ScheduleScreen extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
-                              color: isSelected ? Colors.white : AppColors.darkText,
+                              color: isSelected
+                                  ? Colors.white
+                                  : AppColors.darkText,
                             ),
                           ),
                           if (description.isNotEmpty)
@@ -143,7 +146,9 @@ class Q2ScheduleScreen extends StatelessWidget {
                                 description,
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: isSelected ? Colors.white70 : AppColors.grayText,
+                                  color: isSelected
+                                      ? Colors.white70
+                                      : AppColors.grayText,
                                 ),
                               ),
                             ),

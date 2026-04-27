@@ -10,7 +10,8 @@ class NotificationProvider extends ChangeNotifier {
   int _unreadCount = 0;
   bool _isLoading = false;
   String? _error;
-  bool _enabled = true;
+  bool _enabled = false;
+  String? _userId;
 
   // Pagination state
   int _totalNotifications = 0;
@@ -31,6 +32,22 @@ class NotificationProvider extends ChangeNotifier {
   int get totalPages => _totalPages;
   int get currentPage => _currentPage;
   bool get hasMorePages => _currentPage < _totalPages;
+
+  void setCurrentUser(String userId) {
+    _userId = userId;
+  }
+
+  Future<bool> hasAskedPermission() async {
+    if (_userId == null || _userId!.isEmpty) return false;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('notification_permission_asked_$_userId') ?? false;
+  }
+
+  Future<void> markPermissionAsked() async {
+    if (_userId == null || _userId!.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notification_permission_asked_$_userId', true);
+  }
 
   // ── Enable / disable notifications ───────────────────────────────────────
 

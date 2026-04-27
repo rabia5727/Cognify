@@ -6,8 +6,6 @@ class TokenStorage {
   static const _emailKey = 'user_email';
   static const _userIdKey = 'user_id';
 
-  // ── Token ──────────────────────────────────────────────────────────────────
-
   static Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, token);
@@ -27,8 +25,6 @@ class TokenStorage {
     final token = await getToken();
     return token != null && token.isNotEmpty;
   }
-
-  // ── User info ──────────────────────────────────────────────────────────────
 
   static Future<void> saveUserInfo({
     required String name,
@@ -51,10 +47,12 @@ class TokenStorage {
     return prefs.getString(_emailKey);
   }
 
-  // ── Clear all (logout) ─────────────────────────────────────────────────────
-
+  // FIXED: removes only auth keys, never touches other app preferences
   static Future<void> clearAll() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await prefs.remove(_tokenKey);
+    await prefs.remove(_nameKey);
+    await prefs.remove(_emailKey);
+    await prefs.remove(_userIdKey);
   }
 }

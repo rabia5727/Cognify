@@ -4,7 +4,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constant.dart';
 import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
@@ -15,7 +14,6 @@ import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/voice_fab.dart';
 import '../../widgets/common/priority_badge.dart';
-import '../../widgets/common/notification_permission_sheet.dart';
 import '../../widgets/empty_states/empty_dashboard.dart';
 import '../../widgets/layout/refresh_wrapper.dart';
 import '../../widgets/loading/shimmer_loading.dart';
@@ -40,23 +38,6 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _showProactiveCard = true;
   String? _animatingTaskId;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybeShowNotificationPermission();
-    });
-  }
-
-  Future<void> _maybeShowNotificationPermission() async {
-    final prefs = await SharedPreferences.getInstance();
-    final shown = prefs.getBool('notification_permission_shown') ?? false;
-    if (!shown && mounted) {
-      await showNotificationPermissionSheet(context);
-      await prefs.setBool('notification_permission_shown', true);
-    }
-  }
 
 void _navigateToTaskDetail(Task task) {
     final taskProvider = context.read<TaskProvider>();

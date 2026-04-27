@@ -19,6 +19,7 @@ import 'screens/auth/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/auth_screen.dart';
 import 'services/api_service.dart';
+import 'widgets/common/notification_permission_sheet.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -104,16 +105,36 @@ class _DataLoader extends StatefulWidget {
   State<_DataLoader> createState() => _DataLoaderState();
 }
 
+// main.dart — REPLACE _DataLoaderState entirely
+
 class _DataLoaderState extends State<_DataLoader> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // ↑ ADD async here — this is the fix
+
       context.read<TaskProvider>().refreshTasks();
       context.read<ProjectProvider>().refreshProjects();
       context.read<AnalyticsProvider>().loadSummary();
-      final notif = context.read<NotificationProvider>();
-      notif.loadEnabledState().then((_) => notif.refreshAndFetch());
+
+      final notifProvider = context.read<NotificationProvider>();
+      final userId = context.read<AuthProvider>().user?.id ?? '';
+      notifProvider.setCurrentUser(userId);
+
+      // Check permission BEFORE loading enabled state so settings
+      // doesn't flash "on" for users who haven't been asked yet.
+      final alreadyAsked = await notifProvider.hasAskedPermission();
+      if (!alreadyAsked && mounted) {
+        await showNotificationPermissionSheet(context);
+        // Safety net: mark asked if user dismissed without tapping a button
+        await notifProvider.markPermissionAsked();
+        // Skip loadEnabledState — the sheet's button already called setEnabled
+        // with the user's choice; reloading would overwrite it with the backend default
+      } else {
+        await notifProvider.loadEnabledState();
+      }
+      await notifProvider.refreshAndFetch();
     });
   }
 

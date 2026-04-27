@@ -7,6 +7,8 @@ Future<void> showNotificationPermissionSheet(BuildContext context) {
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
+    isDismissible: false,
+    enableDrag: false,
     builder: (_) => const _NotificationPermissionSheet(),
   );
 }
@@ -52,10 +54,12 @@ class _NotificationPermissionSheet extends StatelessWidget {
             width: double.infinity,
             height: 52,
             child: ElevatedButton(
-              onPressed: () {
-                // Read provider BEFORE popping — context is invalid after pop
+              onPressed: () async {
                 final provider = context.read<NotificationProvider>();
-                Navigator.pop(context);
+                final nav = Navigator.of(context);
+                await provider.markPermissionAsked();
+                await provider.setEnabled(true);
+                nav.pop();
                 provider.refreshUnreadCount();
               },
               style: ElevatedButton.styleFrom(
@@ -69,6 +73,30 @@ class _NotificationPermissionSheet extends StatelessWidget {
               child: const Text(
                 'Confirm',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: TextButton(
+              onPressed: () async {
+                final provider = context.read<NotificationProvider>();
+                final nav = Navigator.of(context);
+                await provider.markPermissionAsked();
+                await provider.setEnabled(false);
+                nav.pop();
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: theme.textTheme.bodySmall?.color,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(30),
+                ),
+              ),
+              child: const Text(
+                'No Thanks',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
               ),
             ),
           ),

@@ -74,6 +74,8 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
   }
 
   void _next() {
+    if (!mounted) return;
+
     final validationMessage = _getValidationMessage();
     if (validationMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -98,6 +100,8 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
   }
 
   void _skip() {
+    if (!mounted) return;
+
     if (_currentPage < _totalPages - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 350),
@@ -109,6 +113,8 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
   }
 
   void _back() {
+    if (!mounted) return;
+
     if (_currentPage > 0) {
       _pageController.previousPage(
         duration: const Duration(milliseconds: 350),
@@ -124,13 +130,13 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
     if (!mounted) return;
 
     context.read<AuthProvider>().onLoginSuccess(
-      UserModel(
-        id: profile?['id'] ?? '',
-        name: profile?['name'] ?? widget.userName,
-        email: profile?['email'] ?? '',
-      ),
-      token,
-    );
+          UserModel(
+            id: profile?['id'] ?? '',
+            name: profile?['name'] ?? widget.userName,
+            email: profile?['email'] ?? '',
+          ),
+          token,
+        );
 
     // Pop all pushed routes back to _AppEntryPoint, which now shows HomeScreen
     Navigator.of(context).popUntil((route) => route.isFirst);
@@ -159,7 +165,8 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
             children: [
               // Top bar: back + progress indicator
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 child: Row(
                   children: [
                     // Back button (only on pages > 0)
@@ -177,8 +184,7 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
                               size: 16, color: AppColors.primaryBlue),
                         ),
                       ),
-                      //addes spacing only if back button exists 
-                      if (_currentPage > 0) const SizedBox(width: 12),
+                    if (_currentPage > 0) const SizedBox(width: 12),
 
                     // Progress bar
                     Expanded(
@@ -216,31 +222,52 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
                 child: PageView(
                   controller: _pageController,
                   physics: const NeverScrollableScrollPhysics(),
-                  onPageChanged: (i) => setState(() => _currentPage = i),
+                  onPageChanged: (i) {
+                    if (mounted) {
+                      setState(() => _currentPage = i);
+                    }
+                  },
                   children: [
                     Q1GoalsScreen(
                       selected: _prefs.goals,
-                      onChanged: (val) => setState(() => _prefs.goals = val),
+                      onChanged: (val) {
+                        if (mounted) {
+                          setState(() => _prefs.goals = val);
+                        }
+                      },
                     ),
                     Q2ScheduleScreen(
                       selected: _prefs.scheduleType,
-                      onChanged: (val) => setState(() => _prefs.scheduleType = val),
+                      onChanged: (val) {
+                        if (mounted) {
+                          setState(() => _prefs.scheduleType = val);
+                        }
+                      },
                     ),
                     Q3TaskloadScreen(
                       value: _prefs.dailyTaskLoad,
-                      onChanged: (val) => setState(() => _prefs.dailyTaskLoad = val),
+                      onChanged: (val) {
+                        if (mounted) {
+                          setState(() => _prefs.dailyTaskLoad = val);
+                        }
+                      },
                     ),
                     Q4ChallengesScreen(
                       selected: _prefs.productivityChallenge,
-                      onChanged: (val) => setState(() => _prefs.productivityChallenge = val),
+                      onChanged: (val) {
+                        if (mounted) {
+                          setState(() => _prefs.productivityChallenge = val);
+                        }
+                      },
                     ),
                   ],
                 ),
               ),
-              //flexible space before buttons
+
               // Next Button
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
                 child: PrimaryButton(
                   label: _currentPage == _totalPages - 1 ? "All Done" : 'Next',
                   onPressed: _next,

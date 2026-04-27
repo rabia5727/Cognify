@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
 
-class Q3TaskloadScreen extends StatelessWidget {
+class Q3TaskloadScreen extends StatefulWidget {
   final int value;
   final ValueChanged<int> onChanged;
 
@@ -11,18 +11,23 @@ class Q3TaskloadScreen extends StatelessWidget {
     required this.onChanged,
   });
 
+  @override
+  State<Q3TaskloadScreen> createState() => _Q3TaskloadScreenState();
+}
+
+class _Q3TaskloadScreenState extends State<Q3TaskloadScreen> {
   String get _label {
-    if (value <= 3) return 'Light';
-    if (value <= 6) return 'Moderate';
-    if (value <= 9) return 'Heavy';
+    if (widget.value <= 3) return 'Light';
+    if (widget.value <= 6) return 'Moderate';
+    if (widget.value <= 9) return 'Heavy';
     return 'Intense';
   }
 
   String get _displayValue {
-    if (value >= 12) {
+    if (widget.value >= 12) {
       return '12+';
     }
-    return value.toString();
+    return widget.value.toString();
   }
 
   @override
@@ -84,12 +89,14 @@ class Q3TaskloadScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  value >= 12 ? 'tasks+ per day' : 'tasks per day',
-                  style: const TextStyle(color: AppColors.grayText, fontSize: 14),
+                  widget.value >= 12 ? 'tasks+ per day' : 'tasks per day',
+                  style:
+                      const TextStyle(color: AppColors.grayText, fontSize: 14),
                 ),
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                   decoration: BoxDecoration(
                     color: AppColors.primaryBlue.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -118,11 +125,11 @@ class Q3TaskloadScreen extends StatelessWidget {
               trackHeight: 6,
             ),
             child: Slider(
-              value: value.toDouble(),
+              value: widget.value.toDouble(),
               min: 1,
               max: 12,
               divisions: 11,
-              onChanged: (v) => onChanged(v.round()),
+              onChanged: (v) => widget.onChanged(v.round()),
             ),
           ),
           const Padding(
