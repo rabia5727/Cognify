@@ -50,7 +50,17 @@ class _AuthScreenState extends State<AuthScreen>
 
   void _toggleTab(bool isLogin) {
     _animController.reverse().then((_) {
-      setState(() => _isLogin = isLogin);
+      _emailController.clear();
+      _passwordController.clear();
+      _confirmPasswordController.clear();
+      setState(() {
+        _isLogin = isLogin;
+        _loginError = null;
+        _termsError = false;
+        _agreedToTerms = false;
+        _obscurePassword = true;
+        _obscureConfirm = true;
+      });
       _animController.forward();
     });
   }

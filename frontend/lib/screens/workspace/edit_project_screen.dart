@@ -84,7 +84,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
       description: _descCtrl.text.trim(),
       dueDate: _dueDate,
       priority: _priority,
-      status: ProjectStatus.active,
+      status: widget.project.status,
       category: _category,
       taskIds: _selectedTaskIds,
     );

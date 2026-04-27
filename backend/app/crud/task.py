@@ -8,6 +8,26 @@ from app.db.connection import get_database
 from app.models.task import TaskCreate, TaskUpdate, TaskResponse
 
 
+async def _sync_project_status(db, project_id: str) -> None:
+    """Auto-complete or reactivate a project based on its tasks' statuses."""
+    project = await db["projects"].find_one({"id": project_id})
+    if not project:
+        return
+    task_ids = project.get("task_ids", [])
+    if not task_ids:
+        return
+    tasks = await db["tasks"].find({"id": {"$in": task_ids}}).to_list(length=None)
+    if not tasks:
+        return
+    all_done = all(t.get("status") == "completed" for t in tasks)
+    new_status = "completed" if all_done else "active"
+    if project.get("status") != new_status:
+        await db["projects"].update_one(
+            {"id": project_id},
+            {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc)}},
+        )
+
+
 # CREATE a new task
 async def create_task(task_data: TaskCreate, user_id: str) -> TaskResponse:
 
@@ -242,7 +262,12 @@ async def update_task(task_id: str, user_id: str, task_data: TaskUpdate) -> Task
         {"$set": update_fields}
     )
 
-    # Step 6: Return the updated task
+    # Step 6: Sync parent project status if task status changed
+    if task_data.status is not None:
+        project_id = current.get("project_id")
+        if project_id:
+            await _sync_project_status(db, project_id)
+
     return await get_task_by_id(task_id, user_id)
 
 
@@ -252,14 +277,23 @@ async def delete_task(task_id: str, user_id: str) -> bool:
     # Step 1: Get database connection
     db = get_database()
 
-    # Step 2: Delete task matching BOTH id AND user_id
-    # This ensures users can only delete their own tasks (security!)
-    result = await db["tasks"].delete_one({
-        "id": task_id,
-        "user_id": user_id
-    })
+    # Step 2: Fetch task first to get its project_id before deleting
+    task = await db["tasks"].find_one({"id": task_id, "user_id": user_id})
+    if not task:
+        return False
 
-    # Step 3: Return result
-    # deleted_count = 1 → successfully deleted
-    # deleted_count = 0 → task not found (or wrong user)
-    return result.deleted_count == 1
+    # Step 3: Delete the task
+    result = await db["tasks"].delete_one({"id": task_id, "user_id": user_id})
+    if result.deleted_count == 0:
+        return False
+
+    # Step 4: Remove task_id from any project that references it
+    project_id = task.get("project_id")
+    if project_id:
+        await db["projects"].update_one(
+            {"id": project_id},
+            {"$pull": {"task_ids": task_id}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+        )
+        await _sync_project_status(db, project_id)
+
+    return True

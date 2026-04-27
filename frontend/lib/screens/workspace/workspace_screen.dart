@@ -112,10 +112,15 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   }
 
   void _goToAddTask() {
+    final DateTime? prefilledDate = (_selectedDayIndex >= 0 && _calendarDays.isNotEmpty)
+        ? _calendarDays[_selectedDayIndex]['fullDate'] as DateTime
+        : null;
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AddTaskScreen(
+          initialDueDate: prefilledDate,
           onTaskAdded: (newTask) async {
             try {
               await context.read<TaskProvider>().addTask(newTask);

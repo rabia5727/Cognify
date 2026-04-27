@@ -12,11 +12,13 @@ class AddTaskScreen extends StatefulWidget {
   // Callback — called with the new task when user taps Save
   final Function(Task) onTaskAdded;
   final String? initialProjectId;
+  final DateTime? initialDueDate;
 
   const AddTaskScreen({
     super.key,
     required this.onTaskAdded,
     this.initialProjectId,
+    this.initialDueDate,
   });
 
   @override
@@ -32,6 +34,12 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   DateTime? _dueDate;
   TimeOfDay? _dueTime;
   bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _dueDate = widget.initialDueDate;
+  }
 
   @override
   void dispose() {
