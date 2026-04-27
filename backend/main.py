@@ -2,21 +2,23 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.db.connection import connect_db, close_db
-from app.routes import auth, users, task, project, notification, analytics
+from app.routes import auth, users, task, project, notification, analytics, classroom  # MERGED: both routers
 from app.crud.notification import setup_indexes
 from app.schedular import start_notification_scheduler, stop_notification_scheduler
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.limiter import limiter
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
-    await setup_indexes() 
+    await setup_indexes()
     start_notification_scheduler()
     yield
     await close_db()
-    stop_notification_scheduler()   
+    stop_notification_scheduler()
+
 
 app = FastAPI(
     title="Cognify API",
@@ -41,7 +43,9 @@ app.include_router(users.router)
 app.include_router(task.router)
 app.include_router(project.router)
 app.include_router(notification.router)
-app.include_router(analytics.router)
+app.include_router(analytics.router)   # YOUR branch
+app.include_router(classroom.router)   # TEAMMATE's branch
+
 
 @app.get("/")
 async def root():

@@ -8,8 +8,16 @@ class AppNotification {
   final String? taskId;
   final DateTime? remindAt;
   final DateTime createdAt;
-  final bool isTriggered; // ← ADDED
-  final DateTime? triggeredAt; // ← ADDED
+  final bool isTriggered;
+  final DateTime? triggeredAt;
+
+  // ─── Notification Type Constants ─────────────────────────────────────────
+  static const String typeGeneral = 'general';
+  static const String typeClassroomAssignment = 'classroom_assignment';
+  static const String typeClassroomBatch = 'classroom_batch';
+  static const String typeDeadlineReminder = 'deadline_reminder';
+  static const String typeSubmissionSuccess = 'submission_success';
+  static const String typeSyncComplete = 'sync_complete';
 
   const AppNotification({
     required this.id,
@@ -21,8 +29,8 @@ class AppNotification {
     this.taskId,
     this.remindAt,
     required this.createdAt,
-    this.isTriggered = false, // ← ADDED
-    this.triggeredAt, // ← ADDED
+    this.isTriggered = false,
+    this.triggeredAt,
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
@@ -31,7 +39,7 @@ class AppNotification {
       userId: json['user_id'],
       title: json['title'],
       message: json['message'],
-      type: json['type'] ?? 'general',
+      type: json['type'] ?? typeGeneral,
       isRead: json['is_read'] ?? false,
       taskId: json['task_id'],
       remindAt:
@@ -39,8 +47,8 @@ class AppNotification {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
-      isTriggered: json['is_triggered'] ?? false, // ← ADDED
-      triggeredAt: json['triggered_at'] != null // ← ADDED
+      isTriggered: json['is_triggered'] ?? false,
+      triggeredAt: json['triggered_at'] != null
           ? DateTime.parse(json['triggered_at'])
           : null,
     );
@@ -56,14 +64,14 @@ class AppNotification {
         'task_id': taskId,
         'remind_at': remindAt?.toIso8601String(),
         'created_at': createdAt.toIso8601String(),
-        'is_triggered': isTriggered, // ← ADDED
-        'triggered_at': triggeredAt?.toIso8601String(), // ← ADDED
+        'is_triggered': isTriggered,
+        'triggered_at': triggeredAt?.toIso8601String(),
       };
 
   AppNotification copyWith({
     bool? isRead,
-    bool? isTriggered, // ← ADDED
-    DateTime? triggeredAt, // ← ADDED
+    bool? isTriggered,
+    DateTime? triggeredAt,
   }) {
     return AppNotification(
       id: id,
@@ -75,8 +83,8 @@ class AppNotification {
       taskId: taskId,
       remindAt: remindAt,
       createdAt: createdAt,
-      isTriggered: isTriggered ?? this.isTriggered, // ← ADDED
-      triggeredAt: triggeredAt ?? this.triggeredAt, // ← ADDED
+      isTriggered: isTriggered ?? this.isTriggered,
+      triggeredAt: triggeredAt ?? this.triggeredAt,
     );
   }
 }

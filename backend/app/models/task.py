@@ -2,11 +2,35 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 from datetime import datetime, timezone
 
+# ── Valid value sets ───────────────────────────────────────────────
 VALID_STATUSES = {"pending", "in_progress", "completed"}
 VALID_PRIORITIES = {"low", "medium", "high"}
 VALID_CATEGORIES = {"academic", "freelance", "general", "email", "classroom"}
 
+# ── Shared validator helpers ───────────────────────────────────────
+# Defined once here so every class reuses the same logic cleanly.
 
+def _validate_priority(v):
+    if v and v not in VALID_PRIORITIES:
+        raise ValueError(f"Priority must be one of: {VALID_PRIORITIES}")
+    return v
+
+def _validate_category(v):
+    if v and v not in VALID_CATEGORIES:
+        raise ValueError(f"Category must be one of: {VALID_CATEGORIES}")
+    return v
+
+def _validate_due_date(v):
+    if v:
+        now = datetime.now(timezone.utc)
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        if v.date() < now.date():
+            raise ValueError("Due date cannot be in the past")
+    return v
+
+
+# ── TaskSchema (internal / DB representation) ──────────────────────
 class TaskSchema(BaseModel):
     title: str
     description: Optional[str] = None
@@ -16,11 +40,24 @@ class TaskSchema(BaseModel):
     due_date: Optional[datetime] = None
     due_time: Optional[str] = None
     project_id: Optional[str] = None
+
+    # External sync fields — from teammate's branch (Gmail / Classroom)
+    source: Optional[str] = None       # e.g. "gmail", "classroom", "manual"
+    source_id: Optional[str] = None    # external ID to prevent duplicate imports
+    course_id: Optional[str] = None    # Classroom course ID
+
     user_id: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    # YOUR fix: timezone-aware utc (replaces deprecated datetime.utcnow)
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
 
 
+# ── TaskCreate (what Flutter sends when creating a task) ───────────
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
@@ -30,29 +67,25 @@ class TaskCreate(BaseModel):
     due_time: Optional[str] = None
     project_id: Optional[str] = None
 
+    # External sync fields — allows sync service to create tasks directly
+    source: Optional[str] = None
+    source_id: Optional[str] = None
+    course_id: Optional[str] = None
+
     @field_validator("priority")
     def validate_priority(cls, v):
-        if v and v not in VALID_PRIORITIES:
-            raise ValueError(f"Priority must be one of: {VALID_PRIORITIES}")
-        return v
+        return _validate_priority(v)
 
     @field_validator("category")
     def validate_category(cls, v):
-        if v and v not in VALID_CATEGORIES:
-            raise ValueError(f"Category must be one of: {VALID_CATEGORIES}")
-        return v
+        return _validate_category(v)
 
     @field_validator("due_date")
     def validate_due_date(cls, v):
-        if v:
-            now = datetime.now(timezone.utc)
-            if v.tzinfo is None:
-                v = v.replace(tzinfo=timezone.utc)
-            if v.date() < now.date():
-                raise ValueError("Due date cannot be in the past")
-        return v
+        return _validate_due_date(v)
 
 
+# ── TaskUpdate (what Flutter sends when editing a task) ────────────
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
@@ -62,6 +95,8 @@ class TaskUpdate(BaseModel):
     due_date: Optional[datetime] = None
     due_time: Optional[str] = None
     project_id: Optional[str] = None
+    # Note: source/source_id/course_id are NOT updatable —
+    # once a task is synced from an external source, its origin is fixed.
 
     @field_validator("status")
     def validate_status(cls, v):
@@ -71,27 +106,18 @@ class TaskUpdate(BaseModel):
 
     @field_validator("priority")
     def validate_priority(cls, v):
-        if v and v not in VALID_PRIORITIES:
-            raise ValueError(f"Priority must be one of: {VALID_PRIORITIES}")
-        return v
+        return _validate_priority(v)
 
     @field_validator("category")
     def validate_category(cls, v):
-        if v and v not in VALID_CATEGORIES:
-            raise ValueError(f"Category must be one of: {VALID_CATEGORIES}")
-        return v
+        return _validate_category(v)
 
     @field_validator("due_date")
     def validate_due_date(cls, v):
-        if v:
-            now = datetime.now(timezone.utc)
-            if v.tzinfo is None:
-                v = v.replace(tzinfo=timezone.utc)
-            if v.date() < now.date():
-                raise ValueError("Due date cannot be in the past")
-        return v
+        return _validate_due_date(v)
 
 
+# ── TaskResponse (what the API sends back to Flutter) ──────────────
 class TaskResponse(BaseModel):
     id: str
     user_id: str
@@ -103,6 +129,12 @@ class TaskResponse(BaseModel):
     due_date: Optional[datetime]
     due_time: Optional[str] = None
     project_id: Optional[str] = None
+
+    # External sync fields — Flutter uses these to show sync badge/label
+    source: Optional[str] = None
+    source_id: Optional[str] = None
+    course_id: Optional[str] = None
+
     created_at: datetime
     updated_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None 
+    completed_at: Optional[datetime] = None  # YOUR field — kept from your branch

@@ -1,5 +1,9 @@
 class AppConfig {
-  // 127.0.0.1 for emulator/desktop testing
-  // Change to your LAN IP (e.g. 192.168.1.x) only when testing on physical device
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  // Default: 127.0.0.1 works for emulator and desktop testing.
+  // For physical device testing, run with your LAN IP:
+  //   flutter run --dart-define=API_URL=http://192.168.1.x:8000
+  static const String baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'http://127.0.0.1:8000',
+  );
 }

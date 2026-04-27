@@ -48,6 +48,11 @@ async def create_task(task_data: TaskCreate, user_id: str) -> TaskResponse:
         "due_date": task_data.due_date,
         "due_time": task_data.due_time,
         "project_id": task_data.project_id,
+        #add classroom fields
+        "source": task_data.source,
+        "source_id": task_data.source_id,
+        "course_id": task_data.course_id,
+
         # System fields (user doesn't set these)
         "status": "pending",              # New tasks always start as pending
         "created_at": datetime.now(timezone.utc),  # Set creation timestamp
@@ -65,8 +70,7 @@ async def create_task(task_data: TaskCreate, user_id: str) -> TaskResponse:
 
     # Step 5: Return as proper TaskResponse object
     return TaskResponse(**task_dict)
-
-
+    
 # ─────────────────────────────────────────────────────────────────
 # GET all tasks — NOW with search, filters, sorting, pagination
 # ─────────────────────────────────────────────────────────────────
