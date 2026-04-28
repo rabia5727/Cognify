@@ -11,11 +11,13 @@ import 'app_card.dart';
 class AppHeader extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
+  final List<Widget>? actions;
 
   const AppHeader({
     super.key,
     required this.title,
     required this.onBack,
+    this.actions,
   });
 
   @override
@@ -51,7 +53,10 @@ class AppHeader extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 48),
+          if (actions != null)
+            Row(children: actions!)
+          else
+            const SizedBox(width: 48),
         ],
       ),
     );
