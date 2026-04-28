@@ -365,22 +365,21 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                   AppHeader(
                     title: 'Workspace',
                     onBack: () => widget.onTabSelected(0),
-
-                    // actions temporarily removed - will add back after Classroom integration
-                    // actions: [
+                    // actions: [ 
                     //   IconButton(
                     //     icon: const Icon(Icons.class_),
                     //     onPressed: () {
                     //       Navigator.push(
                     //         context,
                     //         MaterialPageRoute(
-                    //           builder: (_) => const ClassroomSyncScreen(),
+                    //           builder: (_) => ClassroomSyncScreen(),
                     //         ),
                     //       );
                     //     },
-                    //     tooltip: 'Sync with Google Classroom',
+                    //     tooltip: 'Google Classroom Sync',
                     //   ),
                     // ],
+                    
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
