@@ -129,4 +129,32 @@ class UserService {
       return 'Unexpected error: $e';
     }
   }
+  // POST /users/me/quiz — save quiz preferences
+static Future<String?> saveQuizPreferences({
+  required List<String> goals,
+  required List<String> scheduleType,
+  required int dailyTaskLoad,
+  required List<String> productivityChallenges,
+}) async {
+  try {
+    final res = await http
+        .post(
+          Uri.parse('$_base/me/quiz'),
+          headers: await _headers,
+          body: jsonEncode({
+            'goals': goals,
+            'scheduleType': scheduleType.isNotEmpty ? scheduleType.first : null,
+            'dailyTaskLoad': dailyTaskLoad,
+            'productivityChallenges': productivityChallenges,
+          }),
+        )
+        .timeout(const Duration(seconds: 15));
+    if (res.statusCode == 200) return null;
+    return _parseError(res);
+  } on SocketException {
+    return 'Cannot connect to server.';
+  } catch (e) {
+    return 'Unexpected error: $e';
+  }
+}
 }
