@@ -118,6 +118,13 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
   }
 
   Future<void> _finish() async {
+    //save quiz preferences to backend 
+    await UserService.saveQuizPreferences(
+      goals: _prefs.goals,
+      scheduleType: _prefs.scheduleType,
+      dailyTaskLoad: _prefs.dailyTaskLoad,
+      productivityChallenges: _prefs.productivityChallenge,
+    );
     final profile = await UserService.getProfile();
     final token = await TokenStorage.getToken() ?? '';
 

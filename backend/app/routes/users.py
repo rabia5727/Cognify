@@ -1,3 +1,5 @@
+from typing import List, Optional
+
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from app.utils.dependencies import get_current_user
@@ -25,7 +27,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         "is_google_user": current_user.get("is_google_user", False),
         "created_at": current_user["created_at"],
         # Return preferences or defaults if not set
-        "preferences": current_user.get("preferences", UserPreferences().model_dump())
+        "preferences": current_user.get("preferences", UserPreferences().model_dump()),
+        "quiz_preferences": current_user.get("quiz_preferences", None)    
     }
 
 
@@ -138,3 +141,29 @@ async def change_password(
         {"$set": {"password_hash": hash_password(body.new_password)}}
     )
     return {"message": "Password changed successfully"}
+class QuizPreferencesRequest(BaseModel):
+    goals: List[str] = []
+    scheduleType: Optional[str] = None
+    dailyTaskLoad: int = 5
+    productivityChallenges: List[str] = []
+
+@router.post("/me/quiz")
+async def save_quiz_preferences(
+    body: QuizPreferencesRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Save onboarding quiz preferences"""
+    db = get_database()
+    await db["users"].update_one(
+        {"_id": ObjectId(str(current_user["_id"]))},
+        {"$set": {
+            "quiz_preferences": {
+                "goals": body.goals,
+                "scheduleType": body.scheduleType,
+                "dailyTaskLoad": body.dailyTaskLoad,
+                "productivityChallenges": body.productivityChallenges,
+                "quizCompleted": True
+            }
+        }}
+    )
+    return {"message": "Quiz preferences saved successfully"}

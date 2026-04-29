@@ -1,7 +1,17 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 
+
+#------------------------------
+# User Quiz Preferences
+#------------------------------4
+class QuizPreferences(BaseModel):
+    goals: List[str] = []
+    scheduleType: Optional[str] = None
+    dailyTaskLoad: int = 5
+    productivityChallenges: List[str] = []
+    quizCompleted: bool = False
 
 # --------------------------
 # User preferences structure
