@@ -90,7 +90,7 @@ class AppTheme {
             elevation: 0,
           ),
         ),
-        bottomAppBarTheme: const BottomAppBarThemeData(
+        bottomAppBarTheme: const BottomAppBarTheme(
           color: Colors.white,
         ),
         switchTheme: SwitchThemeData(
@@ -170,7 +170,7 @@ class AppTheme {
             elevation: 0,
           ),
         ),
-        bottomAppBarTheme: const BottomAppBarThemeData(
+        bottomAppBarTheme: const BottomAppBarTheme(
           color: Colors.white,
         ),
         switchTheme: SwitchThemeData(

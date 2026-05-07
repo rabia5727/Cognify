@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from app.db.connection import get_database
 from app.models.task import TaskCreate, TaskUpdate, TaskResponse
-
+from app.crud.analytics import record_daily_snapshot
 
 async def _sync_project_status(db, project_id: str) -> None:
     """Auto-complete or reactivate a project based on its tasks' statuses."""
@@ -152,7 +152,7 @@ async def get_tasks(
             .sort(sort_by, sort_order)   # Sort results
             .skip(skip)               # Skip N items (pagination)
             .limit(limit)   
-             )                # Take only N items
+            )                # Take only N items
 
     # Step 4: Convert cursor to actual list of tasks
     # to_list() executes the query and returns results
@@ -271,6 +271,10 @@ async def update_task(task_id: str, user_id: str, task_data: TaskUpdate) -> Task
         project_id = current.get("project_id")
         if project_id:
             await _sync_project_status(db, project_id)
+
+    # Record analytics snapshot when task is completed
+    if task_data.status == "completed" and current.get("status") != "completed":
+        await record_daily_snapshot(user_id)
 
     return await get_task_by_id(task_id, user_id)
 

@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
+from datetime import datetime,timezone
 
 
 class AchievementItem(BaseModel):
@@ -28,3 +29,13 @@ class AnalyticsSummary(BaseModel):
     achievements: List[AchievementItem]
     total_completed: int
     total_tasks: int
+
+class AnalyticsDailyRecord(BaseModel):
+    user_id: str
+    date: str                          # "YYYY-MM-DD"
+    tasks_completed: int = 0
+    tasks_created: int = 0
+    focus_hours: float = 0.0           # sum of actual time per completed task
+    completion_rate: float = 0.0       # completed / total for that day
+    avg_completion_time_hours: float = 0.0  # avg hours per completed task
+    recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

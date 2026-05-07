@@ -1,7 +1,6 @@
 // lib/screens/dashboard/dashboard_screen.dart
 
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/app_constant.dart';
@@ -20,6 +19,8 @@ import '../../widgets/loading/shimmer_loading.dart';
 import '../assistant/voice_assistant_screen.dart';
 import '../settings/profile_screen.dart';
 import '../workspace/task_detail_screen.dart';
+import '../../widgets/common/notification_permission_sheet.dart';
+import '../../providers/notification_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
   final int currentIndex;
@@ -38,8 +39,25 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _showProactiveCard = true;
   String? _animatingTaskId;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      final notifProvider = context.read<NotificationProvider>();
 
-void _navigateToTaskDetail(Task task) {
+      notifProvider.setCurrentUser(auth.userId);
+      await notifProvider.loadEnabledState();
+
+      final asked = await notifProvider.hasAskedPermission();
+      if (!asked && mounted) {
+        await showNotificationPermissionSheet(context);
+      }
+    });
+  }
+
+  void _navigateToTaskDetail(Task task) {
     final taskProvider = context.read<TaskProvider>();
     Navigator.push(
       context,
@@ -191,20 +209,19 @@ void _navigateToTaskDetail(Task task) {
   }) {
     if (hasNoTasks) {
       return NoTasksEmptyState(
-        onAddTask: () => widget.onTabSelected(1), // ✅ Changed from 2 to 1
+        onAddTask: () => widget.onTabSelected(1),
       );
     }
 
     if (todayTasks.isEmpty) {
       return NoTasksDueTodayEmptyState(
-        onViewAllTasks: () => widget.onTabSelected(1), // ✅ Changed from 2 to 1
+        onViewAllTasks: () => widget.onTabSelected(1),
       );
     }
 
     if (todayTasks.every((t) => t.isCompleted)) {
       return AllDoneEmptyState(
-        onViewUpcomingTasks: () =>
-            widget.onTabSelected(1), // ✅ Changed from 2 to 1
+        onViewUpcomingTasks: () => widget.onTabSelected(1),
       );
     }
 
@@ -349,9 +366,7 @@ class _TaskCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w700,
-                          color: task.isCompleted
-                              ? Colors.green
-                              : Colors.white,
+                          color: task.isCompleted ? Colors.green : Colors.white,
                         ),
                       ),
                     ),
