@@ -9,6 +9,8 @@ import '../../utils/validators.dart';
 import '../../theme/app_theme.dart';
 import 'name_screen.dart';
 import 'forgot_password_screen.dart';
+import '../../services/google_auth_service.dart';
+
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -209,7 +211,7 @@ class _AuthScreenState extends State<AuthScreen>
                         width: 20,
                         height: 20,
                         child: CustomPaint(painter: _GoogleLogoPainter())),
-                    onPressed: () {},
+                    onPressed: _handleGoogleSignIn,
                   ),
                 )
               ]),
@@ -544,8 +546,39 @@ class _AuthScreenState extends State<AuthScreen>
     ),
   );
 }
-}
+Future<void> _handleGoogleSignIn() async {
+  setState(() => _isLoading = true);
 
+  final result = await GoogleAuthService.signIn();
+
+  if (!mounted) return;
+  setState(() => _isLoading = false);
+
+  if (result.isSuccess && result.data != null) {
+    final userResult = await ApiService.getMe();
+    if (!mounted) return;
+
+    final user = UserModel(
+      id: userResult.data?.id ?? '',
+      name: userResult.data?.name ?? '',
+      email: userResult.data?.email ?? '',
+    );
+
+    final token = result.data?.accessToken ?? '';
+    Provider.of<AuthProvider>(context, listen: false)
+        .onLoginSuccess(user, token);
+  } else {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.error ?? 'Google sign in failed'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+    }
 class _GoogleLogoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {

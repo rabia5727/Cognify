@@ -1,3 +1,7 @@
+// ── API Service ─────────────────────────────────────────────────────────────
+// Handles all API calls to the backend, including authentication and user data.
+// This service abstracts away the HTTP logic and provides clean methods for the rest of the app to use.
+// Note: For simplicity, this service does not use a state management solution. In a larger app, you might want to integrate it with something like Provider or Bloc.
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -132,6 +136,35 @@ class ApiService {
       return AuthResult.failure('Unexpected error: $e');
     }
   }
+  /// POST /auth/google
+/// Body: { token: google_id_token }
+/// Returns: AuthResponse with access_token
+static Future<AuthResult> googleLogin({
+  required String idToken,
+}) async {
+  try {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/google'),
+          headers: _jsonHeaders,
+          body: jsonEncode({'token': idToken}),
+        )
+        .timeout(const Duration(seconds: 15));
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final auth = AuthResponse.fromJson(data);
+      await TokenStorage.saveToken(auth.accessToken);
+      return AuthResult.success(auth);
+    } else {
+      return AuthResult.failure(_parseError(response));
+    }
+  } on SocketException {
+    return AuthResult.failure('Cannot connect to server.');
+  } catch (e) {
+    return AuthResult.failure('Unexpected error: $e');
+  }
+}
 
   // ── Users ──────────────────────────────────────────────────────────────────
 
