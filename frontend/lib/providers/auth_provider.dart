@@ -18,6 +18,7 @@ class AuthProvider extends ChangeNotifier {
   // Convenience getters used throughout the UI
   String get userName => _user?.name ?? 'User';
   String get userEmail => _user?.email ?? '';
+  String get userId => _user?.id ?? '';
 
   // ─── Session bootstrap ────────────────────────────────────────────
 

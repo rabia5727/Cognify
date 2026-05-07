@@ -18,9 +18,8 @@ class QuizPreferences(BaseModel):
 # --------------------------
 class UserPreferences(BaseModel):
     notifications_enabled: bool = True        # receive reminders?
-    daily_work_hours: int = 8                 # how many hours per day?
-    categories: list[str] = ["academic", "freelance", "general"]  # active categories
-    theme: str = "light"                      # light or dark mode
+    theme: str = "light"        # light or dark mode
+    voice_permission: bool = False             
 
 
 # --------------------------
@@ -67,9 +66,9 @@ class UserUpdate(BaseModel):
 # --------------------------
 class UserPreferencesUpdate(BaseModel):
     notifications_enabled: Optional[bool] = None
-    daily_work_hours: Optional[int] = None
-    categories: Optional[list[str]] = None
     theme: Optional[str] = None
+    voice_permission: Optional[bool] = None  #
+
 
 
 # --------------------------

@@ -24,6 +24,7 @@ import '../../widgets/common/voice_fab.dart';
 import '../../widgets/layout/section_card.dart';
 import '../../widgets/layout/row_divider.dart';
 import 'profile_screen.dart';
+import '../../services/user_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final int currentIndex;
@@ -40,7 +41,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  bool _notificationsEnabled = false;
   bool _voicePermissionEnabled = false;
 
   @override
@@ -50,16 +50,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _notificationsEnabled = context.read<NotificationProvider>().isEnabled;
-      _voicePermissionEnabled =
-          prefs.getBool('voice_permission_enabled') ?? false;
-    });
+    final profile = await UserService.getProfile();
+    if (profile != null && profile['preferences'] != null) {
+      final prefs = await SharedPreferences.getInstance();
+      final voicePermission =
+          profile['preferences']['voice_permission'] ?? false;
+      final theme = profile['preferences']['theme'] ?? 'light';
+      setState(() => _voicePermissionEnabled = voicePermission);
+      await prefs.setBool('voice_permission_enabled', voicePermission);
+      themeNotifier.value = theme == 'dark' ? ThemeMode.dark : ThemeMode.light;
+      await prefs.setBool('isDarkMode', theme == 'dark');
+    } else {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _voicePermissionEnabled =
+            prefs.getBool('voice_permission_enabled') ?? false;
+      });
+    }
   }
 
   Future<void> _toggleNotifications(bool value) async {
-    setState(() => _notificationsEnabled = value);
     await context.read<NotificationProvider>().setEnabled(value);
     if (mounted) {
       UIFeedback.showSuccess(
@@ -71,6 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _voicePermissionEnabled = value);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('voice_permission_enabled', value);
+    await UserService.updatePreferences(voicePermission: value);
     if (mounted) {
       UIFeedback.showSuccess(context,
           value ? 'Microphone access granted!' : 'Voice permission disabled');
@@ -83,6 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     themeNotifier.value = value ? ThemeMode.dark : ThemeMode.light;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isDarkMode', value);
+    await UserService.updatePreferences(theme: value ? 'dark' : 'light');
     if (mounted) {
       UIFeedback.showSuccess(
           context, value ? 'Dark mode enabled' : 'Light mode enabled');
@@ -343,11 +355,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         builder: (context, mode, _) => SectionCard(
                           title: 'Preferences',
                           children: [
-                            _ToggleRow(
+                            Consumer<NotificationProvider>(
+                              builder: (context, notifProvider, child) =>
+                                  _ToggleRow(
                                 icon: Icons.notifications_outlined,
                                 label: 'Notifications',
-                                value: _notificationsEnabled,
-                                onChanged: _toggleNotifications),
+                                value: notifProvider.isEnabled,
+                                onChanged: _toggleNotifications,
+                              ),
+                            ),
                             const RowDivider(),
                             _ToggleRow(
                                 icon: Icons.dark_mode_outlined,
@@ -465,7 +481,8 @@ class _ContactRow extends StatelessWidget {
   final String label;
   final String email;
   final VoidCallback onCopy;
-  const _ContactRow({required this.label, required this.email, required this.onCopy});
+  const _ContactRow(
+      {required this.label, required this.email, required this.onCopy});
 
   @override
   Widget build(BuildContext context) {

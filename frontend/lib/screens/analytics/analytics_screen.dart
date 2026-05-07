@@ -119,107 +119,117 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
                   // Show empty state when no data
                   if (_hasNoData(chartData)) {
-                    return SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _TabToggle(
-                              isWeekly: _isWeekly,
-                              onToggle: (val) =>
-                                  setState(() => _isWeekly = val)),
-                          const SizedBox(height: 20),
-                          if (_isWeekly)
-                            const AnalyticsWeeklyEmptyState()
-                          else
-                            const AnalyticsMonthlyEmptyState(),
-                        ],
-                      ),
-                    );
+                    return RefreshIndicator(
+                        onRefresh: () =>
+                            context.read<AnalyticsProvider>().loadSummary(),
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _TabToggle(
+                                  isWeekly: _isWeekly,
+                                  onToggle: (val) =>
+                                      setState(() => _isWeekly = val)),
+                              const SizedBox(height: 20),
+                              if (_isWeekly)
+                                const AnalyticsWeeklyEmptyState()
+                              else
+                                const AnalyticsMonthlyEmptyState(),
+                            ],
+                          ),
+                        ));
                   }
 
-                  return SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _TabToggle(
-                            isWeekly: _isWeekly,
-                            onToggle: (val) => setState(() => _isWeekly = val)),
-                        const SizedBox(height: 20),
-                        _CompletionRate(
-                            label: _isWeekly
-                                ? 'Weekly Completion Rate'
-                                : 'Monthly Completion Rate',
-                            rate: completionRate),
-                        const SizedBox(height: 16),
-                        Row(children: [
-                          Expanded(
-                              child: StatCard(
-                            icon: _isWeekly
-                                ? Icons.bolt_rounded
-                                : Icons.check_circle_outline_rounded,
-                            iconColor: _isWeekly
-                                ? theme.colorScheme.primary
-                                : Colors.green,
-                            value: _isWeekly
-                                ? (stats['focusHours'] ?? '0h')
-                                : (stats['tasksCompleted'] ?? '0'),
-                            label:
-                                _isWeekly ? 'Focus Hours' : 'Tasks Completed',
-                          )),
-                          const SizedBox(width: 12),
-                          Expanded(
-                              child: StatCard(
-                            icon: Icons.access_time_rounded,
-                            iconColor: AppConstants.orange,
-                            value: _isWeekly
-                                ? (stats['avgTime'] ?? '0h')
-                                : (stats['efficiency'] ?? '0%'),
-                            label: _isWeekly ? 'Avg Time' : 'Efficiency',
-                          )),
-                        ]),
-                        const SizedBox(height: 24),
-                        Text('Productivity Trends',
-                            style: theme.textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 12),
-                        AppCard(
-                          padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
-                          child: SizedBox(
-                            height: 200,
-                            child: _isWeekly
-                                ? _WeeklyBarChart(
-                                    data: chartData, labels: chartLabels)
-                                : _MonthlyLineChart(
-                                    data: chartData, labels: chartLabels),
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text('Achievements and Insights',
-                            style: theme.textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 12),
-                        if (analytics.achievements.isEmpty)
-                          _EmptyState(
-                              icon: Icons.emoji_events_outlined,
-                              title: 'No achievements yet',
-                              subtitle:
-                                  'Complete tasks consistently to earn achievements.')
-                        else
-                          ...analytics.achievements.map((a) => Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _AchievementCard(
-                                  icon: a['icon'] as String,
-                                  iconColor: a['iconColor'] as Color,
-                                  title: a['title'] as String,
-                                  subtitle: a['subtitle'] as String,
-                                  borderColor: a['borderColor'] as Color,
-                                ),
+                  return RefreshIndicator(
+                      onRefresh: () =>
+                          context.read<AnalyticsProvider>().loadSummary(),
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _TabToggle(
+                                isWeekly: _isWeekly,
+                                onToggle: (val) =>
+                                    setState(() => _isWeekly = val)),
+                            const SizedBox(height: 20),
+                            _CompletionRate(
+                                label: _isWeekly
+                                    ? 'Weekly Completion Rate'
+                                    : 'Monthly Completion Rate',
+                                rate: completionRate),
+                            const SizedBox(height: 16),
+                            Row(children: [
+                              Expanded(
+                                  child: StatCard(
+                                icon: _isWeekly
+                                    ? Icons.bolt_rounded
+                                    : Icons.check_circle_outline_rounded,
+                                iconColor: _isWeekly
+                                    ? theme.colorScheme.primary
+                                    : Colors.green,
+                                value: _isWeekly
+                                    ? (stats['focusHours'] ?? '0h')
+                                    : (stats['tasksCompleted'] ?? '0'),
+                                label: _isWeekly
+                                    ? 'Focus Hours'
+                                    : 'Tasks Completed',
                               )),
-                      ],
-                    ),
-                  );
+                              const SizedBox(width: 12),
+                              Expanded(
+                                  child: StatCard(
+                                icon: Icons.access_time_rounded,
+                                iconColor: AppConstants.orange,
+                                value: _isWeekly
+                                    ? (stats['avgTime'] ?? '0h')
+                                    : (stats['efficiency'] ?? '0%'),
+                                label: _isWeekly ? 'Avg Time' : 'Efficiency',
+                              )),
+                            ]),
+                            const SizedBox(height: 24),
+                            Text('Productivity Trends',
+                                style: theme.textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 12),
+                            AppCard(
+                              padding:
+                                  const EdgeInsets.fromLTRB(12, 20, 12, 12),
+                              child: SizedBox(
+                                height: 200,
+                                child: _isWeekly
+                                    ? _WeeklyBarChart(
+                                        data: chartData, labels: chartLabels)
+                                    : _MonthlyLineChart(
+                                        data: chartData, labels: chartLabels),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            Text('Achievements and Insights',
+                                style: theme.textTheme.titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 12),
+                            if (analytics.achievements.isEmpty)
+                              _EmptyState(
+                                  icon: Icons.emoji_events_outlined,
+                                  title: 'No achievements yet',
+                                  subtitle:
+                                      'Complete tasks consistently to earn achievements.')
+                            else
+                              ...analytics.achievements.map((a) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _AchievementCard(
+                                      icon: a['icon'] as String,
+                                      iconColor: a['iconColor'] as Color,
+                                      title: a['title'] as String,
+                                      subtitle: a['subtitle'] as String,
+                                      borderColor: a['borderColor'] as Color,
+                                    ),
+                                  )),
+                          ],
+                        ),
+                      ));
                 },
               ),
             ),

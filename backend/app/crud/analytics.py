@@ -1,47 +1,134 @@
 from datetime import datetime, timedelta, timezone
 from app.db.connection import get_database
-from bson import ObjectId
 from app.models.analytics import (
     AnalyticsSummary,
+    AnalyticsDailyRecord,
     AchievementItem,
     WeeklyStats,
     MonthlyStats,
 )
 
 
-
 def _make_aware(dt: datetime) -> datetime:
-    """Makes a naive datetime timezone-aware (assumes UTC)."""
     if dt is None:
         return None
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
 
+
+def _calc_hours_per_task(tasks: list) -> float:
+    completed_with_time = [
+        t for t in tasks
+        if t.get("status") == "completed"
+        and t.get("completed_at")
+        and t.get("created_at")
+    ]
+    if not completed_with_time:
+        return 1.5
+
+    total_hours = sum(
+        (_make_aware(t["completed_at"]) - _make_aware(t["created_at"])).total_seconds() / 3600
+        for t in completed_with_time
+    )
+    return total_hours / len(completed_with_time)
+
+
+# ── Setup indexes ─────────────────────────────────────────────────
+
+async def setup_indexes() -> None:
+    db = get_database()
+    col = db["analytics"]
+    await col.create_index([("user_id", 1), ("date", -1)])
+    await col.create_index([("user_id", 1), ("date", 1)], unique=True)
+
+
+# ── Record daily snapshot ─────────────────────────────────────────
+
+async def record_daily_snapshot(user_id: str) -> None:
+    """
+    Called whenever a task is completed or created.
+    Upserts today's analytics record for the user.
+    """
+    db = get_database()
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    # Fetch today's tasks
+    now = datetime.now(timezone.utc)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+
+    tasks = await db["tasks"].find({"user_id": user_id}, {"_id": 0}).to_list(length=None)
+
+    # Tasks created today
+    created_today = [
+        t for t in tasks
+        if _make_aware(t["created_at"]) >= day_start
+    ]
+
+    # Tasks completed today
+    completed_today = [
+        t for t in tasks
+        if t.get("completed_at")
+        and day_start <= _make_aware(t["completed_at"]) < day_end
+    ]
+
+    # Focus hours = sum of actual time per task completed today
+    focus_hours = sum(
+        (_make_aware(t["completed_at"]) - _make_aware(t["created_at"])).total_seconds() / 3600
+        for t in completed_today
+        if t.get("created_at")
+    )
+
+    # Avg completion time
+    avg_completion_time = (
+        focus_hours / len(completed_today) if completed_today else 0.0
+    )
+
+    # Completion rate for today
+    total_due_today = [
+        t for t in tasks
+        if t.get("due_date")
+        and day_start <= _make_aware(t["due_date"]) < day_end
+    ]
+    completion_rate = (
+        len(completed_today) / len(total_due_today)
+        if total_due_today else 0.0
+    )
+
+    record = {
+        "user_id": user_id,
+        "date": today,
+        "tasks_completed": len(completed_today),
+        "tasks_created": len(created_today),
+        "focus_hours": round(focus_hours, 2),
+        "completion_rate": round(completion_rate, 2),
+        "avg_completion_time_hours": round(avg_completion_time, 2),
+        "recorded_at": datetime.now(timezone.utc),
+    }
+
+    # Upsert — one doc per user per day
+    await db["analytics"].update_one(
+        {"user_id": user_id, "date": today},
+        {"$set": record},
+        upsert=True,
+    )
+
+
+# ── Get analytics summary ─────────────────────────────────────────
+
 async def get_analytics_summary(user_id: str) -> AnalyticsSummary:
     db = get_database()
     now = datetime.now(timezone.utc)
 
-    # Fetch user for their work hours setting
-    user = await db["users"].find_one({"_id": ObjectId(user_id)})
-    hours_per_task = 1.5
-    if user and user.get("preferences"):
-        daily_work_hours = user["preferences"].get("daily_work_hours", 8)
-        # Assume user completes ~5 tasks per day on average
-        hours_per_task = daily_work_hours / 5
-
-    # Fetch all tasks for this user once
     tasks = await db["tasks"].find({"user_id": user_id}, {"_id": 0}).to_list(length=None)
+    hours_per_task = _calc_hours_per_task(tasks)
 
-
-    # ── Completion rates ──────────────────────────────────────────
     week_cutoff = now - timedelta(days=7)
     month_cutoff = now - timedelta(days=30)
 
-    # A task "belongs" to the period by due_date if set, otherwise created_at,
-    # so tasks without a due_date are still counted.
     def _task_date(t: dict) -> datetime:
-        return _make_aware(t["due_date"] if t.get("due_date") else t["created_at"])
+        return _make_aware(t["created_at"])
 
     week_tasks = [t for t in tasks if _task_date(t) >= week_cutoff]
     month_tasks = [t for t in tasks if _task_date(t) >= month_cutoff]
@@ -52,46 +139,55 @@ async def get_analytics_summary(user_id: str) -> AnalyticsSummary:
     weekly_rate = len(week_completed) / len(week_tasks) if week_tasks else 0.0
     monthly_rate = len(month_completed) / len(month_tasks) if month_tasks else 0.0
 
-    # ── Weekly bar chart (Mon–Sun of the current week) ────────────
-    # updated_at is the best proxy for "when was this task completed"
+    # ── Weekly bar chart from analytics collection ────────────────
     week_start = (now - timedelta(days=now.weekday())).replace(
         hour=0, minute=0, second=0, microsecond=0
-        # timezone already inherited from now since now is aware
     )
-
-    weekly_chart: list[float] = []
-    for i in range(7):
-        day_start = week_start + timedelta(days=i)
-        day_end = day_start + timedelta(days=1)
-        count = sum(
-            1
-            for t in tasks
-            if t.get("completed_at")
-            and day_start <= _make_aware(t["completed_at"]) < day_end  # FIXED: Added _make_aware()
-        )
-        weekly_chart.append(float(count))
-
-    # ── Monthly line chart (Jan–Dec of the current year) ─────────
-    completed_this_year = [
-        _make_aware(t["completed_at"])
-        for t in tasks
-        if t.get("completed_at") and _make_aware(t["completed_at"]).year == now.year
+    week_dates = [
+        (week_start + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(7)
     ]
-    monthly_chart: list[float] = [
-        float(sum(1 for ca in completed_this_year if ca.month == month))
-        for month in range(1, 13)
+    analytics_records = await db["analytics"].find(
+        {"user_id": user_id, "date": {"$in": week_dates}}
+    ).to_list(length=7)
+    record_map = {r["date"]: r for r in analytics_records}
+    weekly_chart = [
+        float(record_map.get(d, {}).get("tasks_completed", 0))
+        for d in week_dates
     ]
+
+    # ── Monthly line chart from analytics collection ───────────────
+    year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    monthly_records = await db["analytics"].find(
+        {"user_id": user_id, "date": {"$gte": year_start.strftime("%Y-%m-%d")}}
+    ).to_list(length=366)
+    monthly_chart: list[float] = [0.0] * 12
+    for r in monthly_records:
+        month_idx = int(r["date"].split("-")[1]) - 1
+        monthly_chart[month_idx] += r.get("tasks_completed", 0)
 
     # ── Stat cards ────────────────────────────────────────────────
     n_week_done = len(week_completed)
-    focus_hours = f"{n_week_done * hours_per_task:.1f}h"
-    avg_time = f"{7 / n_week_done:.1f}d" if n_week_done > 0 else "–"
+    # Use actual focus hours from analytics collection if available
+    week_focus = sum(
+        record_map.get(d, {}).get("focus_hours", 0.0) for d in week_dates
+    )
+    def _format_hours(h: float) -> str:
+        if h == 0:
+            return "0h"
+        if h < 0.1:
+            return f"{int(h * 60)}m"
+        if h < 1:
+            return f"{h:.2f}h"
+        return f"{h:.1f}h"
+
+    focus_hours_str = _format_hours(week_focus if week_focus > 0 else n_week_done * hours_per_task)
+    avg_time = _format_hours(hours_per_task) if n_week_done > 0 else "–"
 
     n_month_done = len(month_completed)
     n_month_total = len(month_tasks)
     efficiency_pct = round(n_month_done / n_month_total * 100) if n_month_total > 0 else 0
 
-    # ── Totals (for achievements) ─────────────────────────────────
     all_completed = [t for t in tasks if t.get("status") == "completed"]
     total_completed = len(all_completed)
     total_tasks = len(tasks)
@@ -99,36 +195,30 @@ async def get_analytics_summary(user_id: str) -> AnalyticsSummary:
     # ── Achievements ──────────────────────────────────────────────
     achievements: list[AchievementItem] = []
     if total_completed >= 1:
-        achievements.append(
-            AchievementItem(
-                icon="🎯",
-                title="First task completed!",
-                subtitle="You're on your way.",
-            )
-        )
+        achievements.append(AchievementItem(
+            icon="🎯",
+            title="First task completed!",
+            subtitle="You're on your way.",
+        ))
     if weekly_rate >= 0.8:
-        achievements.append(
-            AchievementItem(
-                icon="🔥",
-                title="Weekly streak",
-                subtitle="80%+ completion this week.",
-            )
-        )
+        achievements.append(AchievementItem(
+            icon="🔥",
+            title="Weekly streak",
+            subtitle="80%+ completion this week.",
+        ))
     if total_completed >= 10:
-        achievements.append(
-            AchievementItem(
-                icon="⭐",
-                title="Power user",
-                subtitle="10 tasks completed.",
-            )
-        )
+        achievements.append(AchievementItem(
+            icon="⭐",
+            title="Power user",
+            subtitle="10 tasks completed.",
+        ))
 
     return AnalyticsSummary(
         weekly_completion_rate=weekly_rate,
         monthly_completion_rate=monthly_rate,
         weekly_chart_data=weekly_chart,
         monthly_chart_data=monthly_chart,
-        weekly_stats=WeeklyStats(focus_hours=focus_hours, avg_time=avg_time),
+        weekly_stats=WeeklyStats(focus_hours=focus_hours_str, avg_time=avg_time),
         monthly_stats=MonthlyStats(
             tasks_completed=str(n_month_done),
             efficiency=f"{efficiency_pct}%",

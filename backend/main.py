@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from app.db.connection import connect_db, close_db
 from app.routes import auth, users, task, project, notification, analytics, classroom  # MERGED: both routers
 from app.crud.notification import setup_indexes
+from app.crud.analytics import setup_indexes as setup_analytics_indexes 
 from app.schedular import start_notification_scheduler, stop_notification_scheduler
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -14,6 +15,7 @@ from app.limiter import limiter
 async def lifespan(app: FastAPI):
     await connect_db()
     await setup_indexes()
+    await setup_analytics_indexes()
     start_notification_scheduler()
     yield
     await close_db()
