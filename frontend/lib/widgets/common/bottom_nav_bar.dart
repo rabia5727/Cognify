@@ -14,13 +14,9 @@ class BottomNavBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return BottomAppBar(
       shape: const CircularNotchedRectangle(),
       notchMargin: 8,
-      color: isDark ? const Color(0xFF1E1E2A) : Colors.white,
       elevation: 8,
       child: SizedBox(
         height: 60,
@@ -33,7 +29,6 @@ class BottomNavBar extends StatelessWidget {
               isSelected: currentIndex == 0,
               onTap: () => onTabSelected(0),
             ),
-            // SWAPPED: Workspace now at index 1
             _NavItem(
               icon: Icons.work_outline,
               label: 'Workspace',
@@ -41,7 +36,6 @@ class BottomNavBar extends StatelessWidget {
               onTap: () => onTabSelected(1),
             ),
             const SizedBox(width: 48),
-            // SWAPPED: Analytics now at index 2
             _NavItem(
               icon: Icons.bar_chart_rounded,
               label: 'Analytics',
@@ -60,10 +54,6 @@ class BottomNavBar extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Single Nav Item (Moved OUTSIDE the BottomNavBar class)
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _NavItem extends StatelessWidget {
   final IconData icon;
@@ -84,7 +74,8 @@ class _NavItem extends StatelessWidget {
 
     final color = isSelected
         ? theme.colorScheme.primary
-        : theme.textTheme.bodySmall?.color;
+        : theme.navigationBarTheme.iconTheme?.resolve({})?.color ??
+            theme.colorScheme.onSurface.withValues(alpha: 0.6);
 
     return GestureDetector(
       onTap: onTap,

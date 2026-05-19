@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../screens/notifications/notifications_screen.dart';
 import 'app_card.dart';
+import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SIMPLE HEADER — Settings, Workspace, Analytics, Profile
@@ -53,9 +54,9 @@ class AppHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (actions != null) 
+          if (actions != null)
             Row(children: actions!)
-          else 
+          else
             const SizedBox(width: 48),
         ],
       ),
@@ -94,6 +95,7 @@ class DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
@@ -236,6 +238,7 @@ class DashboardHeader extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           AppCard(
+            backgroundColor: isDark ? AppColors.darkSurface3 : Colors.white,
             child: isNewUser
                 ? const _NewUserMessage()
                 : _ReturningUserMessage(

@@ -1,11 +1,7 @@
-// ═══════════════════════════════════════════════════════════════════
-// FILE: lib/screens/workspace/edit_task_screen.dart
-// PURPOSE: Full screen for editing an existing task
-// ═══════════════════════════════════════════════════════════════════
-
 import 'package:flutter/material.dart';
 import '../../models/task_model.dart';
 import '../../widgets/common/app_header.dart';
+import '../../utils/validators.dart';
 
 class EditTaskScreen extends StatefulWidget {
   final Task task;
@@ -29,6 +25,8 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
   late Priority _priority;
   late DateTime _dueDate;
   TimeOfDay? _dueTime;
+  String? _dueDateError;
+  String? _timeError;
 
   @override
   void initState() {
@@ -37,7 +35,6 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     _descCtrl = TextEditingController(text: widget.task.description);
     _priority = widget.task.priority;
     _dueDate = widget.task.dueDate;
-
     if (widget.task.dueTime != null && widget.task.dueTime!.isNotEmpty) {
       _dueTime = _parseTimeString(widget.task.dueTime!);
     }
@@ -73,7 +70,15 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
-    if (picked != null) setState(() => _dueDate = picked);
+    if (picked != null) {
+      setState(() {
+        _dueDate = picked;
+        _dueDateError = Validators.dueDate(_dueDate);
+        if (_dueTime != null) {
+          _timeError = Validators.futureTime(_dueDate, _dueTime);
+        }
+      });
+    }
   }
 
   Future<void> _pickTime() async {
@@ -81,7 +86,11 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
       context: context,
       initialTime: _dueTime ?? TimeOfDay.now(),
     );
-    if (picked != null) setState(() => _dueTime = picked);
+    if (picked == null) return;
+    setState(() {
+      _dueTime = picked;
+      _timeError = Validators.futureTime(_dueDate, picked);
+    });
   }
 
   String get _dateDisplay =>
@@ -97,6 +106,12 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _dueDateError = Validators.dueDateTime(_dueDate, _dueTime);
+      _timeError = Validators.futureTime(_dueDate, _dueTime);
+    });
+    if (_dueDateError != null || _timeError != null) return;
 
     final updated = widget.task.copyWith(
       title: _titleCtrl.text.trim(),
@@ -132,20 +147,14 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title
                       _Label('Title'),
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _titleCtrl,
                         decoration: _inputDecoration(context, 'Task title'),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Title is required'
-                            : null,
+                        validator: Validators.taskTitle,
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Description
                       _Label('Description'),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -154,44 +163,64 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
                         decoration:
                             _inputDecoration(context, 'Add a description...'),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Due Date
                       _Label('Due Date'),
                       const SizedBox(height: 8),
-                      _PickerRow(
-                        icon: Icons.calendar_today_outlined,
-                        label: _dateDisplay,
-                        hasValue: true,
-                        onTap: _pickDate,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _PickerRow(
+                            icon: Icons.calendar_today_outlined,
+                            label: _dateDisplay,
+                            hasValue: true,
+                            onTap: _pickDate,
+                          ),
+                          if (_dueDateError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _dueDateError!,
+                              style: TextStyle(
+                                color: theme.colorScheme.error,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-
                       const SizedBox(height: 12),
-
-                      // Due Time
                       _Label('Due Time'),
                       const SizedBox(height: 8),
-                      _PickerRow(
-                        icon: Icons.access_time_rounded,
-                        label: _timeDisplay,
-                        hasValue: _dueTime != null,
-                        onTap: _pickTime,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _PickerRow(
+                            icon: Icons.access_time_rounded,
+                            label: _timeDisplay,
+                            hasValue: _dueTime != null,
+                            onTap: _pickTime,
+                          ),
+                          if (_timeError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _timeError!,
+                              style: TextStyle(
+                                color: theme.colorScheme.error,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Priority
                       _Label('Priority'),
                       const SizedBox(height: 8),
                       _PrioritySelector(
                         selected: _priority,
                         onSelected: (p) => setState(() => _priority = p),
                       ),
-
                       const SizedBox(height: 32),
-
-                      // Action buttons
                       Row(
                         children: [
                           Expanded(
@@ -243,10 +272,6 @@ class _EditTaskScreenState extends State<EditTaskScreen> {
     );
   }
 }
-
-// =============================================================
-// HELPER WIDGETS
-// =============================================================
 
 class _Label extends StatelessWidget {
   final String text;
