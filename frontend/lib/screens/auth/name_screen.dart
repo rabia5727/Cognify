@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/common/auth_components.dart';
 import '../../services/api_service.dart';
 import 'onboarding_screen.dart';
+import '../../utils/ui_feedback.dart';
 
 class NameScreen extends StatefulWidget {
   final String email;
@@ -26,13 +27,7 @@ class _NameScreenState extends State<NameScreen> {
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(message),
-      backgroundColor: Colors.redAccent,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    ));
+    UIFeedback.showError(context, message);
   }
 
   Future<void> _continue() async {
@@ -87,7 +82,6 @@ class _NameScreenState extends State<NameScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   const SizedBox(height: 32),
 
                   // Mascot centered

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/task_model.dart';
 import '../../widgets/common/app_header.dart';
 import '../../utils/validators.dart';
+import '../../utils/ui_feedback.dart';
 
 class AddTaskScreen extends StatefulWidget {
   final Function(Task) onTaskAdded;
@@ -120,9 +121,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       if (mounted) Navigator.pop(context, newTask);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create task: $e')),
-        );
+        UIFeedback.showError(context, 'Failed to create task: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

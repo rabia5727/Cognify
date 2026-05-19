@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../theme/app_theme.dart';
+import '../../../utils/ui_feedback.dart';
 
 class Q4ChallengesScreen extends StatefulWidget {
   final List<String> selected;
@@ -32,14 +33,7 @@ class _Q4ChallengesScreenState extends State<Q4ChallengesScreen> {
         updated.add(value);
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('You can select at most 2 challenges'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: AppColors.primaryBlue,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        UIFeedback.showWarning(context, 'You can select at most 2 challenges');
         return;
       }
     }

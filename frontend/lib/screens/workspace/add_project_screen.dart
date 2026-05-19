@@ -10,6 +10,7 @@ import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import 'task_picker_screen.dart';
 import '../../utils/validators.dart';
+import '../../utils/ui_feedback.dart';
 
 class AddProjectScreen extends StatefulWidget {
   final List<Task> allTasks;
@@ -139,9 +140,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create project: $e')),
-        );
+        UIFeedback.showError(context, 'Failed to create project: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

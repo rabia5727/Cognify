@@ -10,6 +10,7 @@ import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import 'task_picker_screen.dart';
 import '../../utils/validators.dart';
+import '../../utils/ui_feedback.dart';
 
 class EditProjectScreen extends StatefulWidget {
   final Project project;
@@ -98,12 +99,13 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     try {
       await widget.onProjectUpdated(updated);
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        UIFeedback.showSuccess(context, 'Project updated successfully!');
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update project: $e')),
-        );
+        UIFeedback.showError(context, 'Failed to update project: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
