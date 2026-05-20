@@ -9,6 +9,8 @@ import '../../utils/validators.dart';
 import '../../theme/app_theme.dart';
 import 'name_screen.dart';
 import 'forgot_password_screen.dart';
+import '../../services/google_auth_service.dart';
+
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -157,18 +159,24 @@ class _AuthScreenState extends State<AuthScreen>
               const SizedBox(height: 24),
 
               // Welcome Text - Centered
-              const Center(
-                child: Text('Welcome Back!!',
-                    style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.darkText)),
-              ),
+             Center(
+  child: Text(
+    _isLogin ? 'Welcome Back!!' : 'Create Account',
+    style: const TextStyle(
+        fontSize: 26,
+        fontWeight: FontWeight.bold,
+        color: AppColors.darkText),
+  ),
+),
               const SizedBox(height: 8),
-              const Center(
-                child: Text('Organize your life, powered by AI',
-                    style: TextStyle(fontSize: 14, color: AppColors.grayText)),
-              ),
+              Center(
+  child: Text(
+    _isLogin
+        ? 'Organize your life, powered by AI'
+        : 'Join Cognify and boost your productivity',
+    style: const TextStyle(fontSize: 14, color: AppColors.grayText),
+  ),
+),
               const SizedBox(height: 32),
 
               // Tab Bar
@@ -203,7 +211,7 @@ class _AuthScreenState extends State<AuthScreen>
                         width: 20,
                         height: 20,
                         child: CustomPaint(painter: _GoogleLogoPainter())),
-                    onPressed: () {},
+                    onPressed: _handleGoogleSignIn,
                   ),
                 )
               ]),
@@ -389,7 +397,7 @@ class _AuthScreenState extends State<AuthScreen>
               ),
               const Text('I agree to ', style: TextStyle(fontSize: 13)),
               GestureDetector(
-                onTap: () {},
+                onTap: () => _showTermsDialog(),
                 child: const Text('Terms & Conditions',
                     style: TextStyle(
                         color: AppColors.primaryBlue,
@@ -433,8 +441,144 @@ class _AuthScreenState extends State<AuthScreen>
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
+  
+  void _showTermsDialog() {
+  showDialog(
+    context: context,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Terms & Conditions',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.darkText,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close_rounded),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const Divider(height: 24),
+            const SizedBox(
+              height: 300,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _TermsSection(
+                      title: '1. Acceptance of Terms',
+                      content:
+                          'By creating an account on Cognify, you agree to be bound by these Terms and Conditions. If you do not agree, please do not use our service.',
+                    ),
+                    _TermsSection(
+                      title: '2. Use of Service',
+                      content:
+                          'Cognify is an AI-powered productivity app designed to help you manage tasks, workflows, and academic assignments. You agree to use the service only for lawful purposes.',
+                    ),
+                    _TermsSection(
+                      title: '3. Privacy & Data',
+                      content:
+                          'We collect and store your task data, preferences, and Google Classroom information solely to provide our services. We do not sell your data to third parties.',
+                    ),
+                    _TermsSection(
+                      title: '4. Google Classroom Integration',
+                      content:
+                          'By connecting your Google Classroom account, you authorize Cognify to access your courses and assignments to sync them as tasks. You can disconnect at any time.',
+                    ),
+                    _TermsSection(
+                      title: '5. Account Security',
+                      content:
+                          'You are responsible for maintaining the confidentiality of your account credentials. Please notify us immediately of any unauthorized use of your account.',
+                    ),
+                    _TermsSection(
+                      title: '6. Modifications',
+                      content:
+                          'We reserve the right to modify these terms at any time. Continued use of Cognify after changes constitutes acceptance of the new terms.',
+                    ),
+                    _TermsSection(
+                      title: '7. Contact',
+                      content:
+                          'For any questions regarding these terms, please contact us at support@cognify.app',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () {
+                  setState(() => _agreedToTerms = true);
+                  Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryBlue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text(
+                  'I Agree',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
+Future<void> _handleGoogleSignIn() async {
+  setState(() => _isLoading = true);
 
+  final result = await GoogleAuthService.signIn();
+
+  if (!mounted) return;
+  setState(() => _isLoading = false);
+
+  if (result.isSuccess && result.data != null) {
+    final userResult = await ApiService.getMe();
+    if (!mounted) return;
+
+    final user = UserModel(
+      id: userResult.data?.id ?? '',
+      name: userResult.data?.name ?? '',
+      email: userResult.data?.email ?? '',
+    );
+
+    final token = result.data?.accessToken ?? '';
+    Provider.of<AuthProvider>(context, listen: false)
+        .onLoginSuccess(user, token);
+  } else {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.error ?? 'Google sign in failed'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
+    }
 class _GoogleLogoPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -462,4 +606,40 @@ class _GoogleLogoPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_) => false;
+}
+
+class _TermsSection extends StatelessWidget {
+  final String title;
+  final String content;
+
+  const _TermsSection({required this.title, required this.content});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: AppColors.darkText,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            content,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.grayText,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
     await setup_analytics_indexes()
     start_notification_scheduler()
     yield
-    await close_db()
+    await close_db()    
     stop_notification_scheduler()
 
 

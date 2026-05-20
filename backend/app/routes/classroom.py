@@ -9,6 +9,7 @@
 #   GET /classroom/courses/{id}/assignments - Get assignments
 #   POST /classroom/sync - Manual sync all enabled courses
 #   POST /classroom/submit - Submit assignment
+#  POST /classroom/courses/{id}/restore - Restore archived course
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import RedirectResponse
@@ -268,3 +269,56 @@ async def restore_course(
         raise HTTPException(status_code=400, detail="Failed to restore course")
 
     return {"message": "Course restored successfully"}
+#submission to the classroom assignments through text or file link (for simplicity, we are not handling actual file uploads here, just links to files)
+class TextSubmissionRequest(BaseModel):
+    course_id: str
+    assignment_id: str
+    content: str
+
+class FileSubmissionRequest(BaseModel):
+    course_id: str
+    assignment_id: str
+    file_url: str
+    file_name: str
+
+@router.post("/submit/text")
+async def submit_text(
+    request: TextSubmissionRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Submit a text answer to a Google Classroom assignment"""
+    db = get_database()
+    user_id = str(current_user["_id"])
+    try:
+        result = await GoogleClassroomService.submit_text_assignment(
+            user_id=user_id,
+            course_id=request.course_id,
+            assignment_id=request.assignment_id,
+            text=request.content,
+            db=db
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/submit/file")
+async def submit_file(
+    request: FileSubmissionRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Submit a file link to a Google Classroom assignment"""
+    db = get_database()
+    user_id = str(current_user["_id"])
+    try:
+        result = await GoogleClassroomService.submit_file_assignment(
+            user_id=user_id,
+            course_id=request.course_id,
+            assignment_id=request.assignment_id,
+            file_url=request.file_url,
+            file_name=request.file_name,
+            db=db
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))

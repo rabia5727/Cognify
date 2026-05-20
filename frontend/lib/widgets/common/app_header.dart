@@ -202,7 +202,7 @@ class DashboardHeader extends StatelessWidget {
                   children: [
                     Text(
                       isNewUser
-                          ? 'Welcome to\nCo-Tasker'
+                          ? 'Welcome to\nCOGNIFY,'
                           : '${_getGreeting()},',
                       style: const TextStyle(
                         fontSize: 26,
@@ -268,7 +268,7 @@ class _NewUserMessage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Welcome to Co-Tasker',
+          'Welcome to COGNIFY',
           style: theme.textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
           ),
