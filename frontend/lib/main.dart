@@ -15,7 +15,8 @@ import 'providers/task_provider.dart';
 import 'providers/project_provider.dart';
 import 'providers/analytics_provider.dart';
 import 'providers/notification_provider.dart';
-import 'providers/classroom_provider.dart'; // ← Only ONE import
+import 'providers/classroom_provider.dart';
+import 'providers/assistant_provider.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/auth/auth_screen.dart';
@@ -43,6 +44,7 @@ class CognifyApp extends StatelessWidget {
 
         // AnalyticsProvider - no ProxyProvider needed since it loads its own data
         ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
+        ChangeNotifierProvider(create: (_) => AssistantProvider()),
       ],
       child: ValueListenableBuilder<ThemeMode>(
         valueListenable: themeNotifier,

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.db.connection import connect_db, close_db
-from app.routes import auth, users, task, project, notification, analytics, classroom  # MERGED: both routers
+from app.routes import auth, users, task, project, notification, analytics, classroom, voice , assistant
 from app.crud.notification import setup_indexes
 from app.crud.analytics import setup_indexes as setup_analytics_indexes 
 from app.schedular import start_notification_scheduler, stop_notification_scheduler
@@ -45,8 +45,10 @@ app.include_router(users.router)
 app.include_router(task.router)
 app.include_router(project.router)
 app.include_router(notification.router)
-app.include_router(analytics.router)   # YOUR branch
-app.include_router(classroom.router)   # TEAMMATE's branch
+app.include_router(analytics.router)   
+app.include_router(classroom.router)   
+app.include_router(voice.router)
+app.include_router(assistant.router)
 
 
 @app.get("/")
