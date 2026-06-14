@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from app.crud.assistant import chat_with_coco, get_full_history
 from app.models.assistant import ChatRequest, ChatResponse, HistoryResponse, MessageOut
 from app.utils.dependencies import get_current_user
+from app.crud.assistant import trigger_manual_briefing
 
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
 
@@ -65,3 +66,21 @@ async def get_history(
         ))
 
     return HistoryResponse(messages=message_list)
+
+
+# (your router is already defined — just add this route)
+ 
+@router.post("/briefing")
+async def trigger_briefing(current_user: dict = Depends(get_current_user)):
+    """
+    Manually trigger a morning briefing for the current user.
+    USE CASE: FYP demo — press a button to show proactive feature
+    without waiting for 8 AM scheduler.
+    
+    Returns the briefing text and saves it to:
+    - notifications collection (shows in bell)
+    - conversations collection (shows in CoCo chat)
+    """
+    user_id = str(current_user["_id"])
+    briefing = await trigger_manual_briefing(user_id)
+    return {"briefing": briefing, "message": "Briefing generated and saved"}

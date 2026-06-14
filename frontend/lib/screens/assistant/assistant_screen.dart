@@ -1,5 +1,4 @@
 // lib/screens/assistant/assistant_screen.dart
-// Main AI chat screen — matches your Figma design
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,7 +6,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import '../../providers/assistant_provider.dart';
 import '../../models/assistant_model.dart';
 import '../../constants/app_constant.dart';
-import 'voice_assistant_screen.dart'; // Updated import name
+import '../../widgets/common/app_header.dart';
+import 'voice_assistant_screen.dart';
 
 class AssistantScreen extends StatefulWidget {
   const AssistantScreen({super.key});
@@ -24,7 +24,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
   @override
   void initState() {
     super.initState();
-    // Load conversation history when screen opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AssistantProvider>().loadHistory();
     });
@@ -45,7 +44,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
     super.dispose();
   }
 
-  // Scroll to bottom after new message
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -58,55 +56,28 @@ class _AssistantScreenState extends State<AssistantScreen> {
     });
   }
 
-  // Send text message
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     _controller.clear();
-
     final provider = context.read<AssistantProvider>();
     await provider.sendMessage(text, source: 'text');
     _scrollToBottom();
-
-    // Wait for AI reply to be added, then speak
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final messages = provider.messages;
-      if (messages.isNotEmpty && messages.last.role == 'assistant') {
-        _tts.speak(messages.last.content);
-      }
-    });
   }
 
-  // Open voice assistant screen (renamed from VoiceListeningScreen)
   Future<void> _openVoiceScreen() async {
     final result = await Navigator.push<String>(
       context,
-      MaterialPageRoute(
-          builder: (_) => const VoiceAssistantScreen()), // Updated class name
+      MaterialPageRoute(builder: (_) => const VoiceAssistantScreen()),
     );
-
-    // result is the audio file path or quick command text returned from VoiceAssistantScreen
     if (result != null && mounted) {
       final provider = context.read<AssistantProvider>();
-
-      // Check if result is a quick command (text) or file path
-      if (result.startsWith('/') || result.contains('.m4a')) {
-        // It's a file path from recording
-        await provider.sendVoiceMessage(result);
-      } else {
-        // It's a quick command text
-        await provider.sendMessage(result, source: 'voice');
-      }
-
+      await provider.sendVoiceMessage(result);
       _scrollToBottom();
-
-      // Wait for AI reply to be added, then speak
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final messages = provider.messages;
-        if (messages.isNotEmpty && messages.last.role == 'assistant') {
-          _tts.speak(messages.last.content);
-        }
-      });
+      final messages = provider.messages;
+      if (messages.isNotEmpty && messages.last.role == 'assistant') {
+        await _tts.speak(messages.last.content);
+      }
     }
   }
 
@@ -117,85 +88,49 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: Icon(Icons.arrow_back_ios_new,
-              color: theme.textTheme.bodyLarge?.color),
-        ),
-        title: Text(
-          'AI Assistant',
-          style: theme.textTheme.titleMedium
-              ?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        centerTitle: true,
-        actions: [
-          // Mic icon in top right — matches your Figma
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: _openVoiceScreen,
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.1)
-                      : Colors.grey.shade200,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.mic_rounded,
-                    size: 20, color: theme.textTheme.bodyLarge?.color),
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppHeader(
+              title: 'AI Assistant',
+              onBack: () => Navigator.pop(context),
+            ),
+
+            Expanded(
+              child: Consumer<AssistantProvider>(
+                builder: (context, provider, _) {
+                  if (provider.messages.isNotEmpty) _scrollToBottom();
+                  if (provider.isLoading) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return provider.messages.isEmpty
+                      ? _buildEmptyState(theme)
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                          itemCount: provider.messages.length +
+                              (provider.isTyping ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (provider.isTyping &&
+                                index == provider.messages.length) {
+                              return _buildTypingIndicator(theme, isDark);
+                            }
+                            return _buildMessageBubble(
+                                provider.messages[index], theme, isDark);
+                          },
+                        );
+                },
               ),
             ),
-          ),
-        ],
-      ),
-      body: Consumer<AssistantProvider>(
-        builder: (context, provider, _) {
-          // Scroll to bottom when messages change
-          if (provider.messages.isNotEmpty) _scrollToBottom();
 
-          if (provider.isLoading) {
-            return const Center(child: CircularProgressIndicator());
-          }
-
-          return Column(
-            children: [
-              // ── Chat messages list ──────────────────────────────────────
-              Expanded(
-                child: provider.messages.isEmpty
-                    ? _buildEmptyState(theme)
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        itemCount: provider.messages.length +
-                            (provider.isTyping ? 1 : 0),
-                        itemBuilder: (context, index) {
-                          // Show typing indicator as last item
-                          if (provider.isTyping &&
-                              index == provider.messages.length) {
-                            return _buildTypingIndicator(theme, isDark);
-                          }
-                          return _buildMessageBubble(
-                              provider.messages[index], theme, isDark);
-                        },
-                      ),
-              ),
-
-              // ── Bottom input bar ────────────────────────────────────────
-              _buildInputBar(theme, isDark),
-            ],
-          );
-        },
+            // ── FIXED Input Bar ─────────────────────────────────────────
+            _buildInputBar(theme, isDark),
+          ],
+        ),
       ),
     );
   }
 
-  // ── Empty state when no messages yet ─────────────────────────────────────
   Widget _buildEmptyState(ThemeData theme) {
     return Center(
       child: Column(
@@ -227,7 +162,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
-  // ── Single message bubble ─────────────────────────────────────────────────
   Widget _buildMessageBubble(
       AssistantMessage msg, ThemeData theme, bool isDark) {
     final isUser = msg.isUser;
@@ -239,7 +173,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // AI avatar — only for assistant messages
           if (!isUser) ...[
             Container(
               width: 32,
@@ -253,8 +186,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
             ),
             const SizedBox(width: 8),
           ],
-
-          // Message bubble
           Flexible(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -262,14 +193,23 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 color: isUser
                     ? AppConstants.primaryBlue
                     : isDark
-                        ? Colors.white.withOpacity(0.08)
-                        : Colors.grey.shade100,
+                        ? const Color(0xFF1E2533)
+                        : Colors.white,
                 borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isUser ? 16 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 16),
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: Radius.circular(isUser ? 18 : 4),
+                  bottomRight: Radius.circular(isUser ? 4 : 18),
                 ),
+                boxShadow: isUser
+                    ? []
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.06),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        )
+                      ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,26 +220,25 @@ class _AssistantScreenState extends State<AssistantScreen> {
                       color: isUser
                           ? Colors.white
                           : theme.textTheme.bodyLarge?.color,
+                      height: 1.4,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Voice indicator — small mic icon on voice messages
                       if (msg.isVoice) ...[
                         Icon(Icons.mic_rounded,
                             size: 10,
                             color: isUser
                                 ? Colors.white60
                                 : theme.textTheme.bodySmall?.color),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 3),
                       ],
-                      // Timestamp
                       if (msg.timestamp != null)
                         Text(
                           _formatTime(msg.timestamp!),
-                          style: theme.textTheme.bodySmall?.copyWith(
+                          style: TextStyle(
                             fontSize: 10,
                             color: isUser
                                 ? Colors.white60
@@ -312,19 +251,17 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ),
             ),
           ),
-
-          // User avatar placeholder — only for user messages
           if (isUser) const SizedBox(width: 8),
         ],
       ),
     );
   }
 
-  // ── Typing indicator — 3 dots animation ──────────────────────────────────
   Widget _buildTypingIndicator(ThemeData theme, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Container(
             width: 32,
@@ -340,24 +277,29 @@ class _AssistantScreenState extends State<AssistantScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.08)
-                  : Colors.grey.shade100,
+              color: isDark ? const Color(0xFF1E2533) : Colors.white,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
-                bottomRight: Radius.circular(16),
+                topLeft: Radius.circular(18),
+                topRight: Radius.circular(18),
+                bottomRight: Radius.circular(18),
                 bottomLeft: Radius.circular(4),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                )
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 _dot(0),
                 const SizedBox(width: 4),
-                _dot(150),
+                _dot(200),
                 const SizedBox(width: 4),
-                _dot(300),
+                _dot(400),
               ],
             ),
           ),
@@ -366,11 +308,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
-  // Animated dot for typing indicator
   Widget _dot(int delayMs) {
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.4, end: 1.0),
-      duration: const Duration(milliseconds: 600),
+      tween: Tween(begin: 0.3, end: 1.0),
+      duration: Duration(milliseconds: 600 + delayMs),
       curve: Curves.easeInOut,
       builder: (_, value, child) => Opacity(opacity: value, child: child),
       child: Container(
@@ -384,75 +325,106 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
-  // ── Bottom input bar ──────────────────────────────────────────────────────
+  // ── FIXED Input Bar - Placeholder inside, proper styling ────────────────
   Widget _buildInputBar(ThemeData theme, bool isDark) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
         border: Border(
           top: BorderSide(
             color:
                 isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200,
+            width: 0.5,
           ),
         ),
       ),
       child: Row(
         children: [
-          // Text input field
+          // Text field with proper border and placeholder inside
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withOpacity(0.08)
-                    : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(24),
+                color: isDark ? const Color(0xFF1E2533) : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.grey.shade300,
+                  width: 0.5,
+                ),
               ),
-              child: Row(
-                children: [
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      decoration: InputDecoration(
-                        hintText: 'Ask AI anything...',
-                        hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.textTheme.bodySmall?.color,
-                        ),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onSubmitted: (_) => _sendMessage(),
-                      textInputAction: TextInputAction.send,
-                      maxLines: null, // allow multi-line
-                    ),
+              child: TextField(
+                controller: _controller,
+                decoration: InputDecoration(
+                  hintText: 'Ask AI anything...',
+                  hintStyle: TextStyle(
+                    color: isDark ? Colors.white38 : Colors.grey.shade500,
+                    fontSize: 14,
                   ),
-                  // Mic icon inside input field
-                  IconButton(
-                    onPressed: _openVoiceScreen,
-                    icon: Icon(Icons.mic_none_rounded,
-                        color: theme.textTheme.bodySmall?.color),
-                    iconSize: 22,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
                   ),
-                ],
+                ),
+                onSubmitted: (_) => _sendMessage(),
+                textInputAction: TextInputAction.send,
+                style: theme.textTheme.bodyMedium,
               ),
             ),
           ),
+
           const SizedBox(width: 8),
-          // Send button — blue circle
+
+          // Mic button
+          GestureDetector(
+            onTap: _openVoiceScreen,
+            child: Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E2533) : Colors.grey.shade100,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.grey.shade300,
+                  width: 0.5,
+                ),
+              ),
+              child: Icon(
+                Icons.mic_rounded,
+                color: isDark ? Colors.white60 : AppConstants.primaryBlue,
+                size: 22,
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          // Send button
           GestureDetector(
             onTap: _sendMessage,
             child: Container(
-              width: 44,
-              height: 44,
-              decoration: const BoxDecoration(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
                 color: AppConstants.primaryBlue,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppConstants.primaryBlue.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child:
-                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              child: const Icon(
+                Icons.send_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
           ),
         ],

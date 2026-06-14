@@ -1,11 +1,12 @@
 // lib/screens/assistant/voice_assistant_screen.dart
-// The blue orb voice recording screen — matches your Figma design
 
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../constants/app_constant.dart';
+import '../../widgets/common/app_header.dart';
+import 'assistant_screen.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   const VoiceAssistantScreen({super.key});
@@ -15,54 +16,81 @@ class VoiceAssistantScreen extends StatefulWidget {
 }
 
 class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final AudioRecorder _recorder = AudioRecorder();
   bool _isRecording = false;
   bool _isProcessing = false;
   String? _filePath;
 
-  // Animation controller for orb pulse effect
+  // Orb pulse — scale animation
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+
+  // Rings — expand outward when listening
+  late AnimationController _ringController;
+  late Animation<double> _ring1Animation;
+  late Animation<double> _ring2Animation;
+  late Animation<double> _ring3Animation;
 
   @override
   void initState() {
     super.initState();
 
-    // Orb pulse animation — scales from 1.0 to 1.08 continuously
+    // Orb pulse
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
 
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.08).animate(
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.06).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
-    // Start recording automatically when screen opens
+    // Rings — staggered expand + fade
+    _ringController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
+
+    _ring1Animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ringController,
+        curve: const Interval(0.0, 0.7, curve: Curves.easeOut),
+      ),
+    );
+    _ring2Animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ringController,
+        curve: const Interval(0.2, 0.9, curve: Curves.easeOut),
+      ),
+    );
+    _ring3Animation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _ringController,
+        curve: const Interval(0.4, 1.0, curve: Curves.easeOut),
+      ),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) => _startRecording());
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
+    _ringController.dispose();
     _recorder.dispose();
     super.dispose();
   }
 
-  // ── Start recording ───────────────────────────────────────────────────────
   Future<void> _startRecording() async {
-    // Check microphone permission
     final hasPermission = await _recorder.hasPermission();
     if (!hasPermission) {
       if (mounted) Navigator.pop(context);
       return;
     }
 
-    // Save audio to temp directory as .m4a
     final dir = await getTemporaryDirectory();
-    _filePath =
-        '${dir.path}/coco_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    _filePath = '${dir.path}/coco_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
     await _recorder.start(
       const RecordConfig(encoder: AudioEncoder.aacLc),
@@ -72,35 +100,49 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
     setState(() => _isRecording = true);
   }
 
-  // ── Stop recording and return file path to AssistantScreen ───────────────
   Future<void> _stopRecording() async {
     setState(() {
       _isRecording = false;
       _isProcessing = true;
     });
-
     _pulseController.stop();
+    _ringController.stop();
 
     final path = await _recorder.stop();
-
     if (path != null && mounted) {
-      // Return file path to AssistantScreen
-      // AssistantScreen will call sendVoiceMessage(path)
       Navigator.pop(context, path);
     } else {
       if (mounted) Navigator.pop(context);
     }
   }
 
-  // ── Cancel without sending ────────────────────────────────────────────────
   Future<void> _cancel() async {
     await _recorder.stop();
-    // Delete the file
     if (_filePath != null) {
       final file = File(_filePath!);
       if (await file.exists()) await file.delete();
     }
     if (mounted) Navigator.pop(context);
+  }
+
+  // Switch to chat screen smoothly
+  Future<void> _switchToChat() async {
+    await _recorder.stop();
+    if (_filePath != null) {
+      final file = File(_filePath!);
+      if (await file.exists()) await file.delete();
+    }
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const AssistantScreen(),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 300),
+        ),
+      );
+    }
   }
 
   @override
@@ -109,198 +151,249 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0D1117) : Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          onPressed: _cancel,
-          icon: Icon(Icons.arrow_back_ios_new,
-              color: isDark ? Colors.white : Colors.black87),
-        ),
-        title: Text(
-          'Voice Assistant',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withOpacity(0.1)
-                    : Colors.grey.shade200,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.settings_outlined,
-                  size: 18, color: isDark ? Colors.white70 : Colors.black54),
-            ),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          const Spacer(),
-
-          // ── Animated blue orb ─────────────────────────────────────────
-          AnimatedBuilder(
-            animation: _pulseAnimation,
-            builder: (_, child) => Transform.scale(
-              scale: _isRecording ? _pulseAnimation.value : 1.0,
-              child: child,
-            ),
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF5B9BF8), // light blue center
-                    AppConstants.primaryBlue, // deeper blue edge
-                    const Color(0xFF1A4FC4), // dark blue outer
-                  ],
-                  stops: const [0.0, 0.6, 1.0],
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── AppHeader — matches all other screens ─────────────────
+            AppHeader(
+              title: 'Voice Assistant',
+              onBack: _cancel,
+              // Chat icon on right — tap to switch to chat
+              actions: [
+                GestureDetector(
+                  onTap: _switchToChat,
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    margin: const EdgeInsets.only(right: 12),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.chat_bubble_outline_rounded,
+                      size: 18,
+                      color: isDark ? Colors.white70 : Colors.grey.shade700,
+                    ),
+                  ),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppConstants.primaryBlue.withOpacity(0.4),
-                    blurRadius: _isRecording ? 40 : 20,
-                    spreadRadius: _isRecording ? 10 : 4,
+              ],
+            ),
+
+            const Spacer(),
+
+            // ── Orb with expanding rings ──────────────────────────────
+            SizedBox(
+              width: 280,
+              height: 280,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Ring 3 — outermost, most transparent
+                  if (_isRecording)
+                    AnimatedBuilder(
+                      animation: _ring3Animation,
+                      builder: (_, __) => Container(
+                        width: 200 + (_ring3Animation.value * 70),
+                        height: 200 + (_ring3Animation.value * 70),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppConstants.primaryBlue.withOpacity(
+                                0.12 * (1 - _ring3Animation.value)),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Ring 2
+                  if (_isRecording)
+                    AnimatedBuilder(
+                      animation: _ring2Animation,
+                      builder: (_, __) => Container(
+                        width: 200 + (_ring2Animation.value * 50),
+                        height: 200 + (_ring2Animation.value * 50),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppConstants.primaryBlue
+                                .withOpacity(0.2 * (1 - _ring2Animation.value)),
+                            width: 1.5,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Ring 1 — closest to orb
+                  if (_isRecording)
+                    AnimatedBuilder(
+                      animation: _ring1Animation,
+                      builder: (_, __) => Container(
+                        width: 200 + (_ring1Animation.value * 30),
+                        height: 200 + (_ring1Animation.value * 30),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: AppConstants.primaryBlue
+                                .withOpacity(0.3 * (1 - _ring1Animation.value)),
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // The orb itself
+                  AnimatedBuilder(
+                    animation: _pulseAnimation,
+                    builder: (_, child) => Transform.scale(
+                      scale: _isRecording ? _pulseAnimation.value : 1.0,
+                      child: child,
+                    ),
+                    child: Container(
+                      width: 180,
+                      height: 180,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const RadialGradient(
+                          colors: [
+                            Color(0xFF7BB8FF), // light blue center
+                            Color(0xFF2563EB), // mid blue
+                            Color(0xFF1A4FC4), // dark blue edge
+                          ],
+                          stops: [0.0, 0.55, 1.0],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppConstants.primaryBlue
+                                .withOpacity(_isRecording ? 0.5 : 0.2),
+                            blurRadius: _isRecording ? 50 : 20,
+                            spreadRadius: _isRecording ? 8 : 2,
+                          ),
+                        ],
+                      ),
+                      // Mic icon inside orb — colored, visible
+                      child: Icon(
+                        _isProcessing
+                            ? Icons.hourglass_empty_rounded
+                            : Icons.mic_rounded,
+                        color: Colors.white.withOpacity(0.9),
+                        size: 56,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
 
-          const SizedBox(height: 40),
+            const SizedBox(height: 32),
 
-          // ── Status text ───────────────────────────────────────────────
-          Text(
-            _isProcessing
-                ? 'Processing...'
-                : _isRecording
-                    ? 'Listening...'
-                    : 'Starting...',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : Colors.black87,
-            ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // ── Hint text ─────────────────────────────────────────────────
-          Text(
-            '"Try saying \'Add meeting with Design team\'"',
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? Colors.white54 : Colors.black45,
-            ),
-            textAlign: TextAlign.center,
-          ),
-
-          const Spacer(),
-
-          // ── Quick action buttons — from your Figma ────────────────────
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _quickActionButton(Icons.add_task_rounded, 'Add Task',
-                    command: 'Add a task for tomorrow'),
-                const SizedBox(width: 12),
-                _quickActionButton(Icons.alarm_rounded, 'Set Reminder',
-                    command: 'Set a reminder for meeting'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          _quickActionButton(Icons.calendar_today_rounded, 'Summarize Day',
-              command: 'Summarize my tasks for today'),
-
-          const SizedBox(height: 40),
-
-          // ── Stop button — tap to stop recording ───────────────────────
-          GestureDetector(
-            onTap: _isRecording ? _stopRecording : null,
-            child: Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color:
-                    _isRecording ? Colors.red.shade400 : Colors.grey.shade400,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                _isProcessing
-                    ? Icons.hourglass_empty_rounded
-                    : Icons.stop_rounded,
-                color: Colors.white,
-                size: 30,
+            // ── Status text ───────────────────────────────────────────
+            Text(
+              _isProcessing
+                  ? 'Processing...'
+                  : _isRecording
+                      ? 'Listening...'
+                      : 'Starting...',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
 
-          const SizedBox(height: 12),
+            const SizedBox(height: 8),
 
-          Text(
-            'Tap to stop',
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.white38 : Colors.black38,
+            Text(
+              '"Try saying \'Add meeting with Design team\'"',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.textTheme.bodySmall?.color,
+              ),
+              textAlign: TextAlign.center,
             ),
-          ),
 
-          const SizedBox(height: 48),
-        ],
+            const Spacer(),
+
+            // ── Quick action chips ────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _chip(Icons.add_task_rounded, 'Add Task'),
+                  const SizedBox(width: 12),
+                  _chip(Icons.alarm_rounded, 'Set Reminder'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            _chip(Icons.calendar_today_rounded, 'Summarize Day'),
+
+            const SizedBox(height: 32),
+
+            // ── Stop button ───────────────────────────────────────────
+            GestureDetector(
+              onTap: _isRecording ? _stopRecording : null,
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color:
+                      _isRecording ? Colors.red.shade400 : Colors.grey.shade400,
+                  shape: BoxShape.circle,
+                  boxShadow: _isRecording
+                      ? [
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.3),
+                            blurRadius: 16,
+                            spreadRadius: 2,
+                          )
+                        ]
+                      : [],
+                ),
+                child: const Icon(
+                  Icons.stop_rounded,
+                  color: Colors.white,
+                  size: 30,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              'Tap to stop',
+              style: theme.textTheme.bodySmall,
+            ),
+
+            const SizedBox(height: 32),
+          ],
+        ),
       ),
     );
   }
 
-  // Quick action chip button — matches Figma design
-  Widget _quickActionButton(IconData icon, String label, {String? command}) {
-    return GestureDetector(
-      onTap: () async {
-        // Stop recording first if active
-        if (_isRecording) {
-          await _recorder.stop();
-          _pulseController.stop();
-          setState(() => _isRecording = false);
-        }
-        // Return the command as if it was spoken
-        if (mounted) Navigator.pop(context, command ?? label);
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppConstants.primaryBlue.withOpacity(0.4)),
-          borderRadius: BorderRadius.circular(24),
-          color: AppConstants.primaryBlue.withOpacity(0.08),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 16, color: AppConstants.primaryBlue),
-            const SizedBox(width: 6),
-            Text(
-              label,
+  Widget _chip(IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        border: Border.all(
+            color: AppConstants.primaryBlue.withOpacity(0.35), width: 1),
+        borderRadius: BorderRadius.circular(20),
+        color: AppConstants.primaryBlue.withOpacity(0.07),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppConstants.primaryBlue),
+          const SizedBox(width: 6),
+          Text(label,
               style: const TextStyle(
-                fontSize: 13,
-                color: AppConstants.primaryBlue,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+                  fontSize: 13,
+                  color: AppConstants.primaryBlue,
+                  fontWeight: FontWeight.w500)),
+        ],
       ),
     );
   }
