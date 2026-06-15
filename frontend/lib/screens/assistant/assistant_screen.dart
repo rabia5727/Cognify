@@ -10,7 +10,8 @@ import '../../widgets/common/app_header.dart';
 import 'voice_assistant_screen.dart';
 
 class AssistantScreen extends StatefulWidget {
-  const AssistantScreen({super.key});
+  final String? initialMessage;
+  const AssistantScreen({super.key, this.initialMessage});
 
   @override
   State<AssistantScreen> createState() => _AssistantScreenState();
@@ -24,8 +25,16 @@ class _AssistantScreenState extends State<AssistantScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AssistantProvider>().loadHistory();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final provider = context.read<AssistantProvider>();
+      await provider.loadHistory();
+
+      // Auto-send if coming from proactive card on dashboard
+      if (widget.initialMessage != null && mounted) {
+        await provider.sendMessage(widget.initialMessage!, source: 'text');
+        _scrollToBottom();
+      }
     });
     _setupTts();
   }

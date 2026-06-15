@@ -12,6 +12,7 @@ class NotificationProvider extends ChangeNotifier {
   String? _error;
   bool _enabled = false;
   String? _userId;
+  bool _isMarkingPermission = false;
 
   // Pagination state
   int _totalNotifications = 0;
@@ -44,11 +45,29 @@ class NotificationProvider extends ChangeNotifier {
   }
 
   Future<void> markPermissionAsked() async {
-    if (_userId == null || _userId!.isEmpty) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('notification_permission_asked_$_userId', true);
-  }
+    // Prevent multiple simultaneous calls
+    if (_isMarkingPermission) {
+      print('⚠️ Already marking permission, skipping duplicate');
+      return;
+    }
 
+    _isMarkingPermission = true;
+
+    try {
+      if (_userId == null || _userId!.isEmpty) {
+        print('⚠️ Cannot mark permission: userId is null or empty');
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notification_permission_asked_$_userId', true);
+      print('✅ Permission marked as asked for user: $_userId');
+    } catch (e) {
+      print('❌ Error marking permission: $e');
+    } finally {
+      _isMarkingPermission = false;
+    }
+  }
   // ── Enable / disable notifications ───────────────────────────────────────
 
   Future<void> setEnabled(bool value) async {
@@ -308,6 +327,7 @@ class NotificationProvider extends ChangeNotifier {
     _totalPages = 1;
     _currentPage = 1;
     _error = null;
+    _userId = null;
     notifyListeners();
   }
 }

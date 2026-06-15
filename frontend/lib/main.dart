@@ -110,17 +110,24 @@ class _DataLoaderState extends State<_DataLoader> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      // YOUR branch: refresh methods + analytics summary
-      await context.read<TaskProvider>().refreshTasks();
-      await context.read<ProjectProvider>().refreshProjects();
-      await context.read<AnalyticsProvider>().loadSummary();
+      if (!mounted) return;
 
-      // TEAMMATE's branch: load classroom courses on startup
+      // Run in parallel — don't block UI on slow network calls
+      await Future.wait([
+        context.read<TaskProvider>().refreshTasks(),
+        context.read<ProjectProvider>().refreshProjects(),
+        context.read<AnalyticsProvider>().loadSummary(),
+      ]);
+
+      if (!mounted) return;
+
+      // Classroom runs independently — don't await it
       context.read<ClassroomProvider>().loadCourses();
 
-      // YOUR branch: notification permission flow
+      // Notification setup
       final notifProvider = context.read<NotificationProvider>();
       final userId = context.read<AuthProvider>().user?.id ?? '';
+      if (userId.isEmpty) return;
       notifProvider.setCurrentUser(userId);
 
       final alreadyAsked = await notifProvider.hasAskedPermission();

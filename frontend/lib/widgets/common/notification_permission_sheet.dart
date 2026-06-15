@@ -2,15 +2,30 @@ import 'package:flutter/material.dart';
 import '../../providers/notification_provider.dart';
 import 'package:provider/provider.dart';
 
-Future<void> showNotificationPermissionSheet(BuildContext context) {
-  return showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    isDismissible: false,
-    enableDrag: false,
-    builder: (_) => const _NotificationPermissionSheet(),
-  );
+// ✅ ADD THIS - Global flag to prevent multiple sheets
+bool _isSheetShowing = false;
+
+Future<void> showNotificationPermissionSheet(BuildContext context) async {
+  // ✅ ADD THIS - Prevent multiple sheets
+  if (_isSheetShowing) {
+    print('⚠️ Notification sheet already showing, skipping');
+    return;
+  }
+
+  _isSheetShowing = true;
+
+  try {
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      builder: (_) => const _NotificationPermissionSheet(),
+    );
+  } finally {
+    _isSheetShowing = false;
+  }
 }
 
 class _NotificationPermissionSheet extends StatelessWidget {
@@ -57,9 +72,17 @@ class _NotificationPermissionSheet extends StatelessWidget {
               onPressed: () async {
                 final provider = context.read<NotificationProvider>();
                 final nav = Navigator.of(context);
+
+                // ✅ ADD THIS - Mark as asked BEFORE closing
                 await provider.markPermissionAsked();
                 await provider.setEnabled(true);
-                nav.pop();
+
+                // ✅ ADD THIS - Small delay to ensure SharedPreferences saves
+                await Future.delayed(const Duration(milliseconds: 100));
+
+                if (nav.canPop()) {
+                  nav.pop();
+                }
                 provider.refreshUnreadCount();
               },
               style: ElevatedButton.styleFrom(
@@ -84,9 +107,17 @@ class _NotificationPermissionSheet extends StatelessWidget {
               onPressed: () async {
                 final provider = context.read<NotificationProvider>();
                 final nav = Navigator.of(context);
+
+                // ✅ ADD THIS - Mark as asked even for "No Thanks"
                 await provider.markPermissionAsked();
                 await provider.setEnabled(false);
-                nav.pop();
+
+                // ✅ ADD THIS - Small delay to ensure SharedPreferences saves
+                await Future.delayed(const Duration(milliseconds: 100));
+
+                if (nav.canPop()) {
+                  nav.pop();
+                }
               },
               style: TextButton.styleFrom(
                 foregroundColor: theme.textTheme.bodySmall?.color,
