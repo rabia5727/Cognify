@@ -22,6 +22,52 @@ class GoogleClassroomService {
     };
   }
 
+  // // Get Google OAuth URL from backend
+  // static Future<String> getOauthUrl() async {
+  //   final response = await http.get(
+  //     Uri.parse('$baseUrl/classroom/oauth/url'),
+  //     headers: await _getHeaders(),
+  //   );
+
+  //   if (response.statusCode == 200) {
+  //     final data = jsonDecode(response.body);
+  //     return data['auth_url'] as String;
+  //   } else {
+  //     throw Exception('Failed to get OAuth URL: ${response.body}');
+  //   }
+  // }
+  // Get OAuth URL for mobile
+  static Future<Map<String, String>> getMobileAuthUrl() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/classroom/oauth/mobile-auth'),
+      headers: await _getHeaders(),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return {
+        'auth_url': data['auth_url'] as String,
+        'state': data['state'] as String,
+      };
+    } else {
+      throw Exception('Failed to get OAuth URL: ${response.body}');
+    }
+  }
+
+// Check if user is connected to Google Classroom
+  static Future<bool> isConnected() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/classroom/health'),
+      headers: await _getHeaders(),
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['connected'] ?? false;
+    }
+    return false;
+  }
+
   // Get all courses for the user
   static Future<List<Map<String, dynamic>>> getCourses() async {
     final response = await http.get(
@@ -91,7 +137,8 @@ class GoogleClassroomService {
   }
 
   // Get assignments for a specific course
-  static Future<List<Map<String, dynamic>>> getAssignments(String courseId) async {
+  static Future<List<Map<String, dynamic>>> getAssignments(
+      String courseId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/classroom/courses/$courseId/assignments'),
       headers: await _getHeaders(),
@@ -152,27 +199,23 @@ class GoogleClassroomService {
       throw Exception('Failed to submit file: ${response.body}');
     }
   }
+
   // Connect Google Classroom account
-static Future<void> connectGoogleAccount({
-  required String accessToken,
-  required String refreshToken,
-  required String clientId,
-  required String clientSecret,
-}) async {
-  final response = await http.post(
-    Uri.parse('$baseUrl/classroom/connect'),
-    headers: await _getHeaders(),
-    body: jsonEncode({
-      'access_token': accessToken,
-      'refresh_token': refreshToken,
-      'client_id': clientId,
-      'client_secret': clientSecret,
-    }),
-  );
+  static Future<void> connectGoogleAccount({
+    required String accessToken,
+    required String refreshToken,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/classroom/connect'),
+      headers: await _getHeaders(),
+      body: jsonEncode({
+        'access_token': accessToken,
+        'refresh_token': refreshToken,
+      }),
+    );
 
-  if (response.statusCode != 200) {
-    throw Exception('Failed to connect Google Classroom: ${response.body}');
+    if (response.statusCode != 200) {
+      throw Exception('Failed to connect Google Classroom: ${response.body}');
+    }
   }
-}
-
 }

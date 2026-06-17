@@ -113,9 +113,10 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   }
 
   void _goToAddTask() {
-    final DateTime? prefilledDate = (_selectedDayIndex >= 0 && _calendarDays.isNotEmpty)
-        ? _calendarDays[_selectedDayIndex]['fullDate'] as DateTime
-        : null;
+    final DateTime? prefilledDate =
+        (_selectedDayIndex >= 0 && _calendarDays.isNotEmpty)
+            ? _calendarDays[_selectedDayIndex]['fullDate'] as DateTime
+            : null;
 
     Navigator.push(
       context,
@@ -365,21 +366,20 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                   AppHeader(
                     title: 'Workspace',
                     onBack: () => widget.onTabSelected(0),
-                    // actions: [ 
-                    //   IconButton(
-                    //     icon: const Icon(Icons.class_),
-                    //     onPressed: () {
-                    //       Navigator.push(
-                    //         context,
-                    //         MaterialPageRoute(
-                    //           builder: (_) => ClassroomSyncScreen(),
-                    //         ),
-                    //       );
-                    //     },
-                    //     tooltip: 'Google Classroom Sync',
-                    //   ),
-                    // ],
-                    
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.class_),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ClassroomSyncScreen(),
+                            ),
+                          );
+                        },
+                        tooltip: 'Google Classroom Sync',
+                      ),
+                    ],
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -644,7 +644,7 @@ class _FilterChip extends StatelessWidget {
 }
 
 // ================================================================
-// SORT BUTTON
+// SORT BUTTON - FIXED VERSION
 // ================================================================
 
 class _SortButton extends StatefulWidget {
@@ -835,18 +835,25 @@ class _SortButtonState extends State<_SortButton> {
     );
 
     Overlay.of(context).insert(_overlayEntry!);
-    setState(() => _isOpen = true);
+    if (mounted) setState(() => _isOpen = true);
   }
 
   void _hideDropdown() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    if (mounted) setState(() => _isOpen = false);
+    if (mounted) {
+      setState(() => _isOpen = false);
+    }
   }
 
   @override
   void dispose() {
-    _hideDropdown();
+    // Clean up overlay without calling setState
+    if (_overlayEntry != null) {
+      _overlayEntry?.remove();
+      _overlayEntry = null;
+    }
+    _isOpen = false;
     super.dispose();
   }
 

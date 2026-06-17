@@ -255,7 +255,7 @@ class _AuthScreenState extends State<AuthScreen>
   Widget _buildLoginForm() {
     return Form(
       key: _loginFormKey,
-      autovalidateMode: AutovalidateMode.onUserInteraction,
+
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -35,11 +35,12 @@ class ClassroomProvider extends ChangeNotifier {
 
     try {
       final allCourses = await GoogleClassroomService.getCourses();
-      
+
       // Separate active and archived courses
       _courses = allCourses.where((c) => c['archived'] != true).toList();
-      _archivedCourses = allCourses.where((c) => c['archived'] == true).toList();
-      
+      _archivedCourses =
+          allCourses.where((c) => c['archived'] == true).toList();
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -52,7 +53,7 @@ class ClassroomProvider extends ChangeNotifier {
   // Toggle sync status for a course
   Future<void> toggleCourseSync(String courseId, bool enabled) async {
     await GoogleClassroomService.toggleCourseSync(courseId, enabled);
-    
+
     // Update local state
     final index = _courses.indexWhere((c) => c['id'] == courseId);
     if (index != -1) {
@@ -64,7 +65,7 @@ class ClassroomProvider extends ChangeNotifier {
   // Archive a course
   Future<void> archiveCourse(String courseId) async {
     await GoogleClassroomService.archiveCourse(courseId);
-    
+
     // Move from active to archived
     final course = _courses.firstWhere((c) => c['id'] == courseId);
     _courses.removeWhere((c) => c['id'] == courseId);
@@ -76,7 +77,7 @@ class ClassroomProvider extends ChangeNotifier {
   // Restore an archived course
   Future<void> restoreCourse(String courseId) async {
     await GoogleClassroomService.restoreCourse(courseId);
-    
+
     // Move from archived to active
     final course = _archivedCourses.firstWhere((c) => c['id'] == courseId);
     _archivedCourses.removeWhere((c) => c['id'] == courseId);
@@ -94,10 +95,10 @@ class ClassroomProvider extends ChangeNotifier {
       final result = await GoogleClassroomService.syncAllAssignments();
       _lastSyncTime = DateTime.now();
       //don't need to reload courses here since sync doesn't change course list, just tasks. We will refresh tasks separately
-      // or use a callback 
+      // or use a callback
 
       //show notification for new tasks synced
-    
+
       _isSyncing = false;
       notifyListeners();
       return result;

@@ -10,7 +10,6 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.limiter import limiter
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
