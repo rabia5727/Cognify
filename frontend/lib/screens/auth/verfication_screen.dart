@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'reset_password_screen.dart';
+import '../../utils/ui_feedback.dart';
 
 class VerificationScreen extends StatefulWidget {
   final String email;
@@ -16,7 +17,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     (index) => TextEditingController(),
   );
   final List<FocusNode> _focusNodes = List.generate(4, (index) => FocusNode());
-  
+
   bool _isLoading = false;
   int _resendTimer = 30;
   bool _canResend = false;
@@ -52,12 +53,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
   void _handleContinue() async {
     if (!_isOtpComplete) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter the 4-digit verification code'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      UIFeedback.showWarning(
+          context, 'Please enter the 4-digit verification code');
       return;
     }
 
@@ -90,12 +87,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     });
 
     // TODO: Call your resend code API
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Verification code resent to your email'),
-        backgroundColor: Colors.green,
-      ),
-    );
+    UIFeedback.showSuccess(context, 'Verification code resent to your email');
 
     _startResendTimer();
   }
@@ -223,7 +215,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isLoading || !_isOtpComplete ? null : _handleContinue,
+                  onPressed:
+                      _isLoading || !_isOtpComplete ? null : _handleContinue,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryBlue,
                     foregroundColor: Colors.white,

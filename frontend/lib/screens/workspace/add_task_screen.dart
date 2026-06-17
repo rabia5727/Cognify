@@ -1,15 +1,10 @@
-// ═══════════════════════════════════════════════════════════════════
-// FILE: lib/screens/workspace/add_task_screen.dart
-// PURPOSE: Full screen for creating a new task
-// FIXES: Added loading state (Save button shows loader, disabled while saving)
-// ═══════════════════════════════════════════════════════════════════
-
 import 'package:flutter/material.dart';
 import '../../models/task_model.dart';
 import '../../widgets/common/app_header.dart';
+import '../../utils/validators.dart';
+import '../../utils/ui_feedback.dart';
 
 class AddTaskScreen extends StatefulWidget {
-  // Callback — called with the new task when user taps Save
   final Function(Task) onTaskAdded;
   final String? initialProjectId;
   final DateTime? initialDueDate;
@@ -34,6 +29,8 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   DateTime? _dueDate;
   TimeOfDay? _dueTime;
   bool _isSaving = false;
+  String? _dueDateError;
+  String? _timeError;
 
   @override
   void initState() {
@@ -48,7 +45,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     super.dispose();
   }
 
-  // ── Pick due date ──────────────────────────────────────────────────
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -60,19 +56,30 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _dueDate = picked);
+    if (picked != null) {
+      setState(() {
+        _dueDate = picked;
+        _dueDateError = null;
+
+        if (_dueTime != null) {
+          _timeError = Validators.futureTime(_dueDate, _dueTime);
+        }
+      });
+    }
   }
 
-  // ── Pick due time ──────────────────────────────────────────────────
   Future<void> _pickTime() async {
     final picked = await showTimePicker(
       context: context,
       initialTime: _dueTime ?? TimeOfDay.now(),
     );
-    if (picked != null) setState(() => _dueTime = picked);
+    if (picked == null) return;
+    setState(() {
+      _dueTime = picked;
+      _timeError = Validators.futureTime(_dueDate, picked);
+    });
   }
 
-  // ── Format display strings ────────────────────────────────────────
   String get _dateDisplay {
     if (_dueDate == null) return 'Select due date';
     return '${_dueDate!.day}/${_dueDate!.month}/${_dueDate!.year}';
@@ -86,15 +93,14 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
     return '$h:$m$period';
   }
 
-  // ── Save ───────────────────────────────────────────────────────────
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_dueDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a due date')),
-      );
-      return;
-    }
+
+    setState(() {
+      _dueDateError = Validators.dueDateTime(_dueDate, _dueTime);
+      _timeError = Validators.futureTime(_dueDate, _dueTime);
+    });
+    if (_dueDateError != null || _timeError != null) return;
 
     setState(() => _isSaving = true);
 
@@ -112,19 +118,13 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
     try {
       await widget.onTaskAdded(newTask);
-      if (mounted) {
-        Navigator.pop(context, newTask);
-      }
+      if (mounted) Navigator.pop(context, newTask);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create task: $e')),
-        );
+        UIFeedback.showError(context, 'Failed to create task: $e');
       }
     } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -137,13 +137,10 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // ── Header ───────────────────────────────────────────────
             AppHeader(
               title: 'New Task',
               onBack: () => Navigator.pop(context),
             ),
-
-            // ── Form ─────────────────────────────────────────────────
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -152,7 +149,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Task Name
                       _Label('Task Name'),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -160,14 +156,9 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                         autofocus: true,
                         decoration:
                             _inputDecoration(context, 'e.g. send an email'),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Task name is required'
-                            : null,
+                        validator: Validators.taskTitle,
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Description
                       _Label('Description'),
                       const SizedBox(height: 8),
                       TextFormField(
@@ -176,46 +167,66 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
                         decoration:
                             _inputDecoration(context, 'Add a description....'),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Due Date
                       _Label('Due Date'),
                       const SizedBox(height: 8),
-                      _PickerRow(
-                        icon: Icons.calendar_today_outlined,
-                        label: _dateDisplay,
-                        hasValue: _dueDate != null,
-                        onTap: _pickDate,
-                        context: context,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _PickerRow(
+                            icon: Icons.calendar_today_outlined,
+                            label: _dateDisplay,
+                            hasValue: _dueDate != null,
+                            onTap: _pickDate,
+                            context: context,
+                          ),
+                          if (_dueDateError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _dueDateError!,
+                              style: TextStyle(
+                                color: theme.colorScheme.error,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-
                       const SizedBox(height: 12),
-
-                      // Due Time
                       _Label('Due Time'),
                       const SizedBox(height: 8),
-                      _PickerRow(
-                        icon: Icons.access_time_rounded,
-                        label: _timeDisplay,
-                        hasValue: _dueTime != null,
-                        onTap: _pickTime,
-                        context: context,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _PickerRow(
+                            icon: Icons.access_time_rounded,
+                            label: _timeDisplay,
+                            hasValue: _dueTime != null,
+                            onTap: _pickTime,
+                            context: context,
+                          ),
+                          if (_timeError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _timeError!,
+                              style: TextStyle(
+                                color: theme.colorScheme.error,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Priority
                       _Label('Priority'),
                       const SizedBox(height: 8),
                       _PrioritySelector(
                         selected: _priority,
                         onSelected: (p) => setState(() => _priority = p),
                       ),
-
                       const SizedBox(height: 28),
-
-                      // Action buttons
                       Row(
                         children: [
                           Expanded(
@@ -274,10 +285,6 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Section label
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _Label extends StatelessWidget {
   final String text;
   const _Label(this.text);
@@ -294,10 +301,6 @@ class _Label extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Date/Time picker row
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _PickerRow extends StatelessWidget {
   final IconData icon;
@@ -351,10 +354,6 @@ class _PickerRow extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: Priority selector (Low / Medium / High pills)
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _PrioritySelector extends StatelessWidget {
   final Priority selected;
@@ -418,10 +417,6 @@ class _PrioritySelector extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPER: Input decoration
-// ─────────────────────────────────────────────────────────────────────────────
 
 InputDecoration _inputDecoration(BuildContext context, String hint) {
   final theme = Theme.of(context);

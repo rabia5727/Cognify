@@ -26,14 +26,23 @@ class AppColors {
   static const Color scaffoldBg = Color(0xFFFFFFFF);
   static const Color tabBarBg = Color(0xFFE8F0FE);
 
-  // Dark mode colors
-  static const Color darkScaffoldBg = Color(0xFF0F1117);
-  static const Color darkSurface = Color(0xFF1C1E27);
-  static const Color darkSurface2 = Color(0xFF252836);
-  static const Color darkBorder = Color(0xFF2E3147);
-  static const Color darkText_ = Color(0xFFF1F1F3);
-  static const Color darkGrayText = Color(0xFF9EA3B8);
-  static const Color darkInputBg = Color(0xFF1E2130);
+  // STEP 1: Updated dark mode colors (navy-tinted, layered)
+  static const Color darkScaffoldBg = Color(0xFF0E1117);
+  static const Color darkSurface = Color(0xFF161B27);
+  static const Color darkSurface2 = Color(0xFF1E2438);
+  static const Color darkSurface3 = Color(0xFF252C42);
+  static const Color darkBorder = Color(0xFF2A3050);
+  static const Color darkText_ = Color(0xFFE8EAF2);
+  static const Color darkGrayText = Color(0xFFA8B0C8);
+  static const Color darkInputBg = Color(0xFF1C2238);
+
+  // Status badge colors
+  static const Color highBadgeBg = Color(0x30EF4444);
+  static const Color mediumBadgeBg = Color(0x30F59E0B);
+  static const Color lowBadgeBg = Color(0x3022C55E);
+  static const Color highBadgeText = Color(0xFFFCA5A5);
+  static const Color mediumBadgeText = Color(0xFFFCD34D);
+  static const Color lowBadgeText = Color(0xFF86EFAC);
 }
 
 // =============================================================
@@ -53,6 +62,31 @@ class AppTheme {
         ),
         cardColor: Colors.white,
         dividerColor: AppColors.lightGray,
+
+        // STEP 3: AppBar light
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: AppColors.darkText,
+          elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkText,
+          ),
+        ),
+
+        // STEP 4: Text theme light
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: AppColors.darkText),
+          bodyMedium: TextStyle(color: AppColors.darkText),
+          bodySmall: TextStyle(color: AppColors.grayText),
+          labelSmall: TextStyle(color: AppColors.grayText),
+          titleMedium: TextStyle(color: AppColors.darkText),
+          titleLarge: TextStyle(color: AppColors.darkText),
+        ),
+
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -75,6 +109,7 @@ class AppTheme {
           ),
           hintStyle: const TextStyle(color: AppColors.grayText, fontSize: 14),
         ),
+
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primaryBlue,
@@ -90,9 +125,33 @@ class AppTheme {
             elevation: 0,
           ),
         ),
+
+        // STEP 6: Bottom nav light
         bottomAppBarTheme: const BottomAppBarTheme(
           color: Colors.white,
+          elevation: 8,
         ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: Colors.white,
+          indicatorColor: Colors.transparent,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryBlue);
+            }
+            return const TextStyle(fontSize: 11, color: AppColors.grayText);
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const IconThemeData(
+                  color: AppColors.primaryBlue, size: 24);
+            }
+            return const IconThemeData(color: AppColors.grayText, size: 24);
+          }),
+        ),
+
         switchTheme: SwitchThemeData(
           thumbColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
@@ -107,6 +166,17 @@ class AppTheme {
             return AppColors.lightGray;
           }),
         ),
+
+        // STEP 7: Tab bar light
+        tabBarTheme: TabBarThemeData(
+          labelColor: Colors.white,
+          unselectedLabelColor: AppColors.grayText,
+          indicator: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            color: AppColors.primaryBlue,
+          ),
+        ),
+
         dialogTheme: DialogThemeData(
           backgroundColor: Colors.white,
           shape:
@@ -123,15 +193,50 @@ class AppTheme {
         brightness: Brightness.dark,
         fontFamily: 'Inter',
         scaffoldBackgroundColor: AppColors.darkScaffoldBg,
+
+        // STEP 2: Updated colorScheme dark
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.primaryBlue,
           primary: AppColors.primaryBlue,
           brightness: Brightness.dark,
-          surface: AppColors.darkSurface,
+          surface: AppColors.darkSurface2,
           onSurface: AppColors.darkText_,
+          surfaceContainerHighest: AppColors.darkSurface3,
+          surfaceContainer: AppColors.darkSurface,
+          outline: AppColors.darkBorder,
         ),
-        cardColor: AppColors.darkSurface,
+
+        cardColor: AppColors.darkSurface2,
         dividerColor: AppColors.darkBorder,
+
+        // STEP 3: AppBar dark
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.darkScaffoldBg,
+          foregroundColor: AppColors.darkText_,
+          elevation: 0,
+          centerTitle: true,
+          titleTextStyle: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: AppColors.darkText_,
+          ),
+        ),
+
+        // STEP 4: Text theme dark
+        textTheme: const TextTheme(
+          bodyLarge: TextStyle(color: AppColors.darkText_),
+          bodyMedium: TextStyle(color: AppColors.darkText_),
+          bodySmall: TextStyle(color: AppColors.darkGrayText),
+          labelSmall: TextStyle(color: AppColors.darkGrayText),
+          titleMedium: TextStyle(color: AppColors.darkText_),
+          titleLarge: TextStyle(color: AppColors.darkText_),
+        ),
+
+        // STEP 5: Icon themes dark
+        iconTheme: const IconThemeData(color: AppColors.darkGrayText),
+        primaryIconTheme: const IconThemeData(color: AppColors.darkText_),
+
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: AppColors.darkInputBg,
@@ -155,6 +260,7 @@ class AppTheme {
           hintStyle:
               const TextStyle(color: AppColors.darkGrayText, fontSize: 14),
         ),
+
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primaryBlue,
@@ -170,9 +276,33 @@ class AppTheme {
             elevation: 0,
           ),
         ),
+
+        // STEP 6: Bottom nav dark
         bottomAppBarTheme: const BottomAppBarTheme(
-          color: Colors.white,
+          color: AppColors.darkSurface,
+          elevation: 8,
         ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: AppColors.darkSurface,
+          indicatorColor: Colors.transparent,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryBlue);
+            }
+            return const TextStyle(fontSize: 11, color: AppColors.darkGrayText);
+          }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) {
+              return const IconThemeData(
+                  color: AppColors.primaryBlue, size: 24);
+            }
+            return const IconThemeData(color: AppColors.darkGrayText, size: 24);
+          }),
+        ),
+
         switchTheme: SwitchThemeData(
           thumbColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
@@ -187,13 +317,24 @@ class AppTheme {
             return AppColors.darkBorder;
           }),
         ),
+
+        // STEP 7: Tab bar dark
+        tabBarTheme: TabBarThemeData(
+          labelColor: Colors.white,
+          unselectedLabelColor: AppColors.darkGrayText,
+          indicator: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            color: AppColors.primaryBlue,
+          ),
+        ),
+
         dialogTheme: DialogThemeData(
-          backgroundColor: AppColors.darkSurface,
+          backgroundColor: AppColors.darkSurface2,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
         snackBarTheme: const SnackBarThemeData(
-          backgroundColor: AppColors.darkSurface2,
+          backgroundColor: AppColors.darkSurface3,
           contentTextStyle: TextStyle(color: AppColors.darkText_),
         ),
       );

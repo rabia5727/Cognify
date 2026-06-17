@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/notification_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../screens/notifications/notifications_screen.dart';
+import '../../screens/assistant/assistant_screen.dart';
 import 'app_card.dart';
+import '../../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SIMPLE HEADER — Settings, Workspace, Analytics, Profile
@@ -53,9 +56,9 @@ class AppHeader extends StatelessWidget {
               ),
             ),
           ),
-          if (actions != null) 
+          if (actions != null)
             Row(children: actions!)
-          else 
+          else
             const SizedBox(width: 48),
         ],
       ),
@@ -94,6 +97,7 @@ class DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
@@ -111,7 +115,7 @@ class DashboardHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Top bar: notification + profile only ──────────────────
+          // ── Top bar: notification + profile ──────────────────────
           Row(
             children: [
               const Spacer(),
@@ -199,9 +203,7 @@ class DashboardHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isNewUser
-                          ? 'Welcome to\nCOGNIFY,'
-                          : '${_getGreeting()},',
+                      isNewUser ? 'Welcome to\nCOGNIFY,' : '${_getGreeting()},',
                       style: const TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
@@ -236,18 +238,116 @@ class DashboardHeader extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           AppCard(
+            backgroundColor: isDark ? AppColors.darkSurface3 : Colors.white,
             child: isNewUser
                 ? const _NewUserMessage()
-                : _ReturningUserMessage(
-                    showButtons: showProactiveCard,
-                    onYes: onYes,
-                    onNo: onNo,
+                : Consumer<TaskProvider>(
+                    builder: (context, taskProvider, _) {
+                      // Build proactive message from REAL task data
+                      final proactiveMessage = _buildProactiveMessage(
+                        taskProvider,
+                      );
+                      return _ReturningUserMessage(
+                        message: proactiveMessage.message,
+                        ctaMessage: proactiveMessage.ctaMessage,
+                        showButtons:
+                            showProactiveCard && proactiveMessage.hasAction,
+                        onYes: onYes,
+                        onNo: onNo,
+                      );
+                    },
                   ),
           ),
         ],
       ),
     );
   }
+
+  /// Builds a proactive message based on real task data.
+  /// Priority: overdue > due today > high priority > general
+  _ProactiveMessage _buildProactiveMessage(TaskProvider taskProvider) {
+    final now = DateTime.now();
+    final tasks = taskProvider.tasks;
+
+    if (tasks.isEmpty) {
+      return _ProactiveMessage(
+        message: "You're all caught up! Add a task to get started.",
+        ctaMessage: null,
+        hasAction: false,
+      );
+    }
+
+    // Check overdue tasks first
+    final overdue = tasks.where((t) {
+      if (t.isCompleted) return false;
+      return t.dueDate.isBefore(DateTime(now.year, now.month, now.day));
+    }).toList();
+
+    if (overdue.isNotEmpty) {
+      final task = overdue.first;
+      return _ProactiveMessage(
+        message:
+            '"${task.title}" is overdue. Want CoCo to help you tackle it now?',
+        ctaMessage: task.title,
+        hasAction: true,
+      );
+    }
+
+    // Check tasks due today
+    final dueToday = tasks.where((t) {
+      if (t.isCompleted) return false;
+      return t.dueDate.year == now.year &&
+          t.dueDate.month == now.month &&
+          t.dueDate.day == now.day;
+    }).toList();
+
+    if (dueToday.isNotEmpty) {
+      final task = dueToday.first;
+      return _ProactiveMessage(
+        message:
+            '"${task.title}" is due today. Would you like CoCo to help you prepare?',
+        ctaMessage: task.title,
+        hasAction: true,
+      );
+    }
+
+    // Check high priority tasks
+    final highPriority = tasks
+        .where((t) => !t.isCompleted && t.priority.name == 'high')
+        .toList();
+
+    if (highPriority.isNotEmpty) {
+      final task = highPriority.first;
+      return _ProactiveMessage(
+        message:
+            '"${task.title}" is high priority. Want help breaking it down?',
+        ctaMessage: task.title,
+        hasAction: true,
+      );
+    }
+
+    // General — show pending count
+    final pending = tasks.where((t) => !t.isCompleted).length;
+    return _ProactiveMessage(
+      message:
+          'You have $pending pending task${pending == 1 ? '' : 's'}. Want CoCo to help prioritize?',
+      ctaMessage: null,
+      hasAction: true,
+    );
+  }
+}
+
+/// Simple data class for proactive card content
+class _ProactiveMessage {
+  final String message;
+  final String? ctaMessage; // task title to pre-fill in assistant
+  final bool hasAction;
+
+  const _ProactiveMessage({
+    required this.message,
+    required this.ctaMessage,
+    required this.hasAction,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -281,11 +381,15 @@ class _NewUserMessage extends StatelessWidget {
 }
 
 class _ReturningUserMessage extends StatelessWidget {
+  final String message;
+  final String? ctaMessage;
   final bool showButtons;
   final VoidCallback onYes;
   final VoidCallback onNo;
 
   const _ReturningUserMessage({
+    required this.message,
+    required this.ctaMessage,
     required this.showButtons,
     required this.onYes,
     required this.onNo,
@@ -305,8 +409,9 @@ class _ReturningUserMessage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
+        // FIXED: shows real task-based message, not hardcoded text
         Text(
-          'You have a quiz due today. Would you like me to help prepare it?',
+          message,
           style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
         ),
         if (showButtons) ...[
@@ -315,7 +420,22 @@ class _ReturningUserMessage extends StatelessWidget {
             children: [
               Expanded(
                 child: ElevatedButton(
-                  onPressed: onYes,
+                  onPressed: () {
+                    onYes(); // hide card
+                    // FIXED: navigate to assistant and pre-fill message
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AssistantScreen(
+                          // Pass the task title as initial message
+                          // so CoCo knows exactly what to help with
+                          initialMessage: ctaMessage != null
+                              ? 'Help me with: $ctaMessage'
+                              : null,
+                        ),
+                      ),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: theme.colorScheme.primary,
                     foregroundColor: Colors.white,

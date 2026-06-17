@@ -100,6 +100,8 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
     try {
       await taskProvider.toggleComplete(id);
+      // Force refresh to get confirmed state from backend
+      await taskProvider.refreshTasks();
     } catch (_) {
       if (mounted) UIFeedback.showError(context, 'Could not update task.');
     } finally {
@@ -137,7 +139,12 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
           },
         ),
       ),
-    );
+    ).then((_) async {
+      // Refresh after returning so real backend ID is in the list
+      if (mounted) {
+        await context.read<TaskProvider>().refreshTasks();
+      }
+    });
   }
 
   void _goToEditTask(String id) {
@@ -151,18 +158,17 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
           onTaskUpdated: (updated) async {
             try {
               await context.read<TaskProvider>().updateTask(updated);
-              if (mounted) {
-                UIFeedback.showSuccess(context, 'Task updated successfully!');
-              }
+              if (mounted) UIFeedback.showSuccess(context, 'Task updated!');
             } catch (_) {
-              if (mounted) {
+              if (mounted)
                 UIFeedback.showError(context, 'Failed to update task.');
-              }
             }
           },
         ),
       ),
-    );
+    ).then((_) async {
+      if (mounted) await context.read<TaskProvider>().refreshTasks();
+    });
   }
 
   void _goToTaskDetail(String id) {

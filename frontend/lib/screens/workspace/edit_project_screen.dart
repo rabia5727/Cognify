@@ -9,6 +9,8 @@ import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import 'task_picker_screen.dart';
+import '../../utils/validators.dart';
+import '../../utils/ui_feedback.dart';
 
 class EditProjectScreen extends StatefulWidget {
   final Project project;
@@ -35,8 +37,8 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
   late ProjectCategory _category;
   late DateTime _dueDate;
   late List<String> _selectedTaskIds;
+  String? _dueDateError;
 
-  // ✅ KEY FIX: local mutable copy of tasks — grows as new tasks are created
   late List<Task> _localAllTasks;
 
   bool _isSaving = false;
@@ -50,7 +52,6 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     _category = widget.project.category;
     _dueDate = widget.project.dueDate;
     _selectedTaskIds = List.from(widget.project.taskIds);
-    // ✅ Initialize local task list from prop
     _localAllTasks = List.from(widget.allTasks);
   }
 
@@ -68,14 +69,21 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
-    if (picked != null) setState(() => _dueDate = picked);
+    if (picked != null) {
+      setState(() {
+        _dueDate = picked;
+        _dueDateError = null;
+      });
+    }
   }
 
   String get _dateDisplay =>
       '${_dueDate.day}/${_dueDate.month}/${_dueDate.year}';
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _dueDateError = Validators.dueDate(_dueDate));
+    if (_dueDateError != null) return;
 
     setState(() => _isSaving = true);
 
@@ -91,12 +99,13 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     try {
       await widget.onProjectUpdated(updated);
-      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        UIFeedback.showSuccess(context, 'Project updated successfully!');
+        Navigator.pop(context);
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update project: $e')),
-        );
+        UIFeedback.showError(context, 'Failed to update project: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -115,8 +124,6 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
           initialSelected: _selectedTaskIds,
           projectId: widget.project.id,
           onTaskCreated: (newTask) {
-            // ✅ When a task is created inside picker, add it to local list
-            // so that when picker returns, we can find the task object by ID
             setState(() {
               if (!_localAllTasks.any((t) => t.id == newTask.id)) {
                 _localAllTasks.add(newTask);
@@ -138,12 +145,11 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
     if (!mounted) return;
 
     if (result != null) {
-      // ✅ Merge any IDs from result that we might not have locally yet
       final freshTasks = context.read<TaskProvider>().tasks;
       for (final id in result) {
         if (!_localAllTasks.any((t) => t.id == id)) {
-          final match = freshTasks.where((t) => t.id == id).firstOrNull
-              ?? _localAllTasks.where((t) => t.id == id).firstOrNull;
+          final match = freshTasks.where((t) => t.id == id).firstOrNull ??
+              _localAllTasks.where((t) => t.id == id).firstOrNull;
           if (match != null) _localAllTasks.add(match);
         }
       }
@@ -155,12 +161,8 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // ✅ Still watch provider for completion toggles — but use _localAllTasks
-    // to resolve task objects, falling back to provider for completion state
     final providerTasks = context.watch<TaskProvider>().tasks;
 
-    // ✅ Build linkedTasks from _localAllTasks first, then merge completion
-    // state from provider so toggles reflect live
     final linkedTasks = _selectedTaskIds
         .map((id) {
           // Try provider first (has latest completion state)
@@ -195,9 +197,7 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                       TextFormField(
                         controller: _titleCtrl,
                         decoration: _inputDecoration(context, 'Project title'),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Title is required'
-                            : null,
+                        validator: Validators.projectTitle,
                       ),
                       const SizedBox(height: 20),
                       const _Label('Description'),
@@ -210,11 +210,27 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                       const SizedBox(height: 20),
                       const _Label('Due Date'),
                       const SizedBox(height: 8),
-                      _PickerRow(
-                        icon: Icons.calendar_today_outlined,
-                        label: _dateDisplay,
-                        hasValue: true,
-                        onTap: _pickDate,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _PickerRow(
+                            icon: Icons.calendar_today_outlined,
+                            label: _dateDisplay,
+                            hasValue: true,
+                            onTap: _pickDate,
+                          ),
+                          if (_dueDateError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _dueDateError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 20),
                       const _Label('Priority'),

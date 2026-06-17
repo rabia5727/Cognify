@@ -11,6 +11,7 @@ import 'q1_goals_screen.dart';
 import 'q2_schedule_screen.dart';
 import 'q3_taskload_screen.dart';
 import 'q4_challenges_screen.dart';
+import '../../../utils/ui_feedback.dart';
 
 class UserPreferences {
   List<String> goals = [];
@@ -77,15 +78,9 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
     if (!mounted) return;
 
     final validationMessage = _getValidationMessage();
+
     if (validationMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(validationMessage),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: AppColors.primaryBlue,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      UIFeedback.showInfo(context, validationMessage);
       return;
     }
 
@@ -124,7 +119,7 @@ class _PreferenceQuizScreenState extends State<PreferenceQuizScreen> {
   }
 
   Future<void> _finish() async {
-    //save quiz preferences to backend 
+    //save quiz preferences to backend
     await UserService.saveQuizPreferences(
       goals: _prefs.goals,
       scheduleType: _prefs.scheduleType,

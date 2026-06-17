@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/screens/auth/verfication_screen.dart';
 import '../../theme/app_theme.dart';
 import 'auth_screen.dart';
+import '../../utils/ui_feedback.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -23,23 +24,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   Future<void> _handleResetPassword() async {
     if (_emailController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your email')),
-      );
+      UIFeedback.showWarning(context, 'Please enter your email');
       return;
     }
 
     setState(() => _isLoading = true);
-    
+
     // TODO: Call API to send verification code
     await Future.delayed(const Duration(seconds: 1));
-      
+
     setState(() => _isLoading = false);
     if (mounted) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => VerificationScreen(email: _emailController.text.trim()),
+          builder: (_) =>
+              VerificationScreen(email: _emailController.text.trim()),
         ),
       );
     }
@@ -69,7 +69,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // Forgot Password Heading
               const Text(
                 'Forgot Password?',
@@ -81,7 +81,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              
+
               // Subtitle
               const Text(
                 'No worries, enter email linked to your account',
@@ -92,7 +92,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
               const SizedBox(height: 48),
-              
+
               // Email Input Field
               TextField(
                 controller: _emailController,
@@ -117,7 +117,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
               const SizedBox(height: 32),
-              
+
               // Reset Password Button
               if (!_isEmailSent)
                 SizedBox(
@@ -150,7 +150,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                   ),
                 ),
-              
+
               // Success Message
               if (_isEmailSent)
                 Column(
@@ -220,7 +220,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                   ],
                 ),
-              
+
               // Back to Login Link (only when no email sent)
               if (!_isEmailSent)
                 Padding(

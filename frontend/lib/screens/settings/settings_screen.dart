@@ -114,6 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _logout() async {
+    context.read<NotificationProvider>().clearLocalNotifications();
     await context.read<AuthProvider>().logout();
     if (mounted) {
       Navigator.of(context).popUntil((route) => route.isFirst);

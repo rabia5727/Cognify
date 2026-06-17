@@ -9,6 +9,8 @@ import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import 'task_picker_screen.dart';
+import '../../utils/validators.dart';
+import '../../utils/ui_feedback.dart';
 
 class AddProjectScreen extends StatefulWidget {
   final List<Task> allTasks;
@@ -33,8 +35,8 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
   ProjectCategory _category = ProjectCategory.academic;
   DateTime? _dueDate;
   List<String> _selectedTaskIds = [];
+  String? _dueDateError;
 
-  // ✅ KEY FIX: local mutable task list — grows as new tasks are created
   late List<Task> _localAllTasks;
 
   bool _isSaving = false;
@@ -60,7 +62,12 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
-    if (picked != null) setState(() => _dueDate = picked);
+    if (picked != null) {
+      setState(() {
+        _dueDate = picked;
+        _dueDateError = null; // clear error on valid pick
+      });
+    }
   }
 
   String get _dateDisplay {
@@ -75,11 +82,9 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => TaskPickerScreen(
-          // ✅ Use local list so newly created tasks are included
           allTasks: _localAllTasks,
           initialSelected: _selectedTaskIds,
           onTaskCreated: (newTask) {
-            // ✅ Append new task to local list immediately
             setState(() {
               if (!_localAllTasks.any((t) => t.id == newTask.id)) {
                 _localAllTasks.add(newTask);
@@ -95,13 +100,11 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
     if (!mounted) return;
 
-    // ✅ Refresh provider after picker closes
     await context.read<TaskProvider>().refreshTasks();
 
     if (!mounted) return;
 
     if (result != null) {
-      // ✅ Ensure all returned IDs have task objects in local list
       final freshTasks = context.read<TaskProvider>().tasks;
       for (final id in result) {
         if (!_localAllTasks.any((t) => t.id == id)) {
@@ -115,12 +118,9 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_dueDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a due date')),
-      );
-      return;
-    }
+
+    setState(() => _dueDateError = Validators.dueDate(_dueDate));
+    if (_dueDateError != null) return;
 
     setState(() => _isSaving = true);
 
@@ -140,9 +140,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create project: $e')),
-        );
+        UIFeedback.showError(context, 'Failed to create project: $e');
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -183,9 +181,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
                         autofocus: true,
                         decoration:
                             _inputDecoration(context, 'e.g. HCI Assignment'),
-                        validator: (v) => (v == null || v.trim().isEmpty)
-                            ? 'Project title is required'
-                            : null,
+                        validator: Validators.projectTitle,
                       ),
 
                       const SizedBox(height: 20),
@@ -203,11 +199,27 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
 
                       const _Label('Due Date'),
                       const SizedBox(height: 8),
-                      _PickerRow(
-                        icon: Icons.calendar_today_outlined,
-                        label: _dateDisplay,
-                        hasValue: _dueDate != null,
-                        onTap: _pickDate,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _PickerRow(
+                            icon: Icons.calendar_today_outlined,
+                            label: _dateDisplay,
+                            hasValue: _dueDate != null,
+                            onTap: _pickDate,
+                          ),
+                          if (_dueDateError != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _dueDateError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
 
                       const SizedBox(height: 20),

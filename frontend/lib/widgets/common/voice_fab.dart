@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../constants/app_constant.dart';
-import '../../screens/assistant/voice_assistant_screen.dart';
+import '../../screens/assistant/assistant_screen.dart';
 
 class VoiceFab extends StatelessWidget {
   final VoidCallback? onPressed;
@@ -25,7 +25,7 @@ class VoiceFab extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => const VoiceAssistantScreen(),
+                  builder: (_) => const AssistantScreen(),
                 ),
               );
             },

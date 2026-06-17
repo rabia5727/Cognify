@@ -192,26 +192,103 @@ async def get_analytics_summary(user_id: str) -> AnalyticsSummary:
     total_completed = len(all_completed)
     total_tasks = len(tasks)
 
-    # ── Achievements ──────────────────────────────────────────────
+    # ── Achievements (FIXED INDENTATION) ──────────────────────────────
+    # ── Achievements & Insights ───────────────────────────────────────
     achievements: list[AchievementItem] = []
-    if total_completed >= 1:
-        achievements.append(AchievementItem(
-            icon="🎯",
-            title="First task completed!",
-            subtitle="You're on your way.",
-        ))
-    if weekly_rate >= 0.8:
+
+    # 1. Completion streak — how many consecutive days with completed tasks
+    streak = 0
+    check_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    for _ in range(30):  # check up to 30 days back
+        date_str = check_date.strftime("%Y-%m-%d")
+        record = record_map.get(date_str) or next(
+            (r for r in analytics_records if r.get("date") == date_str), None
+        )
+        if record and record.get("tasks_completed", 0) > 0:
+            streak += 1
+            check_date -= timedelta(days=1)
+        else:
+            break
+
+    if streak >= 2:
         achievements.append(AchievementItem(
             icon="🔥",
-            title="Weekly streak",
-            subtitle="80%+ completion this week.",
+            title=f"{streak}-day completion streak!",
+            subtitle="Keep the momentum going.",
         ))
+
+    # 2. Weekly goal performance
+    if len(week_tasks) >= 3:
+        weekly_pct = int(weekly_rate * 100)
+        if weekly_pct >= 70:
+            achievements.append(AchievementItem(
+                icon="🎯",
+                title=f"Met {weekly_pct}% of weekly goals",
+                subtitle="Excellent execution this week!",
+            ))
+
+    # 3. Overdue reduction insight
+    total_pending = len([t for t in tasks if t.get("status") != "completed"])
+    if total_completed > 0 and total_pending > 0:
+        completion_ratio = int((total_completed / total_tasks) * 100)
+        if completion_ratio >= 30:
+            achievements.append(AchievementItem(
+                icon="⭐",
+                title=f"Task backlog reduced by {completion_ratio}%",
+                subtitle="You're closing gaps before deadlines stack up.",
+            ))
+
+    # 4. Today's momentum
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    completed_today_count = len([
+        t for t in tasks
+        if t.get("status") == "completed"
+        and t.get("completed_at")
+        and _make_aware(t["completed_at"]) >= day_start
+    ])
+    if completed_today_count >= 2:
+        achievements.append(AchievementItem(
+            icon="💪",
+            title=f"{completed_today_count} tasks crushed today!",
+            subtitle="Strong daily performance. Keep it up!",
+        ))
+
+    # 5. Power user milestone
     if total_completed >= 10:
         achievements.append(AchievementItem(
-            icon="⭐",
-            title="Power user",
-            subtitle="10 tasks completed.",
+            icon="🏆",
+            title=f"{total_completed} tasks completed!",
+            subtitle="You're a Cognify power user.",
         ))
+
+    # 6. Clean slate — no overdue
+    overdue_count = len([
+        t for t in tasks
+        if t.get("status") != "completed"
+        and t.get("due_date")
+        and _make_aware(t["due_date"]) < now
+    ])
+    if total_tasks > 0 and overdue_count == 0:
+        achievements.append(AchievementItem(
+            icon="✅",
+            title="No overdue tasks!",
+            subtitle="Everything is on track. Well done!",
+        ))
+
+    # Fallback — always show something useful
+    if not achievements:
+        if total_completed == 0:
+            achievements.append(AchievementItem(
+                icon="🚀",
+                title="Ready to launch!",
+                subtitle="Complete your first task to start earning insights.",
+            ))
+        else:
+            achievements.append(AchievementItem(
+                icon="📈",
+                title=f"{total_completed} task{'s' if total_completed > 1 else ''} completed so far",
+                subtitle="Keep completing tasks to unlock more insights.",
+            ))
 
     return AnalyticsSummary(
         weekly_completion_rate=weekly_rate,

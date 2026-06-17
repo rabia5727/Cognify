@@ -31,7 +31,7 @@ class AppCard extends StatelessWidget {
 
     // Automatically adapts to light/dark mode
     final cardColor =
-        backgroundColor ?? (isDark ? AppColors.darkSurface : Colors.white);
+        backgroundColor ?? (isDark ? AppColors.darkSurface2 : Colors.white);
 
     final borderColor = showBorder
         ? (isDark ? AppColors.darkBorder : AppColors.lightGray)
@@ -42,7 +42,7 @@ class AppCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: borderColor, width: isDark ? 0.8 : 1.0),
       ),
       child: child,
     );
