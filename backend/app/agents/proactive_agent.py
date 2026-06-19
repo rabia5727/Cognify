@@ -1,4 +1,13 @@
 # app/agents/proactive_agent.py
+#
+# ✅ FIX: under the new session-based chat schema, the old _save_briefing
+# pushed into {"user_id": user_id} with no session_id — that pattern is
+# now incompatible: it would create an orphaned conversation document
+# with no session_id field, which never shows up in the sidebar/session
+# list. Fixed by giving briefings their own dedicated, deterministic
+# session ("briefing-{user_id}") so every morning's briefing lands in
+# ONE consistent "Daily Briefings" chat instead of vanishing.
+
 import uuid
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -118,6 +127,39 @@ Instructions:
         lines.append("You've got this! 💪")
         return "\n".join(lines)
 
+
+# ─────────────────────────────────────────────────────────────────
+# ✅ NEW: dedicated, deterministic session for all of a user's briefings
+# ─────────────────────────────────────────────────────────────────
+async def _get_or_create_briefing_session(user_id: str) -> str:
+    """
+    Briefings always go into ONE dedicated session per user —
+    "Daily Briefings" — rather than scattering across random new
+    chats or landing in an orphaned schema-less document. The id is
+    deterministic (derived from user_id, not uuid4) so re-running this
+    never creates duplicates — it always finds the same session.
+    """
+    db = get_database()
+    session_id = f"briefing-{user_id}"
+
+    existing = await db["conversations"].find_one({
+        "user_id": user_id,
+        "session_id": session_id,
+    })
+    if existing:
+        return session_id
+
+    await db["conversations"].insert_one({
+        "session_id": session_id,
+        "user_id": user_id,
+        "title": "Daily Briefings",
+        "messages": [],
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
+    })
+    return session_id
+
+
 async def _save_briefing(user_id: str, briefing_text: str) -> None:
     db = get_database()
     now = datetime.now(timezone.utc)
@@ -135,6 +177,12 @@ async def _save_briefing(user_id: str, briefing_text: str) -> None:
         "created_at": now,
     }
     await db["notifications"].insert_one(notification)
+
+    # ✅ FIX: scoped to the dedicated briefing session_id, not a bare
+    # {"user_id": user_id} filter — that pattern is incompatible with
+    # the new per-session document schema.
+    session_id = await _get_or_create_briefing_session(user_id)
+
     message = {
         "role": "assistant",
         "content": briefing_text,
@@ -143,10 +191,13 @@ async def _save_briefing(user_id: str, briefing_text: str) -> None:
         "timestamp": now,
     }
     await db["conversations"].update_one(
-        {"user_id": user_id},
-        {"$push": {"messages": message}},
-        upsert=True,
+        {"user_id": user_id, "session_id": session_id},
+        {
+            "$push": {"messages": message},
+            "$set": {"updated_at": now},
+        },
     )
+
 
 async def generate_morning_briefing(user_id: str) -> bool:
     try:
@@ -154,7 +205,6 @@ async def generate_morning_briefing(user_id: str) -> bool:
         now = datetime.now(timezone.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        # Dedup — one briefing per user per day
         existing = await db["notifications"].count_documents({
             "user_id": user_id,
             "type": "proactive",

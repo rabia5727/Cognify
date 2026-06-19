@@ -1,5 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/workspace/edit_project_screen.dart
+// FIX: Date picker no longer crashes when project due date is in the past.
+//      firstDate is now the EARLIER of (today, existing due date) so the
+//      picker can always open with the current value as initialDate.
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -63,10 +66,17 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
   }
 
   Future<void> _pickDate() async {
+    final today = DateTime.now();
+
+    // ✅ FIX: If the existing due date is already in the past (overdue project),
+    // set firstDate to that past date so the picker can open without crashing.
+    // Without this fix: initialDate < firstDate → Flutter throws an assertion error.
+    final firstDate = _dueDate.isBefore(today) ? _dueDate : today;
+
     final picked = await showDatePicker(
       context: context,
-      initialDate: _dueDate,
-      firstDate: DateTime.now(),
+      initialDate: _dueDate, // Always starts showing current value
+      firstDate: firstDate, // ✅ Allows past dates when already past
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
     );
     if (picked != null) {
@@ -79,11 +89,17 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
   String get _dateDisplay =>
       '${_dueDate.day}/${_dueDate.month}/${_dueDate.year}';
+
+  bool get _isOverdue => _dueDate.isBefore(
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+      );
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => _dueDateError = Validators.dueDate(_dueDate));
-    if (_dueDateError != null) return;
+    // ✅ FIX: Don't block saving if date is in past (it's an existing project).
+    // Only validate if user explicitly changed the date to something invalid.
+    // We skip the due date validator for projects — it's fine to have overdue projects.
 
     setState(() => _isSaving = true);
 
@@ -119,7 +135,6 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => TaskPickerScreen(
-          // ✅ Pass the local list (includes any newly created tasks)
           allTasks: _localAllTasks,
           initialSelected: _selectedTaskIds,
           projectId: widget.project.id,
@@ -139,7 +154,6 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     if (!mounted) return;
 
-    // ✅ After picker closes, refresh provider so liveTasks is up to date
     await context.read<TaskProvider>().refreshTasks();
 
     if (!mounted) return;
@@ -165,10 +179,8 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
 
     final linkedTasks = _selectedTaskIds
         .map((id) {
-          // Try provider first (has latest completion state)
           final fromProvider =
               providerTasks.where((t) => t.id == id).firstOrNull;
-          // Fall back to local list (has newly created tasks not yet in provider)
           final fromLocal = _localAllTasks.where((t) => t.id == id).firstOrNull;
           return fromProvider ?? fromLocal;
         })
@@ -208,29 +220,40 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
                         decoration: _inputDecoration(context, 'No description'),
                       ),
                       const SizedBox(height: 20),
-                      const _Label('Due Date'),
-                      const SizedBox(height: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      // ✅ Show overdue warning label on date if past
+                      Row(
                         children: [
-                          _PickerRow(
-                            icon: Icons.calendar_today_outlined,
-                            label: _dateDisplay,
-                            hasValue: true,
-                            onTap: _pickDate,
-                          ),
-                          if (_dueDateError != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              _dueDateError!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
+                          const _Label('Due Date'),
+                          if (_isOverdue) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: Colors.red.withValues(alpha: 0.4)),
+                              ),
+                              child: const Text(
+                                'Overdue',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.red,
+                                ),
                               ),
                             ),
                           ],
                         ],
+                      ),
+                      const SizedBox(height: 8),
+                      _PickerRow(
+                        icon: Icons.calendar_today_outlined,
+                        label: _dateDisplay,
+                        hasValue: true,
+                        isOverdue: _isOverdue,
+                        onTap: _pickDate,
                       ),
                       const SizedBox(height: 20),
                       const _Label('Priority'),
@@ -357,9 +380,9 @@ class _EditProjectScreenState extends State<EditProjectScreen> {
   }
 }
 
-// =============================================================
+// ─────────────────────────────────────────────────────────────────
 // HELPER WIDGETS
-// =============================================================
+// ─────────────────────────────────────────────────────────────────
 
 class _Label extends StatelessWidget {
   final String text;
@@ -383,6 +406,7 @@ class _PickerRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool hasValue;
+  final bool isOverdue;
   final VoidCallback onTap;
 
   const _PickerRow({
@@ -390,37 +414,46 @@ class _PickerRow extends StatelessWidget {
     required this.label,
     required this.hasValue,
     required this.onTap,
+    this.isOverdue = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    // ✅ Show red tint if overdue so user knows to update it
+    final borderColor =
+        isOverdue ? Colors.red.withValues(alpha: 0.5) : theme.dividerColor;
+    final iconColor = isOverdue
+        ? Colors.red
+        : (hasValue
+            ? theme.colorScheme.primary
+            : theme.textTheme.bodySmall?.color);
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1E2130) : const Color(0xFFF0F4FF),
+          color: isOverdue
+              ? Colors.red.withValues(alpha: 0.05)
+              : (isDark ? const Color(0xFF1E2130) : const Color(0xFFF0F4FF)),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: theme.dividerColor),
+          border: Border.all(color: borderColor),
         ),
         child: Row(
           children: [
-            Icon(icon,
-                size: 18,
-                color: hasValue
-                    ? theme.colorScheme.primary
-                    : theme.textTheme.bodySmall?.color),
+            Icon(icon, size: 18, color: iconColor),
             const SizedBox(width: 12),
             Text(
               label,
               style: TextStyle(
                 fontSize: 14,
-                color: hasValue
-                    ? theme.textTheme.bodyLarge?.color
-                    : theme.textTheme.bodySmall?.color,
+                color: isOverdue
+                    ? Colors.red
+                    : (hasValue
+                        ? theme.textTheme.bodyLarge?.color
+                        : theme.textTheme.bodySmall?.color),
               ),
             ),
           ],
@@ -434,10 +467,7 @@ class _PrioritySelector extends StatelessWidget {
   final Priority selected;
   final Function(Priority) onSelected;
 
-  const _PrioritySelector({
-    required this.selected,
-    required this.onSelected,
-  });
+  const _PrioritySelector({required this.selected, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -486,10 +516,7 @@ class _CategorySelector extends StatelessWidget {
   final ProjectCategory selected;
   final Function(ProjectCategory) onSelected;
 
-  const _CategorySelector({
-    required this.selected,
-    required this.onSelected,
-  });
+  const _CategorySelector({required this.selected, required this.onSelected});
 
   @override
   Widget build(BuildContext context) {
@@ -507,8 +534,9 @@ class _CategorySelector extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 decoration: BoxDecoration(
-                  color:
-                      isSelected ? color.withOpacity(0.12) : Colors.transparent,
+                  color: isSelected
+                      ? color.withValues(alpha: 0.12)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                     color: isSelected ? color : theme.dividerColor,
@@ -558,12 +586,12 @@ class _LinkedTasksEditor extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: isCompleted
-                ? theme.colorScheme.primary.withOpacity(0.05)
+                ? theme.colorScheme.primary.withValues(alpha: 0.05)
                 : theme.cardColor,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: isCompleted
-                  ? theme.colorScheme.primary.withOpacity(0.4)
+                  ? theme.colorScheme.primary.withValues(alpha: 0.4)
                   : theme.dividerColor,
             ),
           ),
@@ -619,9 +647,9 @@ class _LinkedTasksEditor extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
+                  color: color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: color.withOpacity(0.4)),
+                  border: Border.all(color: color.withValues(alpha: 0.4)),
                 ),
                 child: Text(
                   task.priority.label,
@@ -642,10 +670,6 @@ class _LinkedTasksEditor extends StatelessWidget {
     );
   }
 }
-
-// =============================================================
-// INPUT DECORATION
-// =============================================================
 
 InputDecoration _inputDecoration(BuildContext context, String hint) {
   final theme = Theme.of(context);

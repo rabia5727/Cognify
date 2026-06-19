@@ -1,17 +1,26 @@
 // lib/screens/assistant/assistant_screen.dart
+//
+// ✅ SESSION REWRITE: added a sidebar (Drawer) listing all chat
+// sessions, a "+ New Chat" action, and session-aware history loading.
+// This is the UI fix for "history of chat should show in separate
+// chats, not one single chat".
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import '../../providers/assistant_provider.dart';
 import '../../models/assistant_model.dart';
+import '../../services/assistant_service.dart';
 import '../../constants/app_constant.dart';
-import '../../widgets/common/app_header.dart';
 import 'voice_assistant_screen.dart';
 
 class AssistantScreen extends StatefulWidget {
   final String? initialMessage;
-  const AssistantScreen({super.key, this.initialMessage});
+  // ✅ NEW: optionally open directly into a specific existing chat
+  // (e.g. tapping a session from a notification or deep link).
+  final String? sessionId;
+
+  const AssistantScreen({super.key, this.initialMessage, this.sessionId});
 
   @override
   State<AssistantScreen> createState() => _AssistantScreenState();
@@ -28,9 +37,20 @@ class _AssistantScreenState extends State<AssistantScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final provider = context.read<AssistantProvider>();
-      await provider.loadHistory();
 
-      // Auto-send if coming from proactive card on dashboard
+      // ✅ Load the specific session if one was passed, otherwise start
+      // fresh (a brand-new chat — matches "Yes" button flow from
+      // dashboard, which should open a NEW conversation, not append to
+      // whatever was open before).
+      if (widget.sessionId != null) {
+        await provider.loadHistory(sessionId: widget.sessionId);
+      } else {
+        await provider.startNewChat();
+      }
+
+      // Load sidebar list in background regardless
+      provider.loadSessions();
+
       if (widget.initialMessage != null && mounted) {
         await provider.sendMessage(widget.initialMessage!, source: 'text');
         _scrollToBottom();
@@ -90,6 +110,43 @@ class _AssistantScreenState extends State<AssistantScreen> {
     }
   }
 
+  Future<void> _switchSession(String sessionId) async {
+    Navigator.pop(context);
+    final provider = context.read<AssistantProvider>();
+    await provider.switchToSession(sessionId);
+    _scrollToBottom();
+  }
+
+  Future<void> _startNewChat() async {
+    Navigator.pop(context);
+    final provider = context.read<AssistantProvider>();
+    await provider.startNewChat();
+  }
+
+  Future<void> _confirmDeleteSession(String sessionId, String title) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Chat'),
+        content: Text('Delete "$title"? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await context.read<AssistantProvider>().deleteSession(sessionId);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -97,14 +154,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      drawer: _buildSessionDrawer(theme, isDark),
       body: SafeArea(
         child: Column(
           children: [
-            AppHeader(
-              title: 'AI Assistant',
-              onBack: () => Navigator.pop(context),
-            ),
-
+            _buildHeaderWithMenu(theme),
             Expanded(
               child: Consumer<AssistantProvider>(
                 builder: (context, provider, _) {
@@ -131,9 +185,129 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 },
               ),
             ),
-
-            // ── FIXED Input Bar ─────────────────────────────────────────
             _buildInputBar(theme, isDark),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderWithMenu(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 12, 12, 4),
+      child: Row(
+        children: [
+          Builder(
+            builder: (ctx) => IconButton(
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+              icon: Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.menu_rounded,
+                    color: Colors.white, size: 18),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Consumer<AssistantProvider>(
+              builder: (context, provider, _) => Text(
+                provider.currentTitle,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: _startNewChat,
+            icon: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.add_rounded,
+                  color: theme.colorScheme.primary, size: 20),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSessionDrawer(ThemeData theme, bool isDark) {
+    return Drawer(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      child: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+              child: Row(
+                children: [
+                  Text(
+                    'Your Chats',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _startNewChat,
+                    icon: Icon(Icons.add_circle_outline_rounded,
+                        color: theme.colorScheme.primary),
+                    tooltip: 'New Chat',
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: Consumer<AssistantProvider>(
+                builder: (context, provider, _) {
+                  if (provider.isLoadingSessions && provider.sessions.isEmpty) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (provider.sessions.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'No chats yet. Start a new conversation with CoCo!',
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.textTheme.bodySmall?.color,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: provider.sessions.length,
+                    itemBuilder: (context, index) {
+                      final session = provider.sessions[index];
+                      final isActive =
+                          session.sessionId == provider.currentSessionId;
+                      return _SessionTile(
+                        session: session,
+                        isActive: isActive,
+                        onTap: () => _switchSession(session.sessionId),
+                        onDelete: () => _confirmDeleteSession(
+                            session.sessionId, session.title),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
           ],
         ),
       ),
@@ -149,7 +323,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: AppConstants.primaryBlue.withOpacity(0.1),
+              color: AppConstants.primaryBlue.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.auto_awesome_rounded,
@@ -214,7 +388,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                     ? []
                     : [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
+                          color: Colors.black.withValues(alpha: 0.06),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         )
@@ -295,7 +469,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 )
@@ -334,7 +508,6 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
-  // ── FIXED Input Bar - Placeholder inside, proper styling ────────────────
   Widget _buildInputBar(ThemeData theme, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -342,15 +515,15 @@ class _AssistantScreenState extends State<AssistantScreen> {
         color: theme.scaffoldBackgroundColor,
         border: Border(
           top: BorderSide(
-            color:
-                isDark ? Colors.white.withOpacity(0.08) : Colors.grey.shade200,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.grey.shade200,
             width: 0.5,
           ),
         ),
       ),
       child: Row(
         children: [
-          // Text field with proper border and placeholder inside
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -358,7 +531,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(
                   color: isDark
-                      ? Colors.white.withOpacity(0.1)
+                      ? Colors.white.withValues(alpha: 0.1)
                       : Colors.grey.shade300,
                   width: 0.5,
                 ),
@@ -383,10 +556,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ),
             ),
           ),
-
           const SizedBox(width: 8),
-
-          // Mic button
           GestureDetector(
             onTap: _openVoiceScreen,
             child: Container(
@@ -397,7 +567,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isDark
-                      ? Colors.white.withOpacity(0.1)
+                      ? Colors.white.withValues(alpha: 0.1)
                       : Colors.grey.shade300,
                   width: 0.5,
                 ),
@@ -409,10 +579,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ),
             ),
           ),
-
           const SizedBox(width: 8),
-
-          // Send button
           GestureDetector(
             onTap: _sendMessage,
             child: Container(
@@ -423,7 +590,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: AppConstants.primaryBlue.withOpacity(0.3),
+                    color: AppConstants.primaryBlue.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -446,5 +613,70 @@ class _AssistantScreenState extends State<AssistantScreen> {
     final m = dt.minute.toString().padLeft(2, '0');
     final period = dt.hour >= 12 ? 'PM' : 'AM';
     return '$h:$m $period';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// ✅ NEW: Session list tile for the sidebar
+// ─────────────────────────────────────────────────────────────────────────
+
+class _SessionTile extends StatelessWidget {
+  final ChatSession session;
+  final bool isActive;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  const _SessionTile({
+    required this.session,
+    required this.isActive,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Material(
+      color: isActive
+          ? theme.colorScheme.primary.withValues(alpha: 0.08)
+          : Colors.transparent,
+      child: ListTile(
+        onTap: onTap,
+        leading: Icon(
+          Icons.chat_bubble_outline_rounded,
+          size: 20,
+          color: isActive
+              ? theme.colorScheme.primary
+              : theme.textTheme.bodySmall?.color,
+        ),
+        title: Text(
+          session.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+            color: isActive ? theme.colorScheme.primary : null,
+          ),
+        ),
+        subtitle: session.lastMessagePreview.isNotEmpty
+            ? Text(
+                session.lastMessagePreview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.textTheme.bodySmall?.color,
+                ),
+              )
+            : null,
+        trailing: IconButton(
+          icon: Icon(Icons.delete_outline_rounded,
+              size: 18, color: theme.textTheme.bodySmall?.color),
+          onPressed: onDelete,
+        ),
+      ),
+    );
   }
 }

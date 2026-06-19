@@ -6,6 +6,7 @@ import '../../screens/notifications/notifications_screen.dart';
 import '../../screens/assistant/assistant_screen.dart';
 import 'app_card.dart';
 import '../../theme/app_theme.dart';
+import 'robot_mascot.dart'; // ✅ ADD THIS IMPORT
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SIMPLE HEADER — Settings, Workspace, Analytics, Profile
@@ -74,6 +75,7 @@ class DashboardHeader extends StatelessWidget {
   final String userName;
   final bool isNewUser;
   final bool showProactiveCard;
+  final String? dismissedTaskId;
   final VoidCallback onYes;
   final VoidCallback onNo;
   final VoidCallback onProfileTap;
@@ -83,6 +85,7 @@ class DashboardHeader extends StatelessWidget {
     required this.userName,
     required this.isNewUser,
     required this.showProactiveCard,
+    this.dismissedTaskId,
     required this.onYes,
     required this.onNo,
     required this.onProfileTap,
@@ -223,16 +226,10 @@ class DashboardHeader extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                width: 72,
-                height: 72,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Center(
-                  child: Text('🤖', style: TextStyle(fontSize: 38)),
-                ),
+              // ✅ Robot Mascot instead of emoji
+              const RobotMascotBubble(
+                expression: RobotExpression.happy,
+                size: 72,
               ),
             ],
           ),
@@ -243,7 +240,6 @@ class DashboardHeader extends StatelessWidget {
                 ? const _NewUserMessage()
                 : Consumer<TaskProvider>(
                     builder: (context, taskProvider, _) {
-                      // Build proactive message from REAL task data
                       final proactiveMessage = _buildProactiveMessage(
                         taskProvider,
                       );
@@ -267,6 +263,7 @@ class DashboardHeader extends StatelessWidget {
   /// Priority: overdue > due today > high priority > general
   _ProactiveMessage _buildProactiveMessage(TaskProvider taskProvider) {
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
     final tasks = taskProvider.tasks;
 
     if (tasks.isEmpty) {
@@ -277,10 +274,24 @@ class DashboardHeader extends StatelessWidget {
       );
     }
 
-    // Check overdue tasks first
-    final overdue = tasks.where((t) {
+    // Skip the dismissed task
+    final activeTasks = tasks
+        .where((t) => dismissedTaskId == null || t.id != dismissedTaskId)
+        .toList();
+
+    if (activeTasks.isEmpty) {
+      return _ProactiveMessage(
+        message: "You're all caught up! Add a task to get started.",
+        ctaMessage: null,
+        hasAction: false,
+      );
+    }
+
+    // Check overdue tasks first (skipping dismissed)
+    final overdue = activeTasks.where((t) {
       if (t.isCompleted) return false;
-      return t.dueDate.isBefore(DateTime(now.year, now.month, now.day));
+      final due = DateTime(t.dueDate.year, t.dueDate.month, t.dueDate.day);
+      return due.isBefore(today);
     }).toList();
 
     if (overdue.isNotEmpty) {
@@ -293,8 +304,8 @@ class DashboardHeader extends StatelessWidget {
       );
     }
 
-    // Check tasks due today
-    final dueToday = tasks.where((t) {
+    // Check tasks due today (skipping dismissed)
+    final dueToday = activeTasks.where((t) {
       if (t.isCompleted) return false;
       return t.dueDate.year == now.year &&
           t.dueDate.month == now.month &&
@@ -311,8 +322,8 @@ class DashboardHeader extends StatelessWidget {
       );
     }
 
-    // Check high priority tasks
-    final highPriority = tasks
+    // Check high priority tasks (skipping dismissed)
+    final highPriority = activeTasks
         .where((t) => !t.isCompleted && t.priority.name == 'high')
         .toList();
 
@@ -326,8 +337,8 @@ class DashboardHeader extends StatelessWidget {
       );
     }
 
-    // General — show pending count
-    final pending = tasks.where((t) => !t.isCompleted).length;
+    // General — show pending count (skipping dismissed)
+    final pending = activeTasks.where((t) => !t.isCompleted).length;
     return _ProactiveMessage(
       message:
           'You have $pending pending task${pending == 1 ? '' : 's'}. Want CoCo to help prioritize?',
@@ -340,7 +351,7 @@ class DashboardHeader extends StatelessWidget {
 /// Simple data class for proactive card content
 class _ProactiveMessage {
   final String message;
-  final String? ctaMessage; // task title to pre-fill in assistant
+  final String? ctaMessage;
   final bool hasAction;
 
   const _ProactiveMessage({
@@ -409,7 +420,6 @@ class _ReturningUserMessage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 6),
-        // FIXED: shows real task-based message, not hardcoded text
         Text(
           message,
           style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
@@ -421,14 +431,11 @@ class _ReturningUserMessage extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    onYes(); // hide card
-                    // FIXED: navigate to assistant and pre-fill message
+                    onYes();
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => AssistantScreen(
-                          // Pass the task title as initial message
-                          // so CoCo knows exactly what to help with
                           initialMessage: ctaMessage != null
                               ? 'Help me with: $ctaMessage'
                               : null,

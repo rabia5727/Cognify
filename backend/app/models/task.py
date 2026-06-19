@@ -8,7 +8,6 @@ VALID_PRIORITIES = {"low", "medium", "high"}
 VALID_CATEGORIES = {"academic", "freelance", "general", "email", "classroom"}
 
 # ── Shared validator helpers ───────────────────────────────────────
-# Defined once here so every class reuses the same logic cleanly.
 
 def _validate_priority(v):
     if v and v not in VALID_PRIORITIES:
@@ -20,13 +19,27 @@ def _validate_category(v):
         raise ValueError(f"Category must be one of: {VALID_CATEGORIES}")
     return v
 
-def _validate_due_date(v):
+def _validate_due_date_create(v):
+    """
+    Only used on CREATE — prevents creating new tasks with past dates.
+    NOT used on UPDATE — overdue tasks must still be updatable.
+    """
     if v:
         now = datetime.now(timezone.utc)
         if v.tzinfo is None:
             v = v.replace(tzinfo=timezone.utc)
         if v.date() < now.date():
             raise ValueError("Due date cannot be in the past")
+    return v
+
+def _normalize_due_date(v):
+    """
+    Used on UPDATE — only normalizes timezone, never rejects past dates.
+    This is critical: overdue tasks have past due_dates and must still
+    be completable (checkbox toggle sends the existing due_date back).
+    """
+    if v and v.tzinfo is None:
+        v = v.replace(tzinfo=timezone.utc)
     return v
 
 
@@ -41,14 +54,12 @@ class TaskSchema(BaseModel):
     due_time: Optional[str] = None
     project_id: Optional[str] = None
 
-    # External sync fields — from teammate's branch (Gmail / Classroom)
-    source: Optional[str] = None       # e.g. "gmail", "classroom", "manual"
-    source_id: Optional[str] = None    # external ID to prevent duplicate imports
-    course_id: Optional[str] = None    # Classroom course ID
+    source: Optional[str] = None
+    source_id: Optional[str] = None
+    course_id: Optional[str] = None
 
     user_id: str
 
-    # YOUR fix: timezone-aware utc (replaces deprecated datetime.utcnow)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
@@ -67,7 +78,6 @@ class TaskCreate(BaseModel):
     due_time: Optional[str] = None
     project_id: Optional[str] = None
 
-    # External sync fields — allows sync service to create tasks directly
     source: Optional[str] = None
     source_id: Optional[str] = None
     course_id: Optional[str] = None
@@ -82,21 +92,20 @@ class TaskCreate(BaseModel):
 
     @field_validator("due_date")
     def validate_due_date(cls, v):
-        return _validate_due_date(v)
+        # ✅ CREATE: reject past dates (user shouldn't create tasks already overdue)
+        return _validate_due_date_create(v)
 
 
-# ── TaskUpdate (what Flutter sends when editing a task) ────────────
+# ── TaskUpdate (what Flutter sends when editing / toggling a task) ──
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = Field(None, max_length=1000)
     status: Optional[str] = None
     priority: Optional[str] = None
     category: Optional[str] = None
-    due_date: Optional[datetime] = None
+    due_date: Optional[datetime] = None   # ✅ NO past-date rejection here
     due_time: Optional[str] = None
     project_id: Optional[str] = None
-    # Note: source/source_id/course_id are NOT updatable —
-    # once a task is synced from an external source, its origin is fixed.
 
     @field_validator("status")
     def validate_status(cls, v):
@@ -113,8 +122,12 @@ class TaskUpdate(BaseModel):
         return _validate_category(v)
 
     @field_validator("due_date")
-    def validate_due_date(cls, v):
-        return _validate_due_date(v)
+    def normalize_due_date(cls, v):
+        # ✅ UPDATE: only normalize timezone, NEVER reject past dates.
+        # Overdue tasks have past due_dates — completing them sends
+        # the original due_date back. Rejecting it would break all
+        # checkbox toggles for overdue tasks.
+        return _normalize_due_date(v)
 
 
 # ── TaskResponse (what the API sends back to Flutter) ──────────────
@@ -130,11 +143,10 @@ class TaskResponse(BaseModel):
     due_time: Optional[str] = None
     project_id: Optional[str] = None
 
-    # External sync fields — Flutter uses these to show sync badge/label
     source: Optional[str] = None
     source_id: Optional[str] = None
     course_id: Optional[str] = None
 
     created_at: datetime
     updated_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None  # YOUR field — kept from your branch
+    completed_at: Optional[datetime] = None

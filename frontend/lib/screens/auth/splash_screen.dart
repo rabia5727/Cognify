@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'auth_screen.dart';
+import '../../widgets/common/robot_mascot.dart'; // ✅ ADD THIS
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -63,8 +64,11 @@ class _SplashScreenState extends State<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Robot mascot placeholder — replace with Image.asset('assets/images/mascot.png')
-                _MascotIllustration(),
+                // ✅ REPLACED with custom robot mascot
+                const RobotMascot(
+                  expression: RobotExpression.happy,
+                  size: 120,
+                ),
                 const SizedBox(height: 28),
                 const Text(
                   'Co-Tasker',
@@ -83,72 +87,25 @@ class _SplashScreenState extends State<SplashScreen>
                     fontWeight: FontWeight.w400,
                   ),
                 ),
+                const SizedBox(height: 20),
+                // ✅ Optional: Add a subtle loading indicator
+                SizedBox(
+                  width: 60,
+                  height: 4,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      backgroundColor: Colors.grey.shade200,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF1360E2),
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Placeholder mascot — swap with your actual asset image
-class _MascotIllustration extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 140,
-      height: 140,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: const Color(0xFFF0F8FF),
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Main body
-          Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              gradient: const LinearGradient(
-                colors: [Color(0xFF1E96FC), Color(0xFF072AC8)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: const Center(
-              child: Text('🤖', style: TextStyle(fontSize: 48)),
-            ),
-          ),
-          // Teal dot top right
-          Positioned(
-            top: 14,
-            right: 18,
-            child: Container(
-              width: 22,
-              height: 22,
-              decoration: const BoxDecoration(
-                color: Color(0xFF00C9A7),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-          // Blue dot bottom left
-          Positioned(
-            bottom: 18,
-            left: 16,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: const BoxDecoration(
-                color: Color(0xFF1E96FC),
-                shape: BoxShape.circle,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

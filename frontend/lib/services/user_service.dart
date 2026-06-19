@@ -93,6 +93,7 @@ class UserService {
 // PATCH /users/me/preferences
   static Future<String?> updatePreferences({
     bool? notificationsEnabled,
+    bool? notificationPermissionAsked,
     String? theme,
     bool? voicePermission,
   }) async {
@@ -100,6 +101,9 @@ class UserService {
       final body = <String, dynamic>{};
       if (notificationsEnabled != null) {
         body['notifications_enabled'] = notificationsEnabled;
+      }
+      if (notificationPermissionAsked != null) {
+        body['notification_permission_asked'] = notificationPermissionAsked;
       }
       if (theme != null) {
         body['theme'] = theme;
