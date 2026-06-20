@@ -6,9 +6,12 @@ from app.routes import auth, users, task, project, notification, analytics, clas
 from app.crud.notification import setup_indexes
 from app.crud.analytics import setup_indexes as setup_analytics_indexes 
 from app.schedular import start_notification_scheduler, stop_notification_scheduler
+from app.routes.documents import router as documents_router
+from app.routes.emails import router as emails_router
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.limiter import limiter
+
 
 
 @asynccontextmanager
@@ -49,6 +52,8 @@ app.include_router(analytics.router)
 app.include_router(classroom.router)   
 app.include_router(voice.router)
 app.include_router(assistant.router)
+app.include_router(documents_router)
+app.include_router(emails_router)
 
 
 @app.get("/")

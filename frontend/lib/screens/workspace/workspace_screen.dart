@@ -1,9 +1,10 @@
 // lib/screens/workspace/workspace_screen.dart
 // FIXES:
-//   - Replaced ALL deprecated .withOpacity() with .withValues(alpha:)
-//   - Fixed overlay dispose in _SortButtonState
-//   - Optimized consumers
+//   - Added floating robot celebration animation
+//   - Robot jumps from bottom when task completed
+//   - Robot bounces and celebrates then returns
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,7 @@ import '../../utils/ui_feedback.dart';
 import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
+import '../../widgets/common/robot_mascot.dart';
 import '../../widgets/empty_states/empty_workspace.dart';
 import '../../widgets/loading/shimmer_loading.dart';
 import 'add_task_screen.dart';
@@ -41,7 +43,8 @@ class WorkSpaceScreen extends StatefulWidget {
   State<WorkSpaceScreen> createState() => _WorkSpaceScreenState();
 }
 
-class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
+class _WorkSpaceScreenState extends State<WorkSpaceScreen>
+    with SingleTickerProviderStateMixin {
   // ─── UI-only state ──────────────────────────────────────────────
   int _selectedDayIndex = -1;
   int _filterIndex = 0;
@@ -55,17 +58,55 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   String? _animatingTaskId;
   late final ConfettiController _confettiController;
 
+  // ✅ ADD: Robot celebration animation
+  bool _showCelebrationRobot = false;
+  Offset _robotPosition = const Offset(0, 0);
+  double _robotScale = 0.5;
+  double _robotRotation = 0;
+  double _robotJumpHeight = 0;
+  late AnimationController _celebrationAnimController;
+  Timer? _celebrationTimer;
+
   @override
   void initState() {
     super.initState();
     _generateCalendarDays();
     _confettiController =
         ConfettiController(duration: const Duration(seconds: 2));
+
+    // ✅ Animation controller for celebration
+    _celebrationAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..addListener(() {
+        setState(() {
+          // Jump animation: sine wave
+          _robotJumpHeight =
+              100 * (1 - (1 - _celebrationAnimController.value * 1.5).abs());
+
+          // Scale animation: pop in and out
+          final scaleValue = _celebrationAnimController.value;
+          if (scaleValue < 0.2) {
+            _robotScale = 0.5 + (0.8 * (scaleValue / 0.2));
+          } else if (scaleValue > 0.8) {
+            _robotScale = 1.3 - (0.5 * ((scaleValue - 0.8) / 0.2));
+          } else {
+            _robotScale =
+                1.0 + (0.2 * (1 - (1 - (scaleValue - 0.2) / 0.6).abs()));
+          }
+
+          // Rotation: spin slightly
+          _robotRotation =
+              0.1 * (1 - (1 - _celebrationAnimController.value * 2).abs());
+        });
+      });
   }
 
   @override
   void dispose() {
     _confettiController.dispose();
+    _celebrationAnimController.dispose();
+    _celebrationTimer?.cancel();
     super.dispose();
   }
 
@@ -86,6 +127,39 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
     return days[weekday - 1];
   }
 
+  // ✅ ADD: Robot celebration animation
+  void _showCelebration() {
+    // Start the celebration animation
+    setState(() {
+      _showCelebrationRobot = true;
+      // Random position near the center
+      _robotPosition = Offset(
+        100 + (MediaQuery.of(context).size.width - 200) / 2,
+        MediaQuery.of(context).size.height * 0.4,
+      );
+    });
+
+    // Start the animation
+    _celebrationAnimController.reset();
+    _celebrationAnimController.forward();
+
+    // Show confetti
+    _confettiController.play();
+
+    // Show success message
+    UIFeedback.showSuccess(context, '🎉 Task completed! Great job!');
+
+    // Hide after 2.5 seconds
+    _celebrationTimer?.cancel();
+    _celebrationTimer = Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) {
+        setState(() {
+          _showCelebrationRobot = false;
+        });
+      }
+    });
+  }
+
   // ─── Task actions ────────────────────────────────────────────────
 
   Future<void> _toggleTask(String id) async {
@@ -100,7 +174,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
     try {
       await taskProvider.toggleComplete(id);
-      // Force refresh to get confirmed state from backend
       await taskProvider.refreshTasks();
     } catch (_) {
       if (mounted) UIFeedback.showError(context, 'Could not update task.');
@@ -109,8 +182,8 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
     }
 
     if (isCompleting && mounted) {
-      _confettiController.play();
-      UIFeedback.showSuccess(context, '🎉 Task completed! Great job!');
+      // ✅ Show celebration animation
+      _showCelebration();
     }
   }
 
@@ -140,7 +213,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
         ),
       ),
     ).then((_) async {
-      // Refresh after returning so real backend ID is in the list
       if (mounted) {
         await context.read<TaskProvider>().refreshTasks();
       }
@@ -180,6 +252,9 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
           onTaskUpdated: (updated) async {
             try {
               await context.read<TaskProvider>().updateTask(updated);
+              if (updated.isCompleted) {
+                _showCelebration();
+              }
             } catch (_) {}
           },
           onTaskDeleted: (taskId) async {
@@ -295,7 +370,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       ),
     );
 
-    // ✅ Refresh after returning so workspace list is current
     if (mounted) {
       await context.read<ProjectProvider>().refreshProjects();
     }
@@ -327,6 +401,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       _projectCategoryFilterIndex = 0;
       _projectFilterIndex = 0;
     });
+    _celebrationTimer?.cancel();
     try {
       await Future.wait([
         context.read<TaskProvider>().refreshTasks(),
@@ -363,221 +438,274 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
         return Scaffold(
           backgroundColor: theme.scaffoldBackgroundColor,
-          body: SafeArea(
-            child: RefreshIndicator(
-              onRefresh: _onRefresh,
-              color: theme.colorScheme.primary,
-              child: Column(
-                children: [
-                  AppHeader(
-                    title: 'Workspace',
-                    onBack: () => widget.onTabSelected(0),
-                    // actions: [
-                    //   IconButton(
-                    //     icon: const Icon(Icons.class_),
-                    //     onPressed: () {
-                    //       Navigator.push(
-                    //         context,
-                    //         MaterialPageRoute(
-                    //           builder: (_) => ClassroomSyncScreen(),
-                    //         ),
-                    //       );
-                    //     },
-                    //     tooltip: 'Google Classroom Sync',
-                    //   ),
-                    // ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: _PillToggle(
-                      labels: const ['Tasks', 'Projects'],
-                      selectedIndex: _innerTabIndex,
-                      onToggle: (i) => setState(() => _innerTabIndex = i),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_innerTabIndex == 0 && _calendarDays.isNotEmpty)
-                    SizedBox(
-                      height: 80,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _calendarDays.length + 1,
-                        itemBuilder: (_, i) {
-                          if (i == 0) {
-                            return _AllDayChip(
-                              isSelected: _selectedDayIndex == -1,
-                              onTap: () =>
-                                  setState(() => _selectedDayIndex = -1),
-                            );
-                          }
-                          final di = i - 1;
-                          return _CalendarDay(
-                            day: _calendarDays[di]['day'] as String,
-                            date: _calendarDays[di]['date'] as String,
-                            isSelected: di == _selectedDayIndex,
-                            hasTask: taskProvider
-                                .tasksForDate(
-                                  _calendarDays[di]['fullDate'] as DateTime,
-                                )
-                                .isNotEmpty,
-                            onTap: () => setState(() => _selectedDayIndex = di),
-                          );
-                        },
-                      ),
-                    ),
-                  const SizedBox(height: 8),
-                  if (_innerTabIndex == 0) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _FilterChip(
-                                    label: 'All',
-                                    isSelected: _filterIndex == 0,
-                                    onTap: () =>
-                                        setState(() => _filterIndex = 0),
-                                    color: const Color(0xFF1360E2),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _FilterChip(
-                                    label: 'Completed',
-                                    isSelected: _filterIndex == 1,
-                                    onTap: () =>
-                                        setState(() => _filterIndex = 1),
-                                    color: const Color(0xFF4CAF50),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          _SortButton(
-                            isActive: hasTaskSortActive,
-                            priorityIndex: _priorityFilterIndex,
-                            categoryIndex: _categoryFilterIndex,
-                            onPriorityChanged: (i) {
-                              setState(() => _priorityFilterIndex = i);
-                            },
-                            onCategoryChanged: (i) {
-                              setState(() => _categoryFilterIndex = i);
-                            },
-                            onReset: () {
-                              setState(() {
-                                _priorityFilterIndex = 0;
-                                _categoryFilterIndex = 0;
-                              });
-                            },
-                          ),
+          body: Stack(
+            // ✅ Changed to Stack for overlay
+            children: [
+              SafeArea(
+                child: RefreshIndicator(
+                  onRefresh: _onRefresh,
+                  color: theme.colorScheme.primary,
+                  child: Column(
+                    children: [
+                      AppHeader(
+                        title: 'Workspace',
+                        onBack: () => widget.onTabSelected(0),
+                        actions: [
+                          // IconButton(
+                          //   icon: const Icon(Icons.class_),
+                          //   onPressed: () {
+                          //     Navigator.push(
+                          //       context,
+                          //       MaterialPageRoute(
+                          //         builder: (_) => ClassroomSyncScreen(),
+                          //       ),
+                          //     );
+                          //   },
+                          //   tooltip: 'Google Classroom Sync',
+                          // ),
                         ],
                       ),
-                    ),
-                  ],
-                  if (_innerTabIndex == 1) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _FilterChip(
-                                    label: 'All',
-                                    isSelected: _projectFilterIndex == 0,
-                                    onTap: () =>
-                                        setState(() => _projectFilterIndex = 0),
-                                    color: const Color(0xFF1360E2),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: _FilterChip(
-                                    label: 'Active',
-                                    isSelected: _projectFilterIndex == 1,
-                                    onTap: () =>
-                                        setState(() => _projectFilterIndex = 1),
-                                    color: const Color(0xFFEFA535),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: _FilterChip(
-                                    label: 'Completed',
-                                    isSelected: _projectFilterIndex == 2,
-                                    onTap: () =>
-                                        setState(() => _projectFilterIndex = 2),
-                                    color: const Color(0xFF4CAF50),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          _SortButton(
-                            isActive: hasProjectSortActive,
-                            priorityIndex: _projectPriorityFilterIndex,
-                            categoryIndex: _projectCategoryFilterIndex,
-                            onPriorityChanged: (i) {
-                              setState(() => _projectPriorityFilterIndex = i);
-                            },
-                            onCategoryChanged: (i) {
-                              setState(() => _projectCategoryFilterIndex = i);
-                            },
-                            onReset: () {
-                              setState(() {
-                                _projectPriorityFilterIndex = 0;
-                                _projectCategoryFilterIndex = 0;
-                              });
-                            },
-                            categoryLabels: const [
-                              'All',
-                              'Academic',
-                              'Freelance',
-                              'Personal',
-                            ],
-                            categoryColors: const [
-                              Color(0xFF1360E2),
-                              Color(0xFF1360E2),
-                              Color(0xFF7B61FF),
-                              Color(0xFF26A69A),
-                            ],
-                          ),
-                        ],
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _PillToggle(
+                          labels: const ['Tasks', 'Projects'],
+                          selectedIndex: _innerTabIndex,
+                          onToggle: (i) => setState(() => _innerTabIndex = i),
+                        ),
                       ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: _innerTabIndex == 0
-                        ? _TasksList(
-                            tasks: filteredTasks,
-                            onToggle: _toggleTask,
-                            onEdit: _goToEditTask,
-                            onDelete: _deleteTask,
-                            onTap: _goToTaskDetail,
-                            animatingTaskId: _animatingTaskId,
-                          )
-                        : _ProjectsList(
-                            projects: projects,
-                            allTasks: tasks,
-                            filterIndex: _projectFilterIndex,
-                            priorityFilterIndex: _projectPriorityFilterIndex,
-                            categoryFilterIndex: _projectCategoryFilterIndex,
-                            onTap: _goToProjectDetail,
-                            onEdit: _goToEditProject,
-                            onDelete: _deleteProject,
+                      const SizedBox(height: 12),
+                      if (_innerTabIndex == 0 && _calendarDays.isNotEmpty)
+                        SizedBox(
+                          height: 80,
+                          child: ListView.builder(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _calendarDays.length + 1,
+                            itemBuilder: (_, i) {
+                              if (i == 0) {
+                                return _AllDayChip(
+                                  isSelected: _selectedDayIndex == -1,
+                                  onTap: () =>
+                                      setState(() => _selectedDayIndex = -1),
+                                );
+                              }
+                              final di = i - 1;
+                              return _CalendarDay(
+                                day: _calendarDays[di]['day'] as String,
+                                date: _calendarDays[di]['date'] as String,
+                                isSelected: di == _selectedDayIndex,
+                                hasTask: taskProvider
+                                    .tasksForDate(
+                                      _calendarDays[di]['fullDate'] as DateTime,
+                                    )
+                                    .isNotEmpty,
+                                onTap: () =>
+                                    setState(() => _selectedDayIndex = di),
+                              );
+                            },
                           ),
+                        ),
+                      const SizedBox(height: 8),
+                      if (_innerTabIndex == 0) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: _FilterChip(
+                                        label: 'All',
+                                        isSelected: _filterIndex == 0,
+                                        onTap: () =>
+                                            setState(() => _filterIndex = 0),
+                                        color: const Color(0xFF1360E2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _FilterChip(
+                                        label: 'Completed',
+                                        isSelected: _filterIndex == 1,
+                                        onTap: () =>
+                                            setState(() => _filterIndex = 1),
+                                        color: const Color(0xFF4CAF50),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              _SortButton(
+                                isActive: hasTaskSortActive,
+                                priorityIndex: _priorityFilterIndex,
+                                categoryIndex: _categoryFilterIndex,
+                                onPriorityChanged: (i) {
+                                  setState(() => _priorityFilterIndex = i);
+                                },
+                                onCategoryChanged: (i) {
+                                  setState(() => _categoryFilterIndex = i);
+                                },
+                                onReset: () {
+                                  setState(() {
+                                    _priorityFilterIndex = 0;
+                                    _categoryFilterIndex = 0;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      if (_innerTabIndex == 1) ...[
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: _FilterChip(
+                                        label: 'All',
+                                        isSelected: _projectFilterIndex == 0,
+                                        onTap: () => setState(
+                                            () => _projectFilterIndex = 0),
+                                        color: const Color(0xFF1360E2),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _FilterChip(
+                                        label: 'Active',
+                                        isSelected: _projectFilterIndex == 1,
+                                        onTap: () => setState(
+                                            () => _projectFilterIndex = 1),
+                                        color: const Color(0xFFEFA535),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: _FilterChip(
+                                        label: 'Completed',
+                                        isSelected: _projectFilterIndex == 2,
+                                        onTap: () => setState(
+                                            () => _projectFilterIndex = 2),
+                                        color: const Color(0xFF4CAF50),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              _SortButton(
+                                isActive: hasProjectSortActive,
+                                priorityIndex: _projectPriorityFilterIndex,
+                                categoryIndex: _projectCategoryFilterIndex,
+                                onPriorityChanged: (i) {
+                                  setState(
+                                      () => _projectPriorityFilterIndex = i);
+                                },
+                                onCategoryChanged: (i) {
+                                  setState(
+                                      () => _projectCategoryFilterIndex = i);
+                                },
+                                onReset: () {
+                                  setState(() {
+                                    _projectPriorityFilterIndex = 0;
+                                    _projectCategoryFilterIndex = 0;
+                                  });
+                                },
+                                categoryLabels: const [
+                                  'All',
+                                  'Academic',
+                                  'Freelance',
+                                  'Personal',
+                                ],
+                                categoryColors: const [
+                                  Color(0xFF1360E2),
+                                  Color(0xFF1360E2),
+                                  Color(0xFF7B61FF),
+                                  Color(0xFF26A69A),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      Expanded(
+                        child: _innerTabIndex == 0
+                            ? _TasksList(
+                                tasks: filteredTasks,
+                                onToggle: _toggleTask,
+                                onEdit: _goToEditTask,
+                                onDelete: _deleteTask,
+                                onTap: _goToTaskDetail,
+                                animatingTaskId: _animatingTaskId,
+                              )
+                            : _ProjectsList(
+                                projects: projects,
+                                allTasks: tasks,
+                                filterIndex: _projectFilterIndex,
+                                priorityFilterIndex:
+                                    _projectPriorityFilterIndex,
+                                categoryFilterIndex:
+                                    _projectCategoryFilterIndex,
+                                onTap: _goToProjectDetail,
+                                onEdit: _goToEditProject,
+                                onDelete: _deleteProject,
+                              ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+              // ✅ Celebration Robot Overlay
+              if (_showCelebrationRobot)
+                Positioned(
+                  left: _robotPosition.dx - 60,
+                  bottom: _robotPosition.dy - _robotJumpHeight,
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: const Duration(milliseconds: 1500),
+                    builder: (context, value, child) {
+                      return Transform.scale(
+                        scale: _robotScale,
+                        child: Transform.rotate(
+                          angle: _robotRotation,
+                          child: const RobotMascot(
+                            expression: RobotExpression.celebrating,
+                            size: 120,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              // ✅ Confetti overlay
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConfettiWidget(
+                  confettiController: _confettiController,
+                  blastDirectionality: BlastDirectionality.explosive,
+                  particleDrag: 0.05,
+                  emissionFrequency: 0.05,
+                  numberOfParticles: 30,
+                  gravity: 0.1,
+                  shouldLoop: false,
+                  colors: const [
+                    Colors.green,
+                    Colors.blue,
+                    Colors.pink,
+                    Colors.orange,
+                    Colors.purple,
+                    Colors.yellow,
+                  ],
+                ),
+              ),
+            ],
           ),
           floatingActionButton: SizedBox(
             width: 64,
@@ -602,6 +730,14 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
     );
   }
 }
+
+// ================================================================
+// REST OF THE CODE REMAINS UNCHANGED (all the widget classes below)
+// ================================================================
+
+// ... (all the widget classes like _FilterChip, _SortButton, _PillToggle,
+//      _CalendarDay, _AllDayChip, _TasksList, _TaskCard, _ProjectsList,
+//      _ProjectCard remain exactly the same as before) ...
 
 // ================================================================
 // FILTER CHIP WIDGET

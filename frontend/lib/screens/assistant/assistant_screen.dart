@@ -1,23 +1,19 @@
 // lib/screens/assistant/assistant_screen.dart
-//
-// ✅ SESSION REWRITE: added a sidebar (Drawer) listing all chat
-// sessions, a "+ New Chat" action, and session-aware history loading.
-// This is the UI fix for "history of chat should show in separate
-// chats, not one single chat".
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/assistant_provider.dart';
 import '../../models/assistant_model.dart';
 import '../../services/assistant_service.dart';
 import '../../constants/app_constant.dart';
+import '../../widgets/common/app_header.dart';
+import '../../widgets/common/robot_mascot.dart';
 import 'voice_assistant_screen.dart';
 
 class AssistantScreen extends StatefulWidget {
   final String? initialMessage;
-  // ✅ NEW: optionally open directly into a specific existing chat
-  // (e.g. tapping a session from a notification or deep link).
   final String? sessionId;
 
   const AssistantScreen({super.key, this.initialMessage, this.sessionId});
@@ -31,6 +27,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
   final ScrollController _scrollController = ScrollController();
   final FlutterTts _tts = FlutterTts();
 
+  static const String _backendBase = 'http://localhost:8000';
+
   @override
   void initState() {
     super.initState();
@@ -38,17 +36,12 @@ class _AssistantScreenState extends State<AssistantScreen> {
       if (!mounted) return;
       final provider = context.read<AssistantProvider>();
 
-      // ✅ Load the specific session if one was passed, otherwise start
-      // fresh (a brand-new chat — matches "Yes" button flow from
-      // dashboard, which should open a NEW conversation, not append to
-      // whatever was open before).
       if (widget.sessionId != null) {
         await provider.loadHistory(sessionId: widget.sessionId);
       } else {
         await provider.startNewChat();
       }
 
-      // Load sidebar list in background regardless
       provider.loadSessions();
 
       if (widget.initialMessage != null && mounted) {
@@ -110,6 +103,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
     }
   }
 
+  // ── Drawer actions — Navigator.pop closes the endDrawer ─────────────────
   Future<void> _switchSession(String sessionId) async {
     Navigator.pop(context);
     final provider = context.read<AssistantProvider>();
@@ -141,32 +135,115 @@ class _AssistantScreenState extends State<AssistantScreen> {
         ],
       ),
     );
-
     if (confirmed == true && mounted) {
       await context.read<AssistantProvider>().deleteSession(sessionId);
     }
   }
 
+  // ── File helpers ─────────────────────────────────────────────────────────
+  String? _extractFilename(String content) {
+    final match = RegExp(r'\[FILE:([^\]]+)\]').firstMatch(content);
+    return match?.group(1);
+  }
+
+  String _cleanContent(String content) {
+    return content.replaceAll(RegExp(r'\[FILE:[^\]]+\]'), '').trim();
+  }
+
+  Future<void> _downloadFile(String filename) async {
+    final url = Uri.parse('$_backendBase/documents/download/$filename');
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open download link.')),
+        );
+      }
+    }
+  }
+
+  // ── ✅ Robot expression logic ─────────────────────────────────────────────
+  // Determines which CoCo face to show based on message content.
+  // Called per-message so each bubble can show the right expression.
+  RobotExpression _expressionForMessage(AssistantMessage msg) {
+    final c = msg.content.toLowerCase();
+
+    // Celebrating: task created, document ready, goal achieved
+    if (c.contains('✅') ||
+        c.contains('created') ||
+        c.contains('your document is ready') ||
+        c.contains('subtask') ||
+        c.contains('well done') ||
+        c.contains('great job')) {
+      return RobotExpression.celebrating;
+    }
+
+    // Sad: errors, overdue, nothing found
+    if (c.contains('❌') ||
+        c.contains('error') ||
+        c.contains('failed') ||
+        c.contains('overdue') ||
+        c.contains("couldn't")) {
+      return RobotExpression.sad;
+    }
+
+    // Thinking: long analytical replies (study plan, breakdown)
+    if (c.contains('step') ||
+        c.contains('plan') ||
+        c.contains('breakdown') ||
+        c.contains('suggest')) {
+      return RobotExpression.thinking;
+    }
+
+    return RobotExpression.happy;
+  }
+
+  // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final provider = context.watch<AssistantProvider>();
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      drawer: _buildSessionDrawer(theme, isDark),
+
+      // ✅ endDrawer = opens from the RIGHT side
+      endDrawer: _buildSessionDrawer(theme, isDark),
+
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeaderWithMenu(theme),
+            // ✅ AppHeader matches all other screens.
+            // Back button on left, session title in center,
+            // hamburger (opens right drawer) as the only action.
+            Builder(
+              builder: (ctx) => AppHeader(
+                title: provider.currentTitle,
+                onBack: () => Navigator.pop(context),
+                actions: [
+                  IconButton(
+                    onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+                    icon: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.menu_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
             Expanded(
-              child: Consumer<AssistantProvider>(
-                builder: (context, provider, _) {
-                  if (provider.messages.isNotEmpty) _scrollToBottom();
-                  if (provider.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  return provider.messages.isEmpty
+              child: provider.isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : provider.messages.isEmpty
                       ? _buildEmptyState(theme)
                       : ListView.builder(
                           controller: _scrollController,
@@ -181,9 +258,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                             return _buildMessageBubble(
                                 provider.messages[index], theme, isDark);
                           },
-                        );
-                },
-              ),
+                        ),
             ),
             _buildInputBar(theme, isDark),
           ],
@@ -192,56 +267,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
-  Widget _buildHeaderWithMenu(ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 12, 12, 4),
-      child: Row(
-        children: [
-          Builder(
-            builder: (ctx) => IconButton(
-              onPressed: () => Scaffold.of(ctx).openDrawer(),
-              icon: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.menu_rounded,
-                    color: Colors.white, size: 18),
-              ),
-            ),
-          ),
-          Expanded(
-            child: Consumer<AssistantProvider>(
-              builder: (context, provider, _) => Text(
-                provider.currentTitle,
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            onPressed: _startNewChat,
-            icon: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.add_rounded,
-                  color: theme.colorScheme.primary, size: 20),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
+  // ── Right-side session drawer ────────────────────────────────────────────
   Widget _buildSessionDrawer(ThemeData theme, bool isDark) {
     return Drawer(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -252,13 +278,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
               child: Row(
                 children: [
-                  Text(
-                    'Your Chats',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  Text('Your Chats',
+                      style: theme.textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w700)),
                   const Spacer(),
+                  // ✅ + button lives inside the drawer, not in the header
                   IconButton(
                     onPressed: _startNewChat,
                     icon: Icon(Icons.add_circle_outline_rounded,
@@ -280,7 +304,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
-                          'No chats yet. Start a new conversation with CoCo!',
+                          'No chats yet.\nStart a conversation with CoCo!',
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.textTheme.bodySmall?.color,
@@ -314,25 +338,23 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
+  // ── ✅ Empty state: waving CoCo ──────────────────────────────────────────
   Widget _buildEmptyState(ThemeData theme) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: AppConstants.primaryBlue.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.auto_awesome_rounded,
-                size: 40, color: AppConstants.primaryBlue),
+          // Waving mascot — greeting the user
+          const RobotMascotBubble(
+            expression: RobotExpression.waving,
+            size: 100,
           ),
-          const SizedBox(height: 16),
-          Text('Hi! I\'m CoCo 👋',
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 12),
+          Text(
+            "Hi! I'm CoCo 👋",
+            style: theme.textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 8),
           Text(
             'Your AI productivity assistant.\nAsk me anything or use voice!',
@@ -345,9 +367,15 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
+  // ── Message bubble with expression-aware mascot avatar ───────────────────
   Widget _buildMessageBubble(
       AssistantMessage msg, ThemeData theme, bool isDark) {
     final isUser = msg.isUser;
+    final filename = isUser ? null : _extractFilename(msg.content);
+    final displayText =
+        filename != null ? _cleanContent(msg.content) : msg.content;
+    final expression =
+        isUser ? RobotExpression.happy : _expressionForMessage(msg);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -356,107 +384,168 @@ class _AssistantScreenState extends State<AssistantScreen> {
             isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // ✅ CoCo avatar = robot mascot with expression matching message tone
           if (!isUser) ...[
-            Container(
-              width: 32,
-              height: 32,
-              decoration: const BoxDecoration(
-                color: AppConstants.primaryBlue,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.auto_awesome_rounded,
-                  size: 16, color: Colors.white),
+            RobotMascotBubble(
+              expression: expression,
+              size: 38,
+              transparent: true,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
           ],
+
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: isUser
-                    ? AppConstants.primaryBlue
-                    : isDark
-                        ? const Color(0xFF1E2533)
-                        : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(18),
-                  topRight: const Radius.circular(18),
-                  bottomLeft: Radius.circular(isUser ? 18 : 4),
-                  bottomRight: Radius.circular(isUser ? 4 : 18),
-                ),
-                boxShadow: isUser
-                    ? []
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.06),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        )
-                      ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    msg.content,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: isUser
-                          ? Colors.white
-                          : theme.textTheme.bodyLarge?.color,
-                      height: 1.4,
+            child: Column(
+              crossAxisAlignment:
+                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isUser
+                        ? AppConstants.primaryBlue
+                        : isDark
+                            ? const Color(0xFF1E2533)
+                            : Colors.white,
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(18),
+                      topRight: const Radius.circular(18),
+                      bottomLeft: Radius.circular(isUser ? 18 : 4),
+                      bottomRight: Radius.circular(isUser ? 4 : 18),
                     ),
+                    boxShadow: isUser
+                        ? []
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.06),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            )
+                          ],
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (msg.isVoice) ...[
-                        Icon(Icons.mic_rounded,
-                            size: 10,
-                            color: isUser
-                                ? Colors.white60
-                                : theme.textTheme.bodySmall?.color),
-                        const SizedBox(width: 3),
-                      ],
-                      if (msg.timestamp != null)
-                        Text(
-                          _formatTime(msg.timestamp!),
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: isUser
-                                ? Colors.white60
-                                : theme.textTheme.bodySmall?.color,
-                          ),
+                      Text(
+                        displayText,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: isUser
+                              ? Colors.white
+                              : theme.textTheme.bodyLarge?.color,
+                          height: 1.4,
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (msg.isVoice) ...[
+                            Icon(Icons.mic_rounded,
+                                size: 10,
+                                color: isUser
+                                    ? Colors.white60
+                                    : theme.textTheme.bodySmall?.color),
+                            const SizedBox(width: 3),
+                          ],
+                          if (msg.timestamp != null)
+                            Text(
+                              _formatTime(msg.timestamp!),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isUser
+                                    ? Colors.white60
+                                    : theme.textTheme.bodySmall?.color,
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
+                ),
+
+                // Download chip
+                if (filename != null) ...[
+                  const SizedBox(height: 8),
+                  _buildDownloadChip(filename, theme),
                 ],
-              ),
+              ],
             ),
           ),
+
           if (isUser) const SizedBox(width: 8),
         ],
       ),
     );
   }
 
+  Widget _buildDownloadChip(String filename, ThemeData theme) {
+    final parts = filename.split('_');
+    final ext = filename.split('.').last;
+    final labelParts =
+        parts.length > 2 ? parts.sublist(0, parts.length - 2) : parts;
+    final label = '${labelParts.join(' ')}.$ext';
+
+    return GestureDetector(
+      onTap: () => _downloadFile(filename),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppConstants.primaryBlue,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: AppConstants.primaryBlue.withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.download_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Download Document',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600)),
+                  Text(label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 11)),
+                ],
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                color: Colors.white70, size: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── ✅ Typing indicator: thinking expression ──────────────────────────────
   Widget _buildTypingIndicator(ThemeData theme, bool isDark) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              color: AppConstants.primaryBlue,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.auto_awesome_rounded,
-                size: 16, color: Colors.white),
+          // Thinking mascot while CoCo is typing
+          const RobotMascotBubble(
+            expression: RobotExpression.thinking,
+            size: 38,
+            transparent: true,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
@@ -538,21 +627,19 @@ class _AssistantScreenState extends State<AssistantScreen> {
               ),
               child: TextField(
                 controller: _controller,
+                onSubmitted: (_) => _sendMessage(),
+                textInputAction: TextInputAction.send,
+                style: theme.textTheme.bodyMedium,
                 decoration: InputDecoration(
-                  hintText: 'Ask AI anything...',
+                  hintText: 'Ask CoCo anything...',
                   hintStyle: TextStyle(
                     color: isDark ? Colors.white38 : Colors.grey.shade500,
                     fontSize: 14,
                   ),
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 ),
-                onSubmitted: (_) => _sendMessage(),
-                textInputAction: TextInputAction.send,
-                style: theme.textTheme.bodyMedium,
               ),
             ),
           ),
@@ -572,11 +659,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   width: 0.5,
                 ),
               ),
-              child: Icon(
-                Icons.mic_rounded,
-                color: isDark ? Colors.white60 : AppConstants.primaryBlue,
-                size: 22,
-              ),
+              child: Icon(Icons.mic_rounded,
+                  color: isDark ? Colors.white60 : AppConstants.primaryBlue,
+                  size: 22),
             ),
           ),
           const SizedBox(width: 8),
@@ -596,11 +681,8 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   ),
                 ],
               ),
-              child: const Icon(
-                Icons.send_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
+              child:
+                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],
@@ -616,9 +698,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// ✅ NEW: Session list tile for the sidebar
-// ─────────────────────────────────────────────────────────────────────────
+// ── Session tile ─────────────────────────────────────────────────────────────
 
 class _SessionTile extends StatelessWidget {
   final ChatSession session;
@@ -636,7 +716,6 @@ class _SessionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Material(
       color: isActive
           ? theme.colorScheme.primary.withValues(alpha: 0.08)

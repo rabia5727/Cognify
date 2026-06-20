@@ -1,10 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/settings/profile_screen.dart
 // CHANGES:
-//   - Added Google Drive to Connected Accounts section
-//   - Added _driveConnected and _lastSyncDrive state variables
-//   - Added Drive case to _toggleConnection method
-//   - All other logic unchanged
+//   - Added sad robot to delete account dialog
+//   - Both buttons same size
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -15,6 +13,7 @@ import 'dart:io';
 import '../../providers/auth_provider.dart';
 import '../../utils/ui_feedback.dart';
 import '../../widgets/common/app_header.dart';
+import '../../widgets/common/robot_mascot.dart'; // ✅ ADDED
 import '../../widgets/layout/section_card.dart';
 import '../../widgets/layout/row_divider.dart';
 import 'edit_name_screen.dart';
@@ -33,13 +32,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ── Connected account state ────────────────────────────────────────
   bool _classroomConnected = false;
   bool _gmailConnected = false;
-  bool _driveConnected = false; // NEW: Google Drive
+  bool _driveConnected = false;
 
   String _lastSyncClassroom = 'Never synced';
   String _lastSyncGmail = 'Never synced';
-  String _lastSyncDrive = 'Never synced'; // NEW: Google Drive last sync
+  String _lastSyncDrive = 'Never synced';
 
-  // bool _isSaving = false;
   bool _isClassroomLoading = false;
   bool _isGmailLoading = false;
   bool _isDriveLoading = false;
@@ -59,7 +57,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _toggleConnection(String platform, bool current) async {
-    // Set loading for specific platform only
     setState(() {
       if (platform == 'Google Classroom') {
         _isClassroomLoading = true;
@@ -70,7 +67,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     });
 
-    await Future.delayed(const Duration(seconds: 1)); // Simulate API call
+    await Future.delayed(const Duration(seconds: 1));
 
     if (mounted) {
       setState(() {
@@ -99,61 +96,143 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final formKey = GlobalKey<FormState>();
     final confirmController = TextEditingController();
     final theme = Theme.of(context);
+
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Delete Account',
-            style: TextStyle(
-                fontWeight: FontWeight.w700, color: Colors.red, fontSize: 16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        backgroundColor: theme.cardColor,
+        title: Column(
+          children: [
+            // ✅ Sad Robot
+            const RobotMascot(
+              expression: RobotExpression.sad,
+              size: 80,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Delete Account',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: Colors.red.shade500,
+              ),
+            ),
+          ],
+        ),
         content: Form(
-            key: formKey,
-            child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                      'This will permanently delete your account and all data. This cannot be undone.'),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                      controller: confirmController,
-                      autofocus: true,
-                      decoration: _inputDecoration('Type DELETE to confirm'),
-                      validator: (v) {
-                        if (v == null || v.trim().toUpperCase() != 'DELETE') {
-                          return 'Type DELETE exactly to confirm';
-                        }
-                        return null;
-                      }),
-                ])),
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'This will permanently delete your account and all data. This cannot be undone.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.textTheme.bodySmall?.color,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: confirmController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Type DELETE to confirm',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: Colors.red.shade500,
+                      width: 1.5,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().toUpperCase() != 'DELETE') {
+                    return 'Type DELETE exactly to confirm';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          ),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel',
-                  style: TextStyle(color: theme.textTheme.bodySmall?.color))),
-          ElevatedButton(
-            onPressed: () async {
-              if (!formKey.currentState!.validate()) return;
-              final auth = context.read<AuthProvider>();
-              Navigator.pop(ctx);
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.textTheme.bodySmall?.color,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: theme.dividerColor,
+                        width: 1,
+                      ),
+                    ),
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (!formKey.currentState!.validate()) return;
+                    final auth = context.read<AuthProvider>();
+                    Navigator.pop(ctx);
 
-              final error = await auth.deleteAccount();
+                    final error = await auth.deleteAccount();
 
-              if (error != null && mounted) {
-                UIFeedback.showError(context, error);
-                return;
-              }
+                    if (error != null && mounted) {
+                      UIFeedback.showError(context, error);
+                      return;
+                    }
 
-              if (mounted) {
-                Navigator.of(context).popUntil((route) => route.isFirst);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade500,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
-                elevation: 0),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+                    if (mounted) {
+                      Navigator.of(context).popUntil((route) => route.isFirst);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade500,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                  child: const Text(
+                    'Delete',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -235,24 +314,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return name.isNotEmpty ? name[0].toUpperCase() : 'U';
   }
 
-  InputDecoration _inputDecoration(String hint) {
-    final theme = Theme.of(context);
-    return InputDecoration(
-      hintText: hint,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5)),
-      errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.red, width: 1.5)),
-      focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Colors.red, width: 1.5)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-    );
-  }
-
   // ─── Build ────────────────────────────────────────────────────────
 
   @override
@@ -313,7 +374,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           icon: Icons.lock_outline_rounded,
                           label: 'Change Password',
                           onTap: _navigateToChangePassword,
-                          isLoading: false, // ← CHANGE from _isSaving to false
+                          isLoading: false,
                           showArrow: true,
                         ),
                       ]),
@@ -344,8 +405,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 lastSync: _lastSyncClassroom,
                                 onTap: () => _toggleConnection(
                                     'Google Classroom', _classroomConnected),
-                                isLoading:
-                                    _isClassroomLoading, // ← Use specific loading variable
+                                isLoading: _isClassroomLoading,
                               ),
                               const RowDivider(),
 
@@ -358,11 +418,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 lastSync: _lastSyncGmail,
                                 onTap: () =>
                                     _toggleConnection('Gmail', _gmailConnected),
-                                isLoading:
-                                    _isGmailLoading, // ← Use specific loading variable
+                                isLoading: _isGmailLoading,
                               ),
 
-                              // Google Drive — NEW
+                              // Google Drive
                               _ConnectedAccountRow(
                                 icon: Icons.folder_outlined,
                                 label: 'Google Drive',
@@ -371,8 +430,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 lastSync: _lastSyncDrive,
                                 onTap: () => _toggleConnection(
                                     'Google Drive', _driveConnected),
-                                isLoading:
-                                    _isDriveLoading, // ← Use specific loading variable
+                                isLoading: _isDriveLoading,
                               ),
                             ]),
                           ]),
