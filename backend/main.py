@@ -9,6 +9,7 @@ from app.schedular import start_notification_scheduler, stop_notification_schedu
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.limiter import limiter
+from app.routes import gmail
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,7 +47,7 @@ app.include_router(project.router)
 app.include_router(notification.router)
 app.include_router(analytics.router)   # YOUR branch
 app.include_router(classroom.router)   # TEAMMATE's branch
-
+app.include_router(gmail.router)       # YOUR branch
 
 @app.get("/")
 async def root():

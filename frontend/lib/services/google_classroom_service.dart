@@ -6,6 +6,8 @@
 //   - fetchAssignments() - Get assignments for a course
 //   - syncAllAssignments() - Trigger manual sync
 //   - submitAssignment() - Submit text/file to Classroom
+//   - getHealth() - Check connection status
+//   - disconnect() - Remove Classroom integration
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
@@ -22,20 +24,6 @@ class GoogleClassroomService {
     };
   }
 
-  // // Get Google OAuth URL from backend
-  // static Future<String> getOauthUrl() async {
-  //   final response = await http.get(
-  //     Uri.parse('$baseUrl/classroom/oauth/url'),
-  //     headers: await _getHeaders(),
-  //   );
-
-  //   if (response.statusCode == 200) {
-  //     final data = jsonDecode(response.body);
-  //     return data['auth_url'] as String;
-  //   } else {
-  //     throw Exception('Failed to get OAuth URL: ${response.body}');
-  //   }
-  // }
   // Get OAuth URL for mobile
   static Future<Map<String, String>> getMobileAuthUrl() async {
     final response = await http.get(
@@ -54,7 +42,7 @@ class GoogleClassroomService {
     }
   }
 
-// Check if user is connected to Google Classroom
+  // Check if user is connected to Google Classroom
   static Future<bool> isConnected() async {
     final response = await http.get(
       Uri.parse('$baseUrl/classroom/health'),
@@ -216,6 +204,36 @@ class GoogleClassroomService {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to connect Google Classroom: ${response.body}');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────
+  // NEW METHODS FOR PROFILE SCREEN
+  // ─────────────────────────────────────────────────────────────────
+
+  // Get connection health status
+  static Future<Map<String, dynamic>> getHealth() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/classroom/health'),
+      headers: await _getHeaders(),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to get Classroom status: ${response.body}');
+    }
+  }
+
+  // Disconnect Google Classroom (remove tokens)
+  static Future<void> disconnect() async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/classroom/disconnect'),
+      headers: await _getHeaders(),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to disconnect Classroom: ${response.body}');
     }
   }
 }

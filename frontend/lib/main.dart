@@ -21,6 +21,8 @@ import 'screens/home_screen.dart';
 import 'screens/auth/auth_screen.dart';
 import 'services/api_service.dart';
 import 'widgets/common/notification_permission_sheet.dart';
+import 'providers/profile_provider.dart';
+import 'providers/gmail_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -43,6 +45,8 @@ class CognifyApp extends StatelessWidget {
 
         // AnalyticsProvider - no ProxyProvider needed since it loads its own data
         ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
+        ChangeNotifierProvider(create: (_) => GmailProvider()), // YOUR branch
       ],
       child: ValueListenableBuilder<ThemeMode>(
         valueListenable: themeNotifier,
