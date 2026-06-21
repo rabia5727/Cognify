@@ -85,17 +85,27 @@ class GoogleClassroomService:
     @staticmethod
     async def fetch_assignments(user_id: str, course_id: str, db):
         """Fetch assignments for a specific course"""
+        print(f"fetch_assignments called for course: {course_id}")
         service = await GoogleClassroomService.get_classroom_service(user_id, db)
         if not service:
+            print("❌ No service available")
             return []
         
         try:
+            print(f"Calling Google Classroom API for course: {course_id}")
             results = service.courses().courseWork().list(
                 courseId=course_id,
                 courseWorkStates='PUBLISHED'
             ).execute()
             
             assignments = results.get('courseWork', [])
+            
+            #print first assignment for debugging
+            if assignments:
+                print(f"📝 Sample assignment: {assignments[0].get('title')}")   
+            else:
+                print("⚠️ No assignments found in this course")
+            
             
             # Process assignments to match frontend expectations
             processed_assignments = []

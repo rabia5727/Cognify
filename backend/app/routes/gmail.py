@@ -92,7 +92,10 @@ async def mobile_oauth_auth(current_user: dict = Depends(get_current_user)):
         prompt='consent',
         state=state
     )
-    
+    print("=" * 60)
+    print("🔍 GENERATED AUTH URL:")
+    print(auth_url)
+    print("=" * 60)
     return {"auth_url": auth_url, "state": state}
 
 

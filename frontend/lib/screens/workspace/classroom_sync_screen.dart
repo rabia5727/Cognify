@@ -112,6 +112,7 @@ class _ClassroomSyncScreenState extends State<ClassroomSyncScreen> {
         context,
         authUrl: authUrl,
         state: state,
+        healthEndpoint: '/classroom/health',
       );
 
       if (success) {

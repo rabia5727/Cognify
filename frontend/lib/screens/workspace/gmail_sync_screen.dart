@@ -1,13 +1,17 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:frontend/services/oauth_webview.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+
 import '../../providers/gmail_provider.dart';
 import '../../services/gmail_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common/app_header.dart';
 import '../../utils/ui_feedback.dart';
+import '../../config/app_config.dart';
 
 class GmailSyncScreen extends StatefulWidget {
   const GmailSyncScreen({super.key});
@@ -33,22 +37,33 @@ class _GmailSyncScreenState extends State<GmailSyncScreen> {
     }
   }
 
-// Replace the _connectGmail method:
   Future<void> _connectGmail() async {
     setState(() => _isConnecting = true);
 
     try {
       final authData = await GmailService.getMobileAuthUrl();
       final authUrl = authData['auth_url']!;
-      final connected = await _openOAuthWebView(authUrl);
+      final state = authData['state']!;
 
-      if (connected) {
+      // ✅ Use OAuthWebView - same as Classroom - NO manual code paste!
+      final success = await OAuthWebView.authenticateWithGoogle(
+        context,
+        authUrl: authUrl,
+        state: state,
+        healthEndpoint: '/gmail/health',
+      );
+
+      if (success) {
         final provider = context.read<GmailProvider>();
         await provider.checkConnection();
         await provider.loadEmails();
-
         if (mounted) {
           UIFeedback.showSuccess(context, 'Gmail connected successfully!');
+        }
+      } else {
+        if (mounted) {
+          UIFeedback.showError(
+              context, 'Failed to connect to Gmail. Please try again.');
         }
       }
     } catch (e) {
@@ -58,58 +73,6 @@ class _GmailSyncScreenState extends State<GmailSyncScreen> {
     } finally {
       setState(() => _isConnecting = false);
     }
-  }
-
-  Future<bool> _openOAuthWebView(String authUrl) async {
-    final completer = Completer<bool>();
-
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => Dialog(
-        insetPadding: EdgeInsets.zero,
-        child: SizedBox(
-          width: double.infinity,
-          height: double.infinity,
-          child: Column(
-            children: [
-              AppBar(
-                title: const Text('Connect Gmail'),
-                leading: IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () {
-                    if (!completer.isCompleted) {
-                      completer.complete(false);
-                    }
-                    Navigator.pop(dialogContext);
-                  },
-                ),
-              ),
-              Expanded(
-                child: InAppWebView(
-                  initialUrlRequest: URLRequest(url: WebUri(authUrl)),
-                  initialSettings: InAppWebViewSettings(
-                    javaScriptEnabled: true,
-                    supportZoom: false,
-                  ),
-                  onLoadStart: (controller, url) {
-                    final urlString = url?.toString() ?? '';
-                    if (urlString.contains('/gmail/oauth/mobile-callback')) {
-                      if (!completer.isCompleted) {
-                        completer.complete(true);
-                      }
-                      Navigator.pop(dialogContext);
-                    }
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    return await completer.future;
   }
 
   Future<void> _syncEmails() async {
@@ -135,7 +98,7 @@ class _GmailSyncScreenState extends State<GmailSyncScreen> {
           children: [
             AppHeader(
               title: 'Gmail Integration',
-              onBack: () => Navigator.of(context).pop(),
+              onBack: () => Navigator.pop(context),
             ),
             Expanded(
               child: Consumer<GmailProvider>(
