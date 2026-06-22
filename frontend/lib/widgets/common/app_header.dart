@@ -431,14 +431,17 @@ class _ReturningUserMessage extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    onYes();
+                    // ✅ Capture BEFORE onYes() — onYes() calls _dismissCurrentSuggestion()
+                    // which clears the task state, so ctaMessage becomes stale after that.
+                    final messageToSend = ctaMessage != null
+                        ? 'Help me with: $ctaMessage'
+                        : 'Help me prioritize my tasks';
+                    onYes(); // dismiss AFTER capturing
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => AssistantScreen(
-                          initialMessage: ctaMessage != null
-                              ? 'Help me with: $ctaMessage'
-                              : null,
+                          initialMessage: messageToSend,
                         ),
                       ),
                     );

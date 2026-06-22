@@ -189,7 +189,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   // true means "nothing dismissed yet this session".
                   showProactiveCard: _dismissedTaskId == null,
                   dismissedTaskId: _dismissedTaskId,
-                  onYes: _dismissCurrentSuggestion,
+                  onYes: () {
+                    // capture BEFORE dismissing — dismissing clears the suggestion
+                    final taskProvider = context.read<TaskProvider>();
+                    final currentTaskId =
+                        _peekCurrentSuggestionTaskId(taskProvider);
+                    final currentTask = taskProvider.tasks
+                        .where((t) => t.id == currentTaskId)
+                        .firstOrNull;
+                    _dismissCurrentSuggestion();
+                    // pass task title up to header via a new callback
+                    // handled inside DashboardHeader's Yes button directly
+                  },
                   onNo: _dismissCurrentSuggestion,
                   onProfileTap: _navigateToProfile,
                 ),
@@ -198,7 +209,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onRefresh: _onRefresh,
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -301,17 +312,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
           animatingTaskId: _animatingTaskId,
         );
       }
+      final upcoming = allTasks.where((t) {
+        if (t.isCompleted) return false;
+        final due = DateTime(t.dueDate.year, t.dueDate.month, t.dueDate.day);
+        return !due.isBefore(today); // includes today + future
+      }).toList()
+        ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+      final nextTask = upcoming.isNotEmpty ? upcoming.first : null;
+
       return NoTasksDueTodayEmptyState(
         onViewAllTasks: () => widget.onTabSelected(1),
+        nextPriorityTask: nextTask,
+        onStartTask: _navigateToVoice,
       );
     }
 
     if (todayTasks.every((t) => t.isCompleted) && overdueTasks.isEmpty) {
+      // Find next upcoming task to show below the celebration
+      final upcoming = allTasks.where((t) {
+        if (t.isCompleted) return false;
+        final due = DateTime(t.dueDate.year, t.dueDate.month, t.dueDate.day);
+        return !due.isBefore(today);
+      }).toList()
+        ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+      final nextTask = upcoming.isNotEmpty ? upcoming.first : null;
+
+      if (nextTask != null) {
+        // Show next priority card instead of generic "all done"
+        return NoTasksDueTodayEmptyState(
+          onViewAllTasks: () => widget.onTabSelected(1),
+          nextPriorityTask: nextTask,
+          onStartTask: _navigateToVoice,
+        );
+      }
+
+      // Truly nothing left — show celebration
       return AllDoneEmptyState(
         onViewUpcomingTasks: () => widget.onTabSelected(1),
       );
     }
-
     // Combine active today tasks + overdue so both are visible together
     final activeTodayTasks = todayTasks.where((t) => !t.isCompleted).toList();
     final combined = [...overdueTasks, ...activeTodayTasks];
@@ -393,6 +434,7 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedOpacity(
@@ -400,94 +442,160 @@ class _TaskCard extends StatelessWidget {
         opacity: isAnimating ? 0.7 : 1.0,
         child: SizedBox(
           width: 165,
-          child: AppCard(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    if (task.isOverdue)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
-                          'Overdue',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.red,
-                          ),
-                        ),
-                      )
-                    else
-                      const SizedBox.shrink(),
-                    PriorityBadge(priority: task.priority),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  task.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time_rounded,
-                      size: 13,
-                      color: task.isOverdue
-                          ? Colors.red
-                          : theme.textTheme.bodySmall?.color,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      task.dueTime ?? task.formattedDueDate,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: task.isOverdue ? Colors.red : null,
-                      ),
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: task.isCompleted ? null : onStart,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Accent bar — red if overdue, gradient otherwise ──
+                  Container(
+                    height: 3,
                     decoration: BoxDecoration(
-                      color: task.isCompleted
-                          ? Colors.green.withValues(alpha: 0.15)
-                          : theme.colorScheme.primary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: Text(
-                        task.isCompleted ? '✓ Done' : 'Start Task >',
-                        key: ValueKey(task.isCompleted),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: task.isCompleted ? Colors.green : Colors.white,
-                        ),
+                      gradient: LinearGradient(
+                        colors: task.isOverdue
+                            ? [Colors.red, Colors.red.shade300]
+                            : const [Color(0xFF1360E2), Color(0xFF7C3AED)],
                       ),
                     ),
                   ),
-                ),
-              ],
+
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── Label row: overdue/today tag ────────────
+                          Row(
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: task.isOverdue
+                                      ? Colors.red.withOpacity(0.12)
+                                      : theme.colorScheme.primary
+                                          .withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Icon(
+                                  task.isOverdue
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.north_east_rounded,
+                                  size: 10,
+                                  color: task.isOverdue
+                                      ? Colors.red
+                                      : theme.colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                task.isOverdue ? 'Overdue' : 'Due today',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: task.isOverdue
+                                      ? Colors.red
+                                      : theme.colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Title ────────────────────────────────────
+                          Text(
+                            task.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              height: 1.25,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Date + priority badge ────────────────────
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today_rounded,
+                                size: 11,
+                                color: task.isOverdue
+                                    ? Colors.red
+                                    : theme.textTheme.bodySmall?.color,
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  task.dueTime ?? task.formattedDueDate,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontSize: 10,
+                                    color: task.isOverdue ? Colors.red : null,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          PriorityBadge(priority: task.priority),
+
+                          const Spacer(),
+
+                          // ── Button ───────────────────────────────────
+                          GestureDetector(
+                            onTap: task.isCompleted ? null : onStart,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 9),
+                              decoration: BoxDecoration(
+                                color: task.isCompleted
+                                    ? Colors.green.withOpacity(0.15)
+                                    : theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (!task.isCompleted) ...[
+                                    const Icon(
+                                      Icons.play_arrow_rounded,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 200),
+                                    child: Text(
+                                      task.isCompleted
+                                          ? '✓ Done'
+                                          : 'Start Task',
+                                      key: ValueKey(task.isCompleted),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: task.isCompleted
+                                            ? Colors.green
+                                            : Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -531,7 +639,7 @@ class _ProductivityCard extends StatelessWidget {
                       size: const Size(120, 120),
                       painter: _GradientArcPainter(
                         progress: animated,
-                        strokeWidth: 14,
+                        strokeWidth: 18, // ← thicker
                         trackColor: theme.dividerColor,
                         startColor: const Color(0xFF1360E2),
                         endColor: const Color(0xFF9B5FFF),

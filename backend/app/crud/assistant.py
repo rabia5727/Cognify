@@ -1,13 +1,4 @@
 # app/crud/assistant.py
-# CoCo — Main AI Orchestrator
-#
-# Changes this session:
-# ✅ Email agent tools added to tool pool
-# ✅ _execute_pending_action handles "send_email" type
-# ✅ _CONFIRM_WORDS cleaned up — removed ambiguous words like
-#    "create", "make", "go", "do" that caused false positives
-#    when user said "make it more formal" with a pending action
-# ✅ SYSTEM_PROMPT updated with email + edit tool descriptions
 
 import uuid
 from langchain_groq import ChatGroq
@@ -20,10 +11,7 @@ from app.agents.task_agent      import get_task_agent_tools
 from app.agents.execution_agent import get_execution_agent_tools
 from app.agents.scheduler_agent import get_scheduler_agent_tools
 from app.agents.analytics_agent import get_analytics_agent_tools
-from app.agents.email_agent     import get_email_agent_tools       # ✅ NEW
 
-
-# ── LLM ─────────────────────────────────────────────────────────────────────
 
 _base_llm = ChatGroq(
     api_key=settings.GROQ_API_KEY,
@@ -32,10 +20,49 @@ _base_llm = ChatGroq(
     max_tokens=1024,
 )
 
+# ── Tools whose output is already user-ready ─────────────────────────────────
+# These tools return carefully formatted messages (full document content,
+# email drafts, search results, study plans).
+# Passing them through a second LLM call causes the LLM to SUMMARIZE
+# the output — destroying the formatting and losing content.
+# Solution: use the tool result directly as the reply, skip second LLM call.
+_PASSTHROUGH_TOOLS = {
+    "generate_solution_tool",  # shows full document content
+    "edit_document_tool",      # shows updated full content
+    "draft_email_tool",        # shows full email draft
+    "edit_email_tool",         # shows updated email draft
+    "search_topic_tool",       # search results
+    "breakdown_task",          # step-by-step plan
+    "build_study_plan",        # study plan
+    "suggest_resources",       # resource list
+}
+
 SYSTEM_PROMPT = """You are CoCo, an intelligent AI productivity assistant inside Cognify.
 You help students and freelancers manage tasks, deadlines, projects, and productivity.
 
-TOOLS — use them whenever the user's request matches:
+CLARIFICATION RULE (HIGHEST PRIORITY):
+Before using generate_solution_tool, draft_email_tool, build_study_plan, or breakdown_task,
+you MUST check if the request has enough detail to produce good output.
+
+If ANY of these are missing, ask ONE focused question before calling the tool:
+- generate_solution_tool needs: topic/subject, key requirements or sections, approximate length
+- draft_email_tool needs: recipient, purpose of email, tone (formal/casual)
+- build_study_plan needs: subject, exam date or deadline, available hours per day
+- breakdown_task needs: what the task actually involves
+
+BAD (too vague to generate well):
+  User: "help me with my maths assignment" → ASK: "What topics does it cover and what sections do you need?"
+  User: "write me an email" → ASK: "Who is this to and what is it about?"
+  User: "make a study plan" → ASK: "Which subject and when is your exam?"
+
+GOOD (enough detail to proceed):
+  User: "write an essay on climate change, 500 words, intro + 3 arguments + conclusion" → USE generate_solution_tool
+  User: "email to my professor apologizing for missing class" → USE draft_email_tool
+  User: "study plan for data structures exam next Friday, 2 hours a day" → USE build_study_plan
+
+Ask only ONE question. Keep it short and friendly. Never ask multiple questions at once.
+
+TOOLS — use them whenever the user's request has enough detail:
 
 Task Management:
 - create_task_tool: add/create/schedule a task
@@ -46,32 +73,31 @@ Task Management:
 
 Execution & Learning:
 - search_topic_tool: search or look something up on the web
-- generate_solution_tool: write a complete assignment, essay, proposal, or report as a DOCX
-- edit_document_tool: edit/change the document draft when user requests modifications
-  (IMPORTANT: call this when user says things like 'make it longer', 'change the intro',
-  'add more examples', 'rewrite the conclusion' AFTER a document was generated)
+- generate_solution_tool: write complete content for assignment, essay, proposal, or report
+  (user reads it in chat first, then decides if they want DOCX or just edits)
+- edit_document_tool: edit the document when user requests changes
+  (call when user says 'make it longer', 'change the intro', 'add more examples' etc.)
 - breakdown_task: plan a complex task step by step
 - build_study_plan: study plan for exams or academic work
 - create_subtasks: split a task into smaller pieces
 - suggest_resources: learning resources for a topic
 
 Email:
-- draft_email_tool: write a complete email draft (academic, freelance, general)
-- edit_email_tool: edit the email draft when user requests changes
-  (call when user says 'make it more formal', 'shorten it', 'change the subject' etc.)
+- draft_email_tool: write a complete email draft
+- edit_email_tool: edit the email when user requests changes
 
 Scheduling & Analytics:
 - summarize_day, prioritize_tasks, check_workload_balance, find_free_slots
 - get_productivity_score, get_weekly_summary, get_most_active_hour
 
 RULES:
-1. ALWAYS use generate_solution_tool when user wants something written as a document.
-2. ALWAYS use edit_document_tool when a document was generated and user asks for changes.
-3. ALWAYS use draft_email_tool when user wants an email written.
-4. ALWAYS use edit_email_tool when an email draft exists and user asks for changes.
-5. Keep replies concise, friendly, plain text."""
-
-
+1. ALWAYS ask ONE clarifying question if the request is too vague before using any generation tool.
+2. ALWAYS use generate_solution_tool when user provides enough detail about an assignment, essay, proposal, or report.
+3. ALWAYS use edit_document_tool when user asks for changes to content just generated.
+4. ALWAYS use draft_email_tool when user wants an email written and has given enough context.
+5. ALWAYS use edit_email_tool when user asks to change a drafted email.
+6. Keep replies concise, friendly, plain text.
+7. Never ask more than ONE question at a time."""
 # ── Session helpers ──────────────────────────────────────────────────────────
 
 def _generate_title_from_message(message: str) -> str:
@@ -83,7 +109,7 @@ async def create_new_session(user_id: str, first_message: str = "") -> dict:
     db         = get_database()
     session_id = str(uuid.uuid4())
     title      = _generate_title_from_message(first_message) if first_message else "New Chat"
-    doc = {
+    await db["conversations"].insert_one({
         "session_id":     session_id,
         "user_id":        user_id,
         "title":          title,
@@ -91,8 +117,7 @@ async def create_new_session(user_id: str, first_message: str = "") -> dict:
         "pending_action": None,
         "created_at":     datetime.now(timezone.utc),
         "updated_at":     datetime.now(timezone.utc),
-    }
-    await db["conversations"].insert_one(doc)
+    })
     return {"session_id": session_id, "title": title}
 
 
@@ -148,10 +173,6 @@ async def _clear_pending_action(user_id: str, session_id: str) -> None:
 
 
 async def _execute_pending_action(action: dict, user_id: str = "") -> str:
-    """
-    Executes a confirmed pending action.
-    Handles: create_docx, send_email
-    """
     action_type = action.get("type")
 
     if action_type == "create_docx":
@@ -169,41 +190,34 @@ async def _execute_pending_action(action: dict, user_id: str = "") -> str:
         )
 
     elif action_type == "send_email":
-        # ✅ Rabia's Gmail send function is called here
         from app.crud.email_generator import send_email_via_gmail
-        result = await send_email_via_gmail(
+        return await send_email_via_gmail(
             to=action.get("to", ""),
             subject=action.get("subject", ""),
             body=action.get("body", ""),
             user_id=user_id,
         )
-        return result
 
     return "Action completed."
 
 
-# ── ✅ FIXED: Confirmation detection ─────────────────────────────────────────
-# Removed ambiguous words: "create", "make", "go", "do", "generate", "build"
-# These caused false positives — e.g. "make it more formal" (4 words) was
-# being treated as a confirmation when a pending_action existed.
-# Now only clear, unambiguous yes-words trigger execution.
+# ── Confirmation detection ────────────────────────────────────────────────────
+# Only clear, unambiguous yes-words trigger execution.
+# "make", "create", "go", "do" removed — too ambiguous when editing.
 
 _CONFIRM_WORDS = {
     "yes", "yeah", "yep", "yup",
     "sure", "ok", "okay", "alright",
-    "confirmed", "proceed", "great", "perfect",
+    "confirmed", "proceed", "perfect",
     "sounds good", "go ahead", "do it",
     "create it", "make it", "let's go",
     "download it", "save it", "send it",
+    "create the file", "download the file",
 }
 
 
 def _is_confirmation(message: str) -> bool:
-    """
-    Returns True only for short, clear confirmation messages.
-    Max 6 words to avoid catching edit requests like
-    'make the intro longer' or 'change the tone'.
-    """
+    """Max 6 words — prevents 'make it more formal' triggering DOCX creation."""
     cleaned = message.lower().strip().rstrip("!.,?")
     words   = cleaned.split()
     if len(words) > 6:
@@ -219,29 +233,20 @@ async def chat_with_coco(
     source: str = "text",
     session_id: str = "",
 ) -> dict:
-    """
-    Orchestrator using bind_tools pattern.
-    Session-aware + confirm-before-execute for documents and emails.
-    Returns: {"reply": str, "intent": str, "session_id": str}
-    """
     try:
         if not session_id:
             new_session = await create_new_session(user_id, first_message=user_message)
             session_id  = new_session["session_id"]
 
-        # ── Confirm-before-execute check ──────────────────────────────────
+        # ── Confirm-before-execute ────────────────────────────────────────
         pending = await _load_pending_action(user_id, session_id)
         if pending and _is_confirmation(user_message):
             result_text = await _execute_pending_action(pending, user_id=user_id)
             await _clear_pending_action(user_id, session_id)
             intent = "create_docx" if pending.get("type") == "create_docx" else "send_email"
-            await save_message(user_id, session_id, "user",      user_message, source,       "confirm")
-            await save_message(user_id, session_id, "assistant", result_text,  "assistant",  intent)
+            await save_message(user_id, session_id, "user",      user_message, source,      "confirm")
+            await save_message(user_id, session_id, "assistant", result_text,  "assistant", intent)
             return {"reply": result_text, "intent": intent, "session_id": session_id}
-
-        # If there's a pending action but user is NOT confirming (they want to edit),
-        # let the LLM handle it — edit_document_tool or edit_email_tool will be called.
-        # Do NOT clear the pending action here; the edit tools update it in place.
 
         # ── Normal tool-calling flow ──────────────────────────────────────
         history = await get_conversation_history(user_id, session_id, limit=8)
@@ -249,11 +254,10 @@ async def chat_with_coco(
         all_tools = (
             get_task_agent_tools(user_id) +
             get_execution_agent_tools(user_id, session_id) +
-            get_email_agent_tools(user_id, session_id) +          # ✅ NEW
             get_scheduler_agent_tools(user_id) +
             get_analytics_agent_tools(user_id)
         )
-        tool_map       = {tool.name: tool for tool in all_tools}
+        tool_map       = {t.name: t for t in all_tools}
         llm_with_tools = _base_llm.bind_tools(all_tools)
 
         messages = [SystemMessage(content=SYSTEM_PROMPT)]
@@ -285,17 +289,25 @@ async def chat_with_coco(
                 else:
                     tool_results.append(ToolMessage(content="Tool not found.", tool_call_id=tool_id))
 
-            messages.extend(tool_results)
-            messages.append(HumanMessage(
-                content=(
-                    "Based ONLY on the tool result above, give a clear and direct response. "
-                    "Do not add information from your own knowledge. "
-                    "If the result contains a [FILE:...] tag, tell the user their document "
-                    "is ready to download."
-                )
-            ))
-            final    = await _base_llm.ainvoke(messages)
-            ai_reply = final.content.strip()
+            # ── ✅ KEY FIX: skip second LLM for formatting tools ──────────
+            # These tools already return perfectly formatted user-facing messages.
+            # Running them through a second LLM call causes summarization/compression
+            # which loses the full document content, email body, etc.
+            if intent in _PASSTHROUGH_TOOLS:
+                ai_reply = "\n\n".join(tr.content for tr in tool_results)
+            else:
+                # For data tools (task lists, stats etc.) — LLM formats the raw output
+                messages.extend(tool_results)
+                messages.append(HumanMessage(
+                    content=(
+                        "Based ONLY on the tool result above, give a clear and direct response. "
+                        "Do not add information from your own knowledge. "
+                        "If the result contains a [FILE:...] tag, tell the user their "
+                        "document is ready to download."
+                    )
+                ))
+                final    = await _base_llm.ainvoke(messages)
+                ai_reply = final.content.strip()
         else:
             ai_reply = response.content.strip()
 

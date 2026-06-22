@@ -127,36 +127,23 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen>
     return days[weekday - 1];
   }
 
-  // ✅ ADD: Robot celebration animation
-  void _showCelebration() {
-    // Start the celebration animation
+  void _showCelebration({String message = '🎉 Task completed! Great job!'}) {
     setState(() {
       _showCelebrationRobot = true;
-      // Random position near the center
       _robotPosition = Offset(
-        100 + (MediaQuery.of(context).size.width - 200) / 2,
-        MediaQuery.of(context).size.height * 0.4,
+        MediaQuery.of(context).size.width / 2,
+        MediaQuery.of(context).size.height * 0.35,
       );
     });
 
-    // Start the animation
     _celebrationAnimController.reset();
     _celebrationAnimController.forward();
-
-    // Show confetti
     _confettiController.play();
+    UIFeedback.showSuccess(context, message);
 
-    // Show success message
-    UIFeedback.showSuccess(context, '🎉 Task completed! Great job!');
-
-    // Hide after 2.5 seconds
     _celebrationTimer?.cancel();
     _celebrationTimer = Timer(const Duration(milliseconds: 2500), () {
-      if (mounted) {
-        setState(() {
-          _showCelebrationRobot = false;
-        });
-      }
+      if (mounted) setState(() => _showCelebrationRobot = false);
     });
   }
 
@@ -171,7 +158,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen>
     final isCompleting = !task.isCompleted;
 
     setState(() => _animatingTaskId = id);
-
     try {
       await taskProvider.toggleComplete(id);
       await taskProvider.refreshTasks();
@@ -182,8 +168,42 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen>
     }
 
     if (isCompleting && mounted) {
-      // ✅ Show celebration animation
-      _showCelebration();
+      // Task celebration fires immediately
+      _showCelebration(message: '🎉 Task completed! Great job!');
+
+      // Project celebration fires after task celebration finishes
+      _checkProjectCompletion(id);
+    }
+  }
+
+  void _checkProjectCompletion(String completedTaskId) {
+    final taskProvider = context.read<TaskProvider>();
+    final projectProvider = context.read<ProjectProvider>();
+
+    for (final project in projectProvider.projects) {
+      // Skip projects that don't contain this task
+      if (!project.taskIds.contains(completedTaskId)) continue;
+
+      final linkedTasks = taskProvider.tasks
+          .where((t) => project.taskIds.contains(t.id))
+          .toList();
+
+      if (linkedTasks.isEmpty) continue;
+
+      // Check if ALL tasks in this project are now done
+      final allDone = linkedTasks.every((t) => t.isCompleted);
+      if (allDone) {
+        // Wait for task celebration to finish (2500ms) then show project one
+        Future.delayed(const Duration(milliseconds: 2800), () {
+          if (mounted) {
+            _showCelebration(
+              message:
+                  '🏆 "${project.title}" project complete! Incredible work!',
+            );
+          }
+        });
+        break; // Only show one project celebration at a time
+      }
     }
   }
 
