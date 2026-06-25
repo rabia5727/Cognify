@@ -1,17 +1,16 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:frontend/providers/task_provider.dart';
 import 'package:frontend/services/oauth_webview.dart';
+import 'package:frontend/services/sync_service.dart'; // ✅ ADD THIS IMPORT
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 
 import '../../providers/gmail_provider.dart';
 import '../../services/gmail_service.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/common/app_header.dart';
 import '../../utils/ui_feedback.dart';
-import '../../config/app_config.dart';
+import '../../widgets/common/app_header.dart';
 
 class GmailSyncScreen extends StatefulWidget {
   const GmailSyncScreen({super.key});
@@ -79,6 +78,8 @@ class _GmailSyncScreenState extends State<GmailSyncScreen> {
     final provider = context.read<GmailProvider>();
     try {
       await provider.syncEmails();
+      //refresh tasks afer email sync
+      await context.read<TaskProvider>().refreshTasks();
       if (mounted) {
         UIFeedback.showSuccess(context, 'Emails synced successfully!');
       }
@@ -206,69 +207,87 @@ class _GmailSyncScreenState extends State<GmailSyncScreen> {
           ),
         ),
         const Divider(),
+        // ✅ ADDED: RefreshIndicator with SyncService.manualSync
         Expanded(
-          child: provider.emails.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+          child: RefreshIndicator(
+            onRefresh: () => SyncService.manualSync(context), // ✅ CHANGED HERE
+            child: provider.emails.isEmpty
+                ? ListView(
                     children: [
-                      Icon(Icons.inbox, size: 64, color: Colors.grey.shade300),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No emails synced yet',
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: provider.emails.length,
-                  itemBuilder: (context, index) {
-                    final email = provider.emails[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: email['is_actionable']
-                              ? Colors.green.shade100
-                              : Colors.grey.shade200,
-                          child: Icon(
-                            email['is_actionable'] ? Icons.flag : Icons.email,
-                            size: 18,
-                            color: email['is_actionable']
-                                ? Colors.green.shade700
-                                : Colors.grey.shade600,
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(40),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.inbox,
+                                  size: 64, color: Colors.grey.shade300),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No emails synced yet',
+                                style: TextStyle(color: Colors.grey.shade600),
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton.icon(
+                                onPressed: _syncEmails,
+                                icon: const Icon(Icons.sync),
+                                label: const Text('Sync Now'),
+                              ),
+                            ],
                           ),
                         ),
-                        title: Text(
-                          email['subject'] ?? 'No Subject',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          email['sender'] ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: email['is_actionable']
-                            ? Chip(
-                                label: Text(
-                                  email['is_task_created']
-                                      ? '✅ Task'
-                                      : '📌 Action',
-                                  style: const TextStyle(fontSize: 10),
-                                ),
-                                backgroundColor: email['is_task_created']
-                                    ? Colors.green.shade100
-                                    : Colors.orange.shade100,
-                              )
-                            : null,
                       ),
-                    );
-                  },
-                ),
+                    ],
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: provider.emails.length,
+                    itemBuilder: (context, index) {
+                      final email = provider.emails[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: email['is_actionable']
+                                ? Colors.green.shade100
+                                : Colors.grey.shade200,
+                            child: Icon(
+                              email['is_actionable'] ? Icons.flag : Icons.email,
+                              size: 18,
+                              color: email['is_actionable']
+                                  ? Colors.green.shade700
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                          title: Text(
+                            email['subject'] ?? 'No Subject',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            email['sender'] ?? '',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: email['is_actionable']
+                              ? Chip(
+                                  label: Text(
+                                    email['is_task_created']
+                                        ? '✅ Task'
+                                        : '📌 Action',
+                                    style: const TextStyle(fontSize: 10),
+                                  ),
+                                  backgroundColor: email['is_task_created']
+                                      ? Colors.green.shade100
+                                      : Colors.orange.shade100,
+                                )
+                              : null,
+                        ),
+                      );
+                    },
+                  ),
+          ),
         ),
       ],
     );

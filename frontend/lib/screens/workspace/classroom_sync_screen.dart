@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:frontend/screens/workspace/classroom_course_tile.dart';
 import 'package:frontend/widgets/empty_states/classroom_empty_state.dart';
 import 'package:provider/provider.dart';
-import '../../services/google_classroom_service.dart';
-import '../../services/oauth_webview.dart';
+
 import '../../providers/classroom_provider.dart';
 import '../../providers/task_provider.dart';
+import '../../services/google_classroom_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/oauth_webview.dart';
+import '../../services/sync_service.dart'; // ✅ ADD THIS IMPORT
 import '../../theme/app_theme.dart';
 import '../../widgets/common/app_header.dart';
 
@@ -220,9 +222,10 @@ class _ClassroomSyncScreenState extends State<ClassroomSyncScreen> {
                     );
                   }
 
-                  // Show courses list
+                  // ✅ UPDATED: Show courses list with manual sync on pull
                   return RefreshIndicator(
-                    onRefresh: _loadData,
+                    onRefresh: () =>
+                        SyncService.manualSync(context), // ✅ CHANGED HERE
                     child: ListView.builder(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,

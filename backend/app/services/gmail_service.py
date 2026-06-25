@@ -27,36 +27,89 @@ class GmailService:
         'https://www.googleapis.com/auth/gmail.modify',
     ]
     
-    # Actionable keywords
+    # ✅ Actionable keywords - more specific
     ACTION_KEYWORDS = [
         r'due\s*(?:date)?',
         r'deadline',
-        r'submit',
+        r'submit\s+(?:your|the|report|assignment|project)',
         r'invoice',
-        r'report',
+        r'report\s+(?:due|needed|required|for)',
         r'asap',
         r'by\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|\d{1,2}/\d{1,2})',
         r'reminder',
         r'action\s*required',
-        r'please\s*(?:review|approve|confirm|send|complete)',
+        r'please\s*(?:review|approve|confirm|send|complete|respond)',
         r'urgent',
-        r'task',
-        r'assignment',
-        r'homework',
-        r'project',
+        r'task\s+(?:assigned|created|updated|for|due)',
+        r'assignment\s+(?:due|submission)',
+        r'homework\s+(?:due|submission)',
+        r'project\s+(?:deadline|due|update|submission)',
         r'deliverable',
         r'milestone',
+        r'need\s+your\s+(?:input|feedback|approval|response)',
+        r'can\s+you\s+(?:send|review|confirm|approve|submit)',
+        r'please\s+find\s+attached',
+        r'attached\s+is\s+the',
+        r'meeting\s+(?:at|with|tomorrow|today)',
+        r'call\s+(?:at|with|today|tomorrow)',
+        r'follow[- ]?up',
+        r'feedback\s+needed',
+        r'approval\s+needed',
+        r'response\s+needed',
+        r'waiting\s+for\s+your',
+        r'could\s+you\s+please',
     ]
     
-    # Ignore patterns (newsletters, spam, etc)
+    # ❌ Ignore patterns (system/welcome/newsletter/spam)
     IGNORE_PATTERNS = [
-        r'unsubscribe',
+        # System/welcome emails
+        r'welcome\s+to',
+        r'welcome,',
+        r'get\s+started',
+        r'your\s+automation\s+forecast',
+        r'welcome\s+aboard',
+        r'thank\s+you\s+for\s+(?:signing|joining|subscribing)',
+        r'verify\s+your\s+email',
+        r'confirm\s+your\s+account',
+        r'complete\s+your\s+profile',
+        r'you\'re\s+all\s+set',
+        
+        # Newsletters & promotions
         r'newsletter',
         r'marketing',
         r'promotion',
+        r'unsubscribe',
         r'you\s*received\s*a\s*message',
         r'donotreply',
         r'noreply',
+        r'special\s+offer',
+        r'discount',
+        r'sale\s+now',
+        r'limited\s+time',
+        
+        # Auto-replies
+        r'automated\s+response',
+        r'automatic\s+reply',
+        r'out\s+of\s+office',
+        r'out\s+of\s+the\s+office',
+        r'vacation\s+auto[- ]?reply',
+    ]
+    
+    # ❌ Ignore senders (system emails)
+    IGNORE_SENDERS = [
+        r'info@make\.com',
+        r'welcome@',
+        r'noreply@',
+        r'donotreply@',
+        r'newsletter@',
+        r'marketing@',
+        r'notifications@',
+        r'updates@',
+        r'team@.*\.com',
+        r'hello@.*\.com',
+        r'support@.*\.com',
+        r'no[- ]?reply',
+        r'@.*\.newsletter\.com',
     ]
 
     @staticmethod
@@ -204,19 +257,26 @@ class GmailService:
         return body[:5000]  # Limit body size
     
     @staticmethod
-    def is_actionable_keyword(text: str) -> Tuple[bool, Dict]:
+    def is_actionable_keyword(text: str, sender: str = "") -> Tuple[bool, Dict]:
         """
         Check if email is actionable using keyword matching.
         Returns: (is_actionable, extracted_info)
         """
         text_lower = text.lower()
         
-        # Check ignore patterns first
-        for pattern in GmailService.IGNORE_PATTERNS:
-            if re.search(pattern, text_lower):
+        # ❌ Check sender first - block known system senders
+        for ignore_sender in GmailService.IGNORE_SENDERS:
+            if re.search(ignore_sender, sender.lower()):
+                print(f"🚫 Ignored email from system sender: {sender}")
                 return False, {}
         
-        # Check actionable keywords
+        # ❌ Check ignore patterns
+        for pattern in GmailService.IGNORE_PATTERNS:
+            if re.search(pattern, text_lower):
+                print(f"🚫 Ignored email: matches '{pattern}'")
+                return False, {}
+        
+        # ✅ Check actionable keywords
         matched_keywords = []
         for pattern in GmailService.ACTION_KEYWORDS:
             if re.search(pattern, text_lower):
@@ -225,12 +285,15 @@ class GmailService:
         if not matched_keywords:
             return False, {}
         
+        print(f"✅ Actionable email: matched keywords: {matched_keywords}")
+        
         # Extract potential due date
         due_date = None
         date_patterns = [
             r'by\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)',
             r'by\s*(\d{1,2}/\d{1,2})',
             r'due\s*(\d{1,2}/\d{1,2})',
+            r'on\s*(\d{1,2}/\d{1,2})',
         ]
         for pattern in date_patterns:
             match = re.search(pattern, text_lower)
@@ -240,10 +303,9 @@ class GmailService:
         
         # Determine priority
         priority = 'medium'
-        if any(k in matched_keywords for k in ['urgent', 'asap', 'deadline']):
+        high_priority_words = ['urgent', 'asap', 'deadline', 'immediately', 'critical']
+        if any(k in ' '.join(matched_keywords) for k in high_priority_words):
             priority = 'high'
-        elif any(k in matched_keywords for k in ['reminder', 'review']):
-            priority = 'medium'
         
         return True, {
             'matched_keywords': matched_keywords,
@@ -276,8 +338,10 @@ class GmailService:
         thread_id = email.get('thread_id', '')
         email_id = email.get('id', '')
         
-        # Generate title from subject or snippet
+        # Generate title from subject (clean up)
         title = subject if subject and subject != '' else snippet[:50]
+        # Remove common prefixes
+        title = re.sub(r'^(?:Fwd:|Re:|RE:|FW:)', '', title).strip()
         
         # Build description
         description = f"📧 From: {sender}\n"
@@ -327,26 +391,38 @@ class GmailService:
             if existing:
                 continue
             
-            # Combine subject + body + snippet for analysis
-            text_to_analyze = f"{email.get('subject', '')} {email.get('snippet', '')} {email.get('body', '')}"
+            # Get email data
+            subject = email.get('subject', '')
+            sender = email.get('sender', '')
+            snippet = email.get('snippet', '')
+            body = email.get('body', '')
             
-            # 1. Check keywords first (free)
-            is_actionable, classification = GmailService.is_actionable_keyword(text_to_analyze)
+            # ✅ Check subject FIRST (highest weight)
+            subject_actionable, subject_classification = GmailService.is_actionable_keyword(
+                subject, sender
+            )
             
-            # 2. If not found, check with AI (if available)
-            if not is_actionable:
-                is_actionable, classification = await GmailService.is_actionable_ai(text_to_analyze)
+            if subject_actionable:
+                is_actionable = True
+                classification = subject_classification
+                print(f"📌 Actionable from subject: '{subject}'")
+            else:
+                # ✅ Then check full email
+                text_to_analyze = f"{subject} {snippet} {body[:1000]}"
+                is_actionable, classification = GmailService.is_actionable_keyword(
+                    text_to_analyze, sender
+                )
             
             # Store email in database regardless
             await db.gmail_emails.insert_one({
                 "user_id": ObjectId(user_id),
                 "email_id": email_id,
                 "thread_id": email.get('thread_id'),
-                "subject": email.get('subject', ''),
-                "sender": email.get('sender', ''),
+                "subject": subject,
+                "sender": sender,
                 "date": email.get('date', ''),
-                "snippet": email.get('snippet', ''),
-                "body": email.get('body', '')[:5000],
+                "snippet": snippet,
+                "body": body[:5000],
                 "is_actionable": is_actionable,
                 "is_task_created": False,
                 "task_id": None,
@@ -388,13 +464,15 @@ class GmailService:
                     tasks_created += 1
                     actionable_emails.append({
                         'email_id': email_id,
-                        'subject': email.get('subject'),
+                        'subject': subject,
                         'task_id': str(created_task.id)
                     })
+                    print(f"✅ Created task from email: '{subject}'")
                     
                 except Exception as e:
                     print(f"❌ Failed to create task from email {email_id}: {e}")
         
+        print(f"📊 Sync complete: {len(emails)} emails, {tasks_created} tasks created")
         return {
             'synced': len(emails),
             'tasks_created': tasks_created,

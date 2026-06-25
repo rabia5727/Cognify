@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+
 import '../models/user_model.dart';
+import '../services/sync_service.dart';
 import '../services/token_storage.dart';
 import '../services/user_service.dart';
 
@@ -88,6 +90,9 @@ class AuthProvider extends ChangeNotifier {
   // ─── Logout ───────────────────────────────────────────────────────
 
   Future<void> logout() async {
+    // ✅ Stop auto-sync before logging out
+    SyncService.stopAutoSync();
+
     _isLoading = true;
     notifyListeners();
 

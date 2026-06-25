@@ -4,28 +4,30 @@
 //   - Fixed overlay dispose in _SortButtonState
 //   - Optimized consumers
 
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:frontend/services/sync_service.dart';
 import 'package:provider/provider.dart';
-import 'package:confetti/confetti.dart';
-import '../../models/task_model.dart';
+
 import '../../models/project_model.dart';
-import '../../providers/task_provider.dart';
-import '../../providers/project_provider.dart';
+import '../../models/task_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/project_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../utils/ui_feedback.dart';
-import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
+import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/empty_states/empty_workspace.dart';
 import '../../widgets/loading/shimmer_loading.dart';
-import 'add_task_screen.dart';
-import 'edit_task_screen.dart';
-import 'task_detail_screen.dart';
 import 'add_project_screen.dart';
-import 'edit_project_screen.dart';
-import 'project_detail_screen.dart';
+import 'add_task_screen.dart';
 import 'classroom_sync_screen.dart';
+import 'edit_project_screen.dart';
+import 'edit_task_screen.dart';
+import 'project_detail_screen.dart';
+import 'task_detail_screen.dart';
 
 class WorkSpaceScreen extends StatefulWidget {
   final int currentIndex;
@@ -322,6 +324,8 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       _projectFilterIndex = 0;
     });
     try {
+      //sync classroom and Gmail before Refreshing tasks
+      await SyncService.manualSync(context);
       await Future.wait([
         context.read<TaskProvider>().refreshTasks(),
         context.read<ProjectProvider>().refreshProjects(),
@@ -1321,7 +1325,7 @@ class _TaskCard extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(width: 10),
-                _buildCategoryTag(task.category),
+                Flexible(child: _buildCategoryTag(task.category)),
                 const Spacer(),
                 if (!isCompleted)
                   GestureDetector(
@@ -1373,12 +1377,12 @@ class _TaskCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
+          Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 9,
               fontWeight: FontWeight.w600,
               color: color,
             ),

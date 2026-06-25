@@ -11,10 +11,12 @@
 //   - archiveEmail()
 //   - checkConnection()
 //   - connectGmail()
+//   - autoSync() - Auto-sync for background
+//   - syncNow() - Force immediate sync
 
 import 'package:flutter/material.dart';
-import '../services/gmail_service.dart'; // ← Make sure this is correct
-import './task_provider.dart';
+
+import '../services/gmail_service.dart';
 
 class GmailProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _emails = [];
@@ -35,9 +37,9 @@ class GmailProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result =
-          await GmailService.getEmails(); // ← GmailService (not GmailServices)
-      _emails = result['emails'] ?? [];
+      final result = await GmailService.getEmails();
+      //cast the list properly
+      _emails = List<Map<String, dynamic>>.from(result['emails'] ?? []);
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -50,7 +52,7 @@ class GmailProvider extends ChangeNotifier {
   // Check connection status
   Future<void> checkConnection() async {
     try {
-      final result = await GmailService.getHealth(); // ← GmailService
+      final result = await GmailService.getHealth();
       _isConnected = result['connected'] ?? false;
       notifyListeners();
     } catch (e) {
@@ -61,11 +63,17 @@ class GmailProvider extends ChangeNotifier {
 
   // Sync emails from Gmail
   Future<void> syncEmails() async {
+    // Don't sync if not connected
+    if (!_isConnected) {
+      print('⚠️ Gmail not connected, skipping sync');
+      return;
+    }
+
     _isSyncing = true;
     notifyListeners();
 
     try {
-      final result = await GmailService.syncEmails(); // ← GmailService
+      final result = await GmailService.syncEmails();
       _lastSyncTime = DateTime.now();
       await loadEmails();
       _isSyncing = false;
@@ -81,6 +89,19 @@ class GmailProvider extends ChangeNotifier {
     }
   }
 
+  // ✅ NEW: Auto-sync for background (called by SyncService)
+  Future<void> autoSync() async {
+    if (!_isConnected) return;
+    print('🔄 GmailProvider: Auto-sync triggered');
+    await syncEmails();
+  }
+
+  // ✅ NEW: Force immediate sync (for pull-to-refresh)
+  Future<void> syncNow() async {
+    print('🔄 GmailProvider: Manual sync triggered');
+    await syncEmails();
+  }
+
   // Create task from email
   Future<void> createTaskFromEmail({
     required String emailId,
@@ -92,7 +113,6 @@ class GmailProvider extends ChangeNotifier {
   }) async {
     try {
       await GmailService.createTaskFromEmail(
-        // ← GmailService
         emailId: emailId,
         title: title,
         description: description,
@@ -114,7 +134,7 @@ class GmailProvider extends ChangeNotifier {
   // Archive email
   Future<void> archiveEmail(String emailId) async {
     try {
-      await GmailService.archiveEmail(emailId); // ← GmailService
+      await GmailService.archiveEmail(emailId);
 
       _emails.removeWhere((e) => e['email_id'] == emailId);
       notifyListeners();
@@ -126,7 +146,7 @@ class GmailProvider extends ChangeNotifier {
   // Mark email as read
   Future<void> markEmailRead(String emailId) async {
     try {
-      await GmailService.markEmailRead(emailId); // ← GmailService
+      await GmailService.markEmailRead(emailId);
 
       final index = _emails.indexWhere((e) => e['email_id'] == emailId);
       if (index != -1) {
@@ -140,7 +160,7 @@ class GmailProvider extends ChangeNotifier {
 
   // Get OAuth URL
   Future<Map<String, String>> getOAuthUrl() async {
-    return await GmailService.getMobileAuthUrl(); // ← GmailService
+    return await GmailService.getMobileAuthUrl();
   }
 
   // Connect Gmail account
@@ -154,7 +174,7 @@ class GmailProvider extends ChangeNotifier {
   // Disconnect Gmail
   Future<void> disconnectGmail() async {
     try {
-      await GmailService.disconnect(); // ← GmailService
+      await GmailService.disconnect();
       _isConnected = false;
       _emails = [];
       _lastSyncTime = null;
@@ -163,6 +183,8 @@ class GmailProvider extends ChangeNotifier {
       rethrow;
     }
   }
+
+  // ─── Getters ──────────────────────────────────────────────────────
 
   List<Map<String, dynamic>> get actionableEmails {
     return _emails.where((e) => e['is_actionable'] == true).toList();

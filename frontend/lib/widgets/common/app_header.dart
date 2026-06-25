@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../providers/notification_provider.dart';
 import '../../screens/notifications/notifications_screen.dart';
 import 'app_card.dart';
@@ -26,38 +27,56 @@ class AppHeader extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 20, 4),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: onBack,
-            icon: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white,
-                size: 16,
+      child: SizedBox(
+        height: 48,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: onBack,
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints.tightFor(width: 44, height: 44),
+                icon: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white,
+                    size: 16,
+                  ),
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              title,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w700,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 72),
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-          if (actions != null) 
-            Row(children: actions!)
-          else 
-            const SizedBox(width: 48),
-        ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: actions != null
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: actions!,
+                    )
+                  : const SizedBox(width: 48),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -199,9 +218,7 @@ class DashboardHeader extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      isNewUser
-                          ? 'Welcome to\nCOGNIFY,'
-                          : '${_getGreeting()},',
+                      isNewUser ? 'Welcome to\nCOGNIFY,' : '${_getGreeting()},',
                       style: const TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
