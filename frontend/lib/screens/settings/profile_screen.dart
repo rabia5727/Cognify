@@ -1,24 +1,29 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/settings/profile_screen.dart
 // CHANGES:
-//   - Added Google Drive to Connected Accounts section
-//   - Added _driveConnected and _lastSyncDrive state variables
-//   - Added Drive case to _toggleConnection method
-//   - All other logic unchanged
+//   - Added real connection status from ProfileProvider
+//   - Added disconnect functionality for Classroom and Gmail
+//   - Added Google Drive as "Coming Soon"
+//   - Replaced static mock data with real backend data
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
+import 'package:frontend/screens/workspace/gmail_sync_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 
 import '../../providers/auth_provider.dart';
+import '../../providers/profile_provider.dart';
+import '../../services/google_classroom_service.dart';
+import '../../services/gmail_service.dart';
 import '../../utils/ui_feedback.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/layout/section_card.dart';
 import '../../widgets/layout/row_divider.dart';
 import 'edit_name_screen.dart';
 import 'change_password_screen.dart';
+import '../workspace/classroom_sync_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -30,19 +35,13 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   File? _profileImage;
 
-  // ── Connected account state ────────────────────────────────────────
-  bool _classroomConnected = false;
-  bool _gmailConnected = false;
-  bool _driveConnected = false; // NEW: Google Drive
-
-  String _lastSyncClassroom = 'Never synced';
-  String _lastSyncGmail = 'Never synced';
-  String _lastSyncDrive = 'Never synced'; // NEW: Google Drive last sync
-
-  // bool _isSaving = false;
-  bool _isClassroomLoading = false;
-  bool _isGmailLoading = false;
-  bool _isDriveLoading = false;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProfileProvider>().loadConnections();
+    });
+  }
 
   void _navigateToEditName() {
     Navigator.push(
@@ -58,40 +57,79 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _toggleConnection(String platform, bool current) async {
-    // Set loading for specific platform only
-    setState(() {
-      if (platform == 'Google Classroom') {
-        _isClassroomLoading = true;
-      } else if (platform == 'Gmail') {
-        _isGmailLoading = true;
-      } else if (platform == 'Google Drive') {
-        _isDriveLoading = true;
-      }
-    });
+  // ─── Disconnect Methods ───────────────────────────────────────────
 
-    await Future.delayed(const Duration(seconds: 1)); // Simulate API call
+  Future<void> _disconnectClassroom() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Disconnect Google Classroom?'),
+        content: const Text(
+          'This will remove your Classroom integration. '
+          'Tasks from Classroom will remain in your workspace.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child:
+                const Text('Disconnect', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
 
-    if (mounted) {
-      setState(() {
-        if (platform == 'Google Classroom') {
-          _classroomConnected = !current;
-          _lastSyncClassroom =
-              _classroomConnected ? 'Just now' : 'Never synced';
-          _isClassroomLoading = false;
-        } else if (platform == 'Gmail') {
-          _gmailConnected = !current;
-          _lastSyncGmail = _gmailConnected ? 'Just now' : 'Never synced';
-          _isGmailLoading = false;
-        } else if (platform == 'Google Drive') {
-          _driveConnected = !current;
-          _lastSyncDrive = _driveConnected ? 'Just now' : 'Never synced';
-          _isDriveLoading = false;
+    if (confirm == true) {
+      try {
+        await context.read<ProfileProvider>().disconnectClassroom();
+        if (mounted) {
+          UIFeedback.showSuccess(context, 'Google Classroom disconnected');
         }
-      });
+      } catch (e) {
+        if (mounted) {
+          UIFeedback.showError(context, 'Failed to disconnect: $e');
+        }
+      }
+    }
+  }
 
-      UIFeedback.showSuccess(
-          context, current ? '$platform disconnected' : '$platform connected!');
+  Future<void> _disconnectGmail() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Disconnect Gmail?'),
+        content: const Text(
+          'This will remove your Gmail integration. '
+          'Tasks from emails will remain in your workspace.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child:
+                const Text('Disconnect', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await context.read<ProfileProvider>().disconnectGmail();
+        if (mounted) {
+          UIFeedback.showSuccess(context, 'Gmail disconnected');
+        }
+      } catch (e) {
+        if (mounted) {
+          UIFeedback.showError(context, 'Failed to disconnect: $e');
+        }
+      }
     }
   }
 
@@ -284,7 +322,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 20, vertical: 8),
                         decoration: BoxDecoration(
-                            color: theme.dividerColor.withOpacity(0.3),
+                            color: theme.dividerColor.withValues(alpha: 0.3),
                             borderRadius: BorderRadius.circular(20)),
                         child: Text(auth.userEmail,
                             style: theme.textTheme.labelMedium?.copyWith(
@@ -313,69 +351,106 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           icon: Icons.lock_outline_rounded,
                           label: 'Change Password',
                           onTap: _navigateToChangePassword,
-                          isLoading: false, // ← CHANGE from _isSaving to false
+                          isLoading: false,
                           showArrow: true,
                         ),
                       ]),
                       const SizedBox(height: 24),
 
                       // ── Connected Accounts Section ────────────
-                      Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
+                      Consumer<ProfileProvider>(
+                        builder: (context, profileProvider, _) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
                                 padding:
                                     const EdgeInsets.only(left: 4, bottom: 8),
-                                child: Text('Connected Accounts',
-                                    style: theme.textTheme.titleMedium)),
-                            Padding(
+                                child: Text(
+                                  'Connected Accounts',
+                                  style: theme.textTheme.titleMedium,
+                                ),
+                              ),
+                              Padding(
                                 padding:
                                     const EdgeInsets.only(left: 4, bottom: 12),
                                 child: Text(
-                                    'Connect your accounts to automatically sync tasks and deadlines.',
-                                    style: theme.textTheme.labelSmall)),
-                            SectionCard(children: [
-                              // Google Classroom
-                              _ConnectedAccountRow(
-                                icon: Icons.school_outlined,
-                                label: 'Google Classroom',
-                                description: 'Sync assignments & deadlines',
-                                isConnected: _classroomConnected,
-                                lastSync: _lastSyncClassroom,
-                                onTap: () => _toggleConnection(
-                                    'Google Classroom', _classroomConnected),
-                                isLoading:
-                                    _isClassroomLoading, // ← Use specific loading variable
+                                  'Connect your accounts to automatically sync tasks and deadlines.',
+                                  style: theme.textTheme.labelSmall,
+                                ),
                               ),
-                              const RowDivider(),
+                              SectionCard(children: [
+                                // Google Classroom
+                                _ConnectedAccountRow(
+                                  icon: Icons.school_outlined,
+                                  label: 'Google Classroom',
+                                  description: 'Sync assignments & deadlines',
+                                  isConnected:
+                                      profileProvider.isClassroomConnected,
+                                  lastSync: profileProvider
+                                      .getClassroomLastSyncText(),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const ClassroomSyncScreen(),
+                                      ),
+                                    ).then((_) {
+                                      profileProvider.loadConnections();
+                                    });
+                                  },
+                                  onDisconnect: _disconnectClassroom,
+                                  isLoading: profileProvider.isLoading,
+                                ),
+                                const RowDivider(),
 
-                              // Gmail
-                              _ConnectedAccountRow(
-                                icon: Icons.mail_outline_rounded,
-                                label: 'Gmail',
-                                description: 'Import task emails automatically',
-                                isConnected: _gmailConnected,
-                                lastSync: _lastSyncGmail,
-                                onTap: () =>
-                                    _toggleConnection('Gmail', _gmailConnected),
-                                isLoading:
-                                    _isGmailLoading, // ← Use specific loading variable
-                              ),
+                                // Gmail
+                                _ConnectedAccountRow(
+                                  icon: Icons.mail_outline_rounded,
+                                  label: 'Gmail',
+                                  description:
+                                      'Import task emails automatically',
+                                  isConnected: profileProvider.isGmailConnected,
+                                  lastSync:
+                                      profileProvider.getGmailLastSyncText(),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => const GmailSyncScreen(),
+                                      ),
+                                    ).then((_) {
+                                      profileProvider.loadConnections();
+                                    });
+                                  },
+                                  onDisconnect: _disconnectGmail,
+                                  isLoading: profileProvider.isLoading,
+                                ),
+                                const RowDivider(),
 
-                              // Google Drive — NEW
-                              _ConnectedAccountRow(
-                                icon: Icons.folder_outlined,
-                                label: 'Google Drive',
-                                description: 'Attach files to tasks easily',
-                                isConnected: _driveConnected,
-                                lastSync: _lastSyncDrive,
-                                onTap: () => _toggleConnection(
-                                    'Google Drive', _driveConnected),
-                                isLoading:
-                                    _isDriveLoading, // ← Use specific loading variable
-                              ),
-                            ]),
-                          ]),
+                                // Google Drive - Coming Soon
+                                _ConnectedAccountRow(
+                                  icon: Icons.folder_outlined,
+                                  label: 'Google Drive',
+                                  description: 'Attach files to tasks easily',
+                                  isConnected: false,
+                                  lastSync: 'Coming soon',
+                                  onTap: () {
+                                    UIFeedback.showInfo(
+                                      context,
+                                      'Google Drive integration coming soon!',
+                                    );
+                                  },
+                                  onDisconnect: null,
+                                  isLoading: false,
+                                  isComingSoon: true,
+                                ),
+                              ]),
+                            ],
+                          );
+                        },
+                      ),
                       const SizedBox(height: 24),
 
                       // ── Delete Account Section ────────────────
@@ -401,7 +476,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Private widgets — unchanged from original
+// Private widgets
 // ═══════════════════════════════════════════════════════════════════
 
 class _ProfilePhoto extends StatelessWidget {
@@ -422,9 +497,9 @@ class _ProfilePhoto extends StatelessWidget {
               height: 100,
               decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: theme.dividerColor.withOpacity(0.3),
+                  color: theme.dividerColor.withValues(alpha: 0.3),
                   border: Border.all(
-                      color: theme.colorScheme.primary.withOpacity(0.2),
+                      color: theme.colorScheme.primary.withValues(alpha: 0.2),
                       width: 3)),
               child: ClipOval(
                   child: profileImage != null
@@ -462,7 +537,7 @@ class _PhotoOption extends StatelessWidget {
         child: Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
             decoration: BoxDecoration(
-                color: theme.dividerColor.withOpacity(0.3),
+                color: theme.dividerColor.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(12)),
             child: Column(children: [
               Icon(icon, size: 32, color: theme.colorScheme.primary),
@@ -579,7 +654,9 @@ class _ConnectedAccountRow extends StatelessWidget {
   final bool isConnected;
   final String lastSync;
   final VoidCallback onTap;
+  final VoidCallback? onDisconnect;
   final bool isLoading;
+  final bool isComingSoon;
 
   const _ConnectedAccountRow({
     required this.icon,
@@ -588,73 +665,150 @@ class _ConnectedAccountRow extends StatelessWidget {
     required this.isConnected,
     required this.lastSync,
     required this.onTap,
+    this.onDisconnect,
     this.isLoading = false,
+    this.isComingSoon = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(children: [
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
           Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12)),
-              child: Icon(icon, size: 22, color: theme.colorScheme.primary)),
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: isConnected
+                  ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                  : theme.dividerColor.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              size: 22,
+              color: isConnected
+                  ? theme.colorScheme.primary
+                  : Colors.grey.shade500,
+            ),
+          ),
           const SizedBox(width: 14),
           Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                Text(label,
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(
+                      label,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (isComingSoon) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade100,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Soon',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 const SizedBox(height: 2),
-                Text(description, style: theme.textTheme.labelSmall),
+                Text(
+                  description,
+                  style: theme.textTheme.labelSmall,
+                ),
                 if (isConnected) ...[
                   const SizedBox(height: 2),
-                  Row(children: [
-                    const Icon(Icons.sync_rounded,
-                        size: 10, color: Colors.green),
-                    const SizedBox(width: 4),
-                    Text('Last synced: $lastSync',
+                  Row(
+                    children: [
+                      const Icon(Icons.sync_rounded,
+                          size: 10, color: Colors.green),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Last synced: $lastSync',
                         style:
-                            const TextStyle(fontSize: 10, color: Colors.green))
-                  ])
+                            const TextStyle(fontSize: 10, color: Colors.green),
+                      ),
+                    ],
+                  ),
                 ],
-              ])),
+              ],
+            ),
+          ),
           const SizedBox(width: 8),
           if (isLoading)
             SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: theme.colorScheme.primary))
-          else
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: theme.colorScheme.primary,
+              ),
+            )
+          else if (isConnected && onDisconnect != null)
             GestureDetector(
-                onTap: onTap,
-                child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                    decoration: BoxDecoration(
-                        color: isConnected
-                            ? Colors.green.withOpacity(0.1)
-                            : theme.colorScheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                            color: isConnected
-                                ? Colors.green.withOpacity(0.4)
-                                : theme.colorScheme.primary.withOpacity(0.4))),
-                    child: Text(isConnected ? 'Connected' : 'Connect',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isConnected
-                                ? Colors.green
-                                : theme.colorScheme.primary)))),
-        ]));
+              onTap: onDisconnect,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.red.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  'Disconnect',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.red,
+                  ),
+                ),
+              ),
+            )
+          else if (!isComingSoon)
+            GestureDetector(
+              onTap: onTap,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.4),
+                  ),
+                ),
+                child: Text(
+                  'Connect',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

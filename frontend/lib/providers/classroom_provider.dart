@@ -11,8 +11,9 @@
 //   - triggerSync()
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
 import '../services/google_classroom_service.dart';
-import '../services/notification_service.dart';
 import './task_provider.dart';
 
 class ClassroomProvider extends ChangeNotifier {
@@ -96,6 +97,10 @@ class ClassroomProvider extends ChangeNotifier {
       _lastSyncTime = DateTime.now();
       //don't need to reload courses here since sync doesn't change course list, just tasks. We will refresh tasks separately
       // or use a callback
+      //immedttiately refresh tasks
+      if (context.mounted) {
+        await context.read<TaskProvider>().refreshTasks();
+      }
 
       //show notification for new tasks synced
 

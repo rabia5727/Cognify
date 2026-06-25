@@ -11,10 +11,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080 
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
+    GMAIL_CLIENT_ID: str = ""
+    GMAIL_CLIENT_SECRET: str = ""
     API_URL: str = "http://127.0.0.1:8000"
     FRONTEND_URL: str = "http://localhost:3000"
     MOBILE_REDIRECT_URI: str = "http://localhost:8000/classroom/mobile_oauth_callback"
     GROQ_API_KEY: str = ""
+    GOOGLE_DRIVE_CLIENT_ID: str = ""
+    GOOGLE_DRIVE_CLIENT_SECRET: str = ""
 
     class Config:
         env_file = str(BASE_DIR / ".env")

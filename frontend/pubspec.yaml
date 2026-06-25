@@ -1,12 +1,12 @@
 name: frontend
 description: Co-Tasker — Your AI Productivity Assistant
 
-publish_to: 'none'
+publish_to: "none"
 
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.0.0 <4.0.0'
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -14,13 +14,13 @@ dependencies:
   cupertino_icons: ^1.0.6
   http: ^1.2.0
   shared_preferences: ^2.2.3
-  fl_chart: ^0.68.0 
+  fl_chart: ^0.68.0
   image_picker: ^1.0.7
   confetti: ^0.7.0
   provider: ^6.1.2
   google_sign_in: ^6.2.1
   flutter_local_notifications: ^17.0.0
-  url_launcher: ^6.3.2 
+  url_launcher: ^6.3.2
   webview_flutter: ^4.7.0
   flutter_tts: ^4.2.5
   record: ^6.2.1

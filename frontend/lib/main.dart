@@ -8,19 +8,23 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'theme/app_theme.dart';
-import 'theme/theme_notifier.dart';
-import 'providers/auth_provider.dart';
-import 'providers/task_provider.dart';
-import 'providers/project_provider.dart';
+
+import '../services/sync_service.dart';
 import 'providers/analytics_provider.dart';
-import 'providers/notification_provider.dart';
-import 'providers/classroom_provider.dart';
 import 'providers/assistant_provider.dart';
+import 'providers/auth_provider.dart';
+import 'providers/classroom_provider.dart';
+import 'providers/gmail_provider.dart';
+import 'providers/notification_provider.dart';
+import 'providers/profile_provider.dart';
+import 'providers/project_provider.dart';
+import 'providers/task_provider.dart';
+import 'screens/auth/auth_screen.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/auth/auth_screen.dart';
 import 'services/api_service.dart';
+import 'theme/app_theme.dart';
+import 'theme/theme_notifier.dart';
 import 'widgets/common/notification_permission_sheet.dart';
 
 void main() {
@@ -45,6 +49,8 @@ class CognifyApp extends StatelessWidget {
         // AnalyticsProvider - no ProxyProvider needed since it loads its own data
         ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
         ChangeNotifierProvider(create: (_) => AssistantProvider()),
+        ChangeNotifierProvider(create: (_) => ProfileProvider()),
+        ChangeNotifierProvider(create: (_) => GmailProvider()),
       ],
       child: ValueListenableBuilder<ThemeMode>(
         valueListenable: themeNotifier,
@@ -123,6 +129,7 @@ class _DataLoaderState extends State<_DataLoader> {
 
       // Classroom runs independently — don't await it
       context.read<ClassroomProvider>().loadCourses();
+      SyncService.startAutoSync(context);
 
       // Notification setup
       final notifProvider = context.read<NotificationProvider>();
