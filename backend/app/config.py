@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GROQ_API_KEY: str = ""
+    ORCHESTRATOR_MODEL: str = "openai/gpt-oss-120b"
+    LIGHTWEIGHT_MODEL: str = "openai/gpt-oss-20b"
 
     class Config:
         env_file = str(BASE_DIR / ".env")

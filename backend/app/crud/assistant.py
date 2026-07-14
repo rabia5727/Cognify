@@ -15,7 +15,7 @@ from app.agents.analytics_agent import get_analytics_agent_tools
 
 _base_llm = ChatGroq(
     api_key=settings.GROQ_API_KEY,
-    model="llama-3.3-70b-versatile",
+    model=settings.ORCHESTRATOR_MODEL,
     temperature=0.7,
     max_tokens=1024,
 )

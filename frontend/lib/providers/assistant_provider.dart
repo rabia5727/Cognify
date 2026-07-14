@@ -23,6 +23,7 @@ class AssistantProvider extends ChangeNotifier {
   bool _isLoading = false; // loading a session's history
   bool _isLoadingSessions = false; // loading the sidebar list
   bool _isTyping = false;
+  bool _isSending = false; // ✅ NEW — re-entry guard
   String? _error;
 
   // ── Getters ───────────────────────────────────────────────────────
@@ -33,6 +34,7 @@ class AssistantProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoadingSessions => _isLoadingSessions;
   bool get isTyping => _isTyping;
+  bool get isSending => _isSending; // ✅ NEW — UI can disable the button
   String? get error => _error;
 
   // ── Load ONE session's history (called when opening a specific chat) ─
@@ -102,6 +104,8 @@ class AssistantProvider extends ChangeNotifier {
   // ── Send text message — now session-aware ────────────────────────────
   Future<void> sendMessage(String text, {String source = 'text'}) async {
     if (text.trim().isEmpty) return;
+    if (_isSending) return; // ✅ blocks the second call outright
+    _isSending = true;
 
     _messages.add(AssistantMessage(
       role: 'user',
@@ -113,44 +117,47 @@ class AssistantProvider extends ChangeNotifier {
     _isTyping = true;
     notifyListeners();
 
-    final result = await AssistantService.sendMessage(
-      text.trim(),
-      source: source,
-      sessionId:
-          _currentSessionId, // null on first message — backend auto-creates
-    );
+    try {
+      final result = await AssistantService.sendMessage(
+        text.trim(),
+        source: source,
+        sessionId:
+            _currentSessionId, // null on first message — backend auto-creates
+      );
 
-    _isTyping = false;
+      if (result != null) {
+        _messages.add(AssistantMessage(
+          role: 'assistant',
+          content: result.reply,
+          source: 'assistant',
+          timestamp: DateTime.now(),
+        ));
 
-    if (result != null) {
-      _messages.add(AssistantMessage(
-        role: 'assistant',
-        content: result.reply,
-        source: 'assistant',
-        timestamp: DateTime.now(),
-      ));
-
-      // ✅ CRITICAL: capture the session_id the backend assigned/used.
-      // On the very first message of a new chat, this is the moment we
-      // learn the real session_id — without storing it here, every
-      // subsequent message would try to auto-create ANOTHER new session,
-      // silently fragmenting what should be one continuous chat.
-      if (_currentSessionId == null || _currentSessionId != result.sessionId) {
-        _currentSessionId = result.sessionId;
-        // Refresh the sidebar list in the background so the new chat
-        // appears there too, with its auto-generated title.
-        loadSessions();
+        // ✅ CRITICAL: capture the session_id the backend assigned/used.
+        // On the very first message of a new chat, this is the moment we
+        // learn the real session_id — without storing it here, every
+        // subsequent message would try to auto-create ANOTHER new session,
+        // silently fragmenting what should be one continuous chat.
+        if (_currentSessionId == null ||
+            _currentSessionId != result.sessionId) {
+          _currentSessionId = result.sessionId;
+          // Refresh the sidebar list in the background so the new chat
+          // appears there too, with its auto-generated title.
+          loadSessions();
+        }
+      } else {
+        _messages.add(AssistantMessage(
+          role: 'assistant',
+          content: 'Sorry, I\'m having trouble connecting. Please try again.',
+          source: 'assistant',
+          timestamp: DateTime.now(),
+        ));
       }
-    } else {
-      _messages.add(AssistantMessage(
-        role: 'assistant',
-        content: 'Sorry, I\'m having trouble connecting. Please try again.',
-        source: 'assistant',
-        timestamp: DateTime.now(),
-      ));
+    } finally {
+      _isTyping = false;
+      _isSending = false; // ✅ always release the guard
+      notifyListeners();
     }
-
-    notifyListeners();
   }
 
   // ── Send voice message — unchanged flow, just delegates to sendMessage ─

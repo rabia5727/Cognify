@@ -30,7 +30,7 @@ from app.agents.email_agent    import get_email_agent_tools
 # ── LLM (8b for lightweight execution tools) ─────────────────────────────────
 _execution_llm = ChatGroq(
     api_key=settings.GROQ_API_KEY,
-    model="llama-3.1-8b-instant",
+    model=settings.LIGHTWEIGHT_MODEL,
     temperature=0.4,
     max_tokens=1024,
 )

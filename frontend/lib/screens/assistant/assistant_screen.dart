@@ -260,7 +260,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
                           },
                         ),
             ),
-            _buildInputBar(theme, isDark),
+            _buildInputBar(theme, isDark, provider),
           ],
         ),
       ),
@@ -597,7 +597,9 @@ class _AssistantScreenState extends State<AssistantScreen> {
     );
   }
 
-  Widget _buildInputBar(ThemeData theme, bool isDark) {
+  // ── ✅ UPDATED: Input bar with isSending state ──────────────────────────
+  Widget _buildInputBar(
+      ThemeData theme, bool isDark, AssistantProvider provider) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -630,8 +632,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 onSubmitted: (_) => _sendMessage(),
                 textInputAction: TextInputAction.send,
                 style: theme.textTheme.bodyMedium,
+                enabled: !provider.isSending, // ✅ Disable input while sending
                 decoration: InputDecoration(
-                  hintText: 'Ask CoCo anything...',
+                  hintText: provider.isSending
+                      ? 'Sending...'
+                      : 'Ask CoCo anything...',
                   hintStyle: TextStyle(
                     color: isDark ? Colors.white38 : Colors.grey.shade500,
                     fontSize: 14,
@@ -644,8 +649,11 @@ class _AssistantScreenState extends State<AssistantScreen> {
             ),
           ),
           const SizedBox(width: 8),
+          // ── Voice button ──────────────────────────────────────────────────
           GestureDetector(
-            onTap: _openVoiceScreen,
+            onTap: provider.isSending
+                ? null
+                : _openVoiceScreen, // ✅ Disabled while sending
             child: Container(
               width: 46,
               height: 46,
@@ -659,30 +667,52 @@ class _AssistantScreenState extends State<AssistantScreen> {
                   width: 0.5,
                 ),
               ),
-              child: Icon(Icons.mic_rounded,
-                  color: isDark ? Colors.white60 : AppConstants.primaryBlue,
-                  size: 22),
+              child: Icon(
+                Icons.mic_rounded,
+                color: provider.isSending
+                    ? (isDark ? Colors.white30 : Colors.grey.shade400)
+                    : (isDark ? Colors.white60 : AppConstants.primaryBlue),
+                size: 22,
+              ),
             ),
           ),
           const SizedBox(width: 8),
+          // ── Send button with isSending state ────────────────────────────
           GestureDetector(
-            onTap: _sendMessage,
+            onTap: provider.isSending
+                ? null
+                : _sendMessage, // ✅ Disabled while sending
             child: Container(
               width: 46,
               height: 46,
               decoration: BoxDecoration(
-                color: AppConstants.primaryBlue,
+                color: provider.isSending
+                    ? AppConstants.primaryBlue
+                        .withValues(alpha: 0.4) // ✅ visually dimmed
+                    : AppConstants.primaryBlue,
                 shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: AppConstants.primaryBlue.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                boxShadow: provider.isSending
+                    ? [] // ✅ No shadow when disabled
+                    : [
+                        BoxShadow(
+                          color:
+                              AppConstants.primaryBlue.withValues(alpha: 0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
               ),
-              child:
-                  const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              child: provider.isSending
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.send_rounded,
+                      color: Colors.white, size: 20),
             ),
           ),
         ],

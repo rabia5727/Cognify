@@ -11,7 +11,7 @@ from app.config import settings
 
 _email_llm = ChatGroq(
     api_key=settings.GROQ_API_KEY,
-    model="llama-3.3-70b-versatile",
+    model=settings.ORCHESTRATOR_MODEL,
     temperature=0.4,
     max_tokens=1024,
 )

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 _document_llm = ChatGroq(
     api_key=settings.GROQ_API_KEY,
-    model="llama-3.3-70b-versatile",
+    model=settings.ORCHESTRATOR_MODEL,
     temperature=0.3,
     max_tokens=4096,
 )

@@ -17,7 +17,7 @@ from app.config import settings
 
 _proactive_llm = ChatGroq(
     api_key=settings.GROQ_API_KEY,
-    model="llama-3.1-8b-instant",
+    model=settings.LIGHTWEIGHT_MODEL,
     temperature=0.5,
     max_tokens=512,
 )
