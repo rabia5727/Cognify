@@ -642,6 +642,8 @@ class _FilterChip extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -940,6 +942,8 @@ class _DropdownMenuItem extends StatelessWidget {
             if (isSelected) const SizedBox(width: 8),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
@@ -1261,6 +1265,8 @@ class _TaskCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
@@ -1297,6 +1303,8 @@ class _TaskCard extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 34),
                 child: Text(
                   task.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.textTheme.bodySmall?.color
                         ?.withValues(alpha: 0.7),
@@ -1316,22 +1324,30 @@ class _TaskCard extends StatelessWidget {
                         : theme.textTheme.bodySmall?.color),
                 const SizedBox(width: 5),
                 if (task.isOverdue)
-                  Text(
-                    'Overdue',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.red,
+                  Expanded(
+                    child: Text(
+                      'Overdue',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.red,
+                      ),
                     ),
                   )
                 else
-                  Text(
-                    'Due ${_formatDueDate()} · ${_formatDueTime()}',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      'Due ${_formatDueDate()} · ${_formatDueTime()}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                const SizedBox(width: 10),
-                Flexible(child: _buildCategoryTag(task.category)),
+                const SizedBox(width: 8),
+                _buildCategoryTag(task.category),
                 const Spacer(),
                 if (!isCompleted)
                   GestureDetector(
@@ -1387,6 +1403,8 @@ class _TaskCard extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w600,
@@ -1567,6 +1585,8 @@ class _ProjectCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   project.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -1602,6 +1622,8 @@ class _ProjectCard extends StatelessWidget {
             ),
             child: Text(
               project.category.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -1643,10 +1665,14 @@ class _ProjectCard extends StatelessWidget {
               Icon(Icons.description_outlined,
                   size: 14, color: theme.textTheme.bodySmall?.color),
               const SizedBox(width: 6),
-              Text(
-                '$completedCount/$totalCount tasks done',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  '$completedCount/$totalCount tasks done',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
               const Spacer(),

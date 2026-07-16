@@ -9,6 +9,10 @@
 #   GET /gmail/health - Check connection status
 #   POST /gmail/disconnect - Remove Gmail tokens
 
+import os
+# Force oauthlib to allow merged/incremental scopes (Gmail + Classroom) without crashing
+os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
+
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -77,12 +81,14 @@ async def mobile_oauth_auth(current_user: dict = Depends(get_current_user)):
     """Generate OAuth URL for Gmail connection"""
     flow = get_flow()
     state = str(ObjectId())
-    
+    #get code verifier and challenge for PKCE
+    code_verifier = flow.code_verifier
     db = get_database()
     await db.oauth_states.insert_one({
         "state": state,
         "user_id": str(current_user["_id"]),
-        "type": "gmail",
+        "service": "gmail",
+        "code_verifier": code_verifier,
         "created_at": datetime.utcnow()
     })
     
@@ -110,9 +116,12 @@ async def mobile_oauth_callback(code: str, state: str):
             return HTMLResponse("Invalid state", status_code=400)
         
         user_id = stored_state["user_id"]
+        code_verifier = stored_state.get("code_verifier")
         await db.oauth_states.delete_one({"state": state})
         
         flow = get_flow()
+        if code_verifier:
+            flow.code_verifier = code_verifier
         flow.fetch_token(code=code)
         credentials = flow.credentials
         
@@ -139,6 +148,7 @@ async def mobile_oauth_callback(code: str, state: str):
         """)
         
     except Exception as e:
+        print(f"Error during Gmail OAuth callback: {str(e)}")
         return HTMLResponse(f"Connection failed: {str(e)}", status_code=400)
 
 

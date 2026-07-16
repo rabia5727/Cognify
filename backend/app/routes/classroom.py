@@ -20,6 +20,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+import base64
+import hashlib
+import secrets
 from bson import ObjectId
 from google_auth_oauthlib.flow import Flow
 from app.db.connection import get_database
@@ -59,6 +62,15 @@ def get_flow(redirect_uri: str = None):
         scopes=SCOPES,
         redirect_uri=redirect_uri or WEB_REDIRECT_URI
     )
+
+
+def create_pkce_pair():
+    """Create a PKCE verifier/challenge pair for the mobile OAuth flow."""
+    code_verifier = secrets.token_urlsafe(96)
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode("utf-8")).digest()
+    ).decode("utf-8").rstrip("=")
+    return code_verifier, code_challenge
 
 
 # Request/Response Models
@@ -172,12 +184,15 @@ async def mobile_oauth_auth(current_user: dict = Depends(get_current_user)):
     
     # Generate a state parameter to verify the callback
     state = str(ObjectId())
-    
+    code_verifier, code_challenge = create_pkce_pair()
+
     # Store state in database to verify later
     db = get_database()
     await db.oauth_states.insert_one({
         "state": state,
         "user_id": str(current_user["_id"]),
+        "service": "google_classroom",
+        "code_verifier": code_verifier,
         "created_at": datetime.utcnow()
     })
     
@@ -185,7 +200,9 @@ async def mobile_oauth_auth(current_user: dict = Depends(get_current_user)):
         access_type='offline',
         include_granted_scopes='true',
         prompt='consent',
-        state=state
+        state=state,
+        code_challenge=code_challenge,
+        code_challenge_method='S256'
     )
     
     return {"auth_url": auth_url, "state": state}
@@ -230,15 +247,16 @@ async def mobile_oauth_callback(
                         """, status_code=400)
 
         user_id = stored_state["user_id"]
+        code_verifier = stored_state.get("code_verifier")
         await db.oauth_states.delete_one({"state": state})
         
         # Verify user matches
         #if stored_state["user_id"] != str(current_user["_id"]):
          #   raise HTTPException(status_code=400, detail="User mismatch")
         
-        # Exchange code for tokens
+        # use the stored code_verifier to complete the OAuth flow
         flow = get_flow(redirect_uri=MOBILE_REDIRECT_URI)
-        flow.fetch_token(code=code)
+        flow.fetch_token(code=code, code_verifier=code_verifier)
         credentials = flow.credentials
         
         # Store tokens for the user
@@ -257,10 +275,11 @@ async def mobile_oauth_callback(
                             </html>
                         """)
     except Exception as e:
-        raise HTMLResponse(content=f"""
+        return HTMLResponse(content=f"""
                             <html>
                             <body style="font-family:sans-serif; text-align: center; padding: 40px;">
                                 <h2 style="color: #E53E3E;">Connection Failed</h2>
+                                <p>{str(e)}</p>
                                 </body></html>
                         """, status_code=400)
 
