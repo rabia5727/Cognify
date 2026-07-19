@@ -29,35 +29,50 @@ class GmailService:
     
     # ✅ Actionable keywords - more specific
     ACTION_KEYWORDS = [
-        r'due\s*(?:date)?',
-        r'deadline',
-        r'submit\s+(?:your|the|report|assignment|project)',
-        r'invoice',
-        r'report\s+(?:due|needed|required|for)',
-        r'asap',
-        r'by\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|\d{1,2}/\d{1,2})',
-        r'reminder',
-        r'action\s*required',
-        r'please\s*(?:review|approve|confirm|send|complete|respond)',
-        r'urgent',
-        r'task\s+(?:assigned|created|updated|for|due)',
-        r'assignment\s+(?:due|submission)',
-        r'homework\s+(?:due|submission)',
-        r'project\s+(?:deadline|due|update|submission)',
-        r'deliverable',
-        r'milestone',
-        r'need\s+your\s+(?:input|feedback|approval|response)',
-        r'can\s+you\s+(?:send|review|confirm|approve|submit)',
-        r'please\s+find\s+attached',
-        r'attached\s+is\s+the',
-        r'meeting\s+(?:at|with|tomorrow|today)',
-        r'call\s+(?:at|with|today|tomorrow)',
-        r'follow[- ]?up',
-        r'feedback\s+needed',
-        r'approval\s+needed',
-        r'response\s+needed',
-        r'waiting\s+for\s+your',
-        r'could\s+you\s+please',
+         # Work/Professional
+    r'project\s+(?:deadline|due|update|submission|review)',
+    r'report\s+(?:due|needed|required|for|submission)',
+    r'assignment\s+(?:due|submission|deadline)',
+    r'task\s+(?:assigned|created|updated|for|due|complete)',
+    r'deliverable',
+    r'milestone',
+    r'sprint',
+    
+    # Meeting/Communication
+    r'meeting\s+(?:at|with|tomorrow|today|schedule|agenda)',
+    r'call\s+(?:at|with|today|tomorrow|schedule)',
+    r'follow[- ]?up',
+    r'reminder',
+    
+    # Actions/Requests
+    r'action\s*required',
+    r'please\s*(?:review|approve|confirm|send|complete|respond|submit)',
+    r'need\s+your\s+(?:input|feedback|approval|response|review)',
+    r'can\s+you\s+(?:send|review|confirm|approve|submit|check)',
+    r'could\s+you\s+please',
+    r'waiting\s+for\s+your',
+    r'feedback\s+needed',
+    r'approval\s+needed',
+    r'response\s+needed',
+    
+    # Deadlines
+    r'due\s*(?:date)?',
+    r'deadline',
+    r'asap',
+    r'urgent',
+    r'by\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|\d{1,2}/\d{1,2})',
+    
+    # Documents/Submissions
+    r'invoice',
+    r'submit\s+(?:your|the|report|assignment|project)',
+    r'attached\s+is\s+the',
+    r'please\s+find\s+attached',
+    r'file\s+upload',
+    r'document',
+    r'proposal',
+    r'budget',
+    r'contract',
+    r'agreement',
     ]
     
     # ❌ Ignore patterns (system/welcome/newsletter/spam)
@@ -97,19 +112,48 @@ class GmailService:
     
     # ❌ Ignore senders (system emails)
     IGNORE_SENDERS = [
-        r'info@make\.com',
-        r'welcome@',
-        r'noreply@',
-        r'donotreply@',
-        r'newsletter@',
-        r'marketing@',
-        r'notifications@',
-        r'updates@',
-        r'team@.*\.com',
-        r'hello@.*\.com',
-        r'support@.*\.com',
-        r'no[- ]?reply',
-        r'@.*\.newsletter\.com',
+       # Welcome/Onboarding
+    r'welcome\s+to',
+    r'welcome,',
+    r'get\s+started',
+    r'your\s+automation\s+forecast',
+    r'welcome\s+aboard',
+    r'thank\s+you\s+for\s+(?:signing|joining|subscribing)',
+    r'verify\s+your\s+email',
+    r'confirm\s+your\s+account',
+    r'complete\s+your\s+profile',
+    r"you're\s+all\s+set",
+    
+    # Newsletters & Promotions
+    r'newsletter',
+    r'marketing',
+    r'promotion',
+    r'unsubscribe',
+    r'special\s+offer',
+    r'discount',
+    r'sale\s+now',
+    r'limited\s+time',
+    r'credit\s+purchases',  # Add this to block "credit purchase" emails
+    r'crypto',
+    r'investment\s+opportunity',
+    
+    # System/Auto
+    r'donotreply',
+    r'noreply',
+    r'automated\s+response',
+    r'automatic\s+reply',
+    r'out\s+of\s+office',
+    r'out\s+of\s+the\s+office',
+    r'vacation\s+auto[- ]?reply',
+    r'you\s*received\s*a\s*message',
+    
+    # Social/Entertainment
+    r'social\s+media',
+    r'instagram',
+    r'facebook',
+    r'twitter',
+    r'linkedin',
+    r'medium\.com',
     ]
 
     @staticmethod
