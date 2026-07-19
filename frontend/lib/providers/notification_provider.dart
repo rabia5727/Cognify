@@ -40,12 +40,23 @@ class NotificationProvider extends ChangeNotifier {
 
   Future<bool> hasAskedPermission() async {
     if (_userId == null || _userId!.isEmpty) return false;
+
+    // ✅ First check backend (authoritative)
+    try {
+      final profile = await UserService.getProfile();
+      if (profile != null && profile['preferences'] != null) {
+        final asked =
+            profile['preferences']['notification_permission_asked'] ?? false;
+        if (asked) return true;
+      }
+    } catch (_) {}
+
+    // ✅ Fallback to SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     return prefs.getBool('notification_permission_asked_$_userId') ?? false;
   }
 
   Future<void> markPermissionAsked() async {
-    // Prevent multiple simultaneous calls
     if (_isMarkingPermission) {
       print('⚠️ Already marking permission, skipping duplicate');
       return;
@@ -59,8 +70,15 @@ class NotificationProvider extends ChangeNotifier {
         return;
       }
 
+      // ✅ Save to SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('notification_permission_asked_$_userId', true);
+
+      // ✅ Save to backend as well
+      await UserService.updatePreferences(
+        notificationPermissionAsked: true,
+      );
+
       print('✅ Permission marked as asked for user: $_userId');
     } catch (e) {
       print('❌ Error marking permission: $e');

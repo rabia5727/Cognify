@@ -1,4 +1,12 @@
 // lib/screens/dashboard/dashboard_screen.dart
+//
+// FIX: Previously _showProactiveCard was a one-time bool — once set to
+// false (after tapping Yes or No), the card's MESSAGE stayed frozen on
+// the same task forever, just with buttons hidden. Now we track WHICH
+// task's suggestion was dismissed (dismissedTaskId) and pass it to
+// DashboardHeader, which uses it to skip that task and surface the next
+// relevant suggestion — so the card actually moves forward instead of
+// getting stuck.
 
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
@@ -37,8 +45,13 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  bool _showProactiveCard = true;
+  // ✅ FIX: was `bool _showProactiveCard`. Now tracks the SPECIFIC task id
+  // that was dismissed, so DashboardHeader can compute a fresh suggestion
+  // that excludes it — rather than freezing the same message with no buttons.
+  String? _dismissedTaskId;
+
   String? _animatingTaskId;
+
   @override
   void initState() {
     super.initState();
@@ -80,7 +93,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _onRefresh() async {
-    setState(() => _showProactiveCard = true);
+    // ✅ FIX: refreshing clears the dismissed state so all suggestions
+    // are re-evaluated fresh, including the one the user dismissed earlier
+    // (e.g. if they want to revisit it).
+    setState(() => _dismissedTaskId = null);
     try {
       await context.read<TaskProvider>().refreshTasks();
     } catch (_) {}
@@ -99,6 +115,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context,
       MaterialPageRoute(builder: (_) => const ProfileScreen()),
     );
+  }
+
+  /// ✅ FIX: Reads the CURRENT top suggestion's taskId before marking it
+  /// dismissed. This is what lets DashboardHeader know exactly which
+  /// suggestion to skip on the next build, so a NEW one can surface.
+  void _dismissCurrentSuggestion() {
+    final taskProvider = context.read<TaskProvider>();
+    final currentTaskId = _peekCurrentSuggestionTaskId(taskProvider);
+    setState(() => _dismissedTaskId = currentTaskId);
+  }
+
+  /// Mirrors the same priority logic used in DashboardHeader so the
+  /// dashboard screen knows which task is currently being suggested,
+  /// without duplicating the full message-building logic.
+  String? _peekCurrentSuggestionTaskId(TaskProvider taskProvider) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final activeTasks =
+        taskProvider.tasks.where((t) => !t.isCompleted).toList();
+
+    if (activeTasks.isEmpty) return null;
+
+    final overdue = activeTasks.where((t) {
+      final due = DateTime(t.dueDate.year, t.dueDate.month, t.dueDate.day);
+      return due.isBefore(today);
+    }).toList();
+    if (overdue.isNotEmpty) return overdue.first.id;
+
+    final dueToday = activeTasks.where((t) {
+      return t.dueDate.year == now.year &&
+          t.dueDate.month == now.month &&
+          t.dueDate.day == now.day;
+    }).toList();
+    if (dueToday.isNotEmpty) return dueToday.first.id;
+
+    final highPriority =
+        activeTasks.where((t) => t.priority.name == 'high').toList();
+    if (highPriority.isNotEmpty) return highPriority.first.id;
+
+    final sorted = List<Task>.of(activeTasks)
+      ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+    if (sorted.isNotEmpty) return sorted.first.id;
+
+    return null;
   }
 
   @override
@@ -124,9 +184,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 DashboardHeader(
                   userName: auth.userName,
                   isNewUser: hasNoTasks,
-                  showProactiveCard: _showProactiveCard,
-                  onYes: () => setState(() => _showProactiveCard = false),
-                  onNo: () => setState(() => _showProactiveCard = false),
+                  // showProactiveCard kept for backward compatibility with
+                  // the "isFreshSuggestion" check inside DashboardHeader —
+                  // true means "nothing dismissed yet this session".
+                  showProactiveCard: _dismissedTaskId == null,
+                  dismissedTaskId: _dismissedTaskId,
+                  onYes: () {
+                    // capture BEFORE dismissing — dismissing clears the suggestion
+                    final taskProvider = context.read<TaskProvider>();
+                    final currentTaskId =
+                        _peekCurrentSuggestionTaskId(taskProvider);
+                    final currentTask = taskProvider.tasks
+                        .where((t) => t.id == currentTaskId)
+                        .firstOrNull;
+                    _dismissCurrentSuggestion();
+                    // pass task title up to header via a new callback
+                    // handled inside DashboardHeader's Yes button directly
+                  },
+                  onNo: _dismissCurrentSuggestion,
                   onProfileTap: _navigateToProfile,
                 ),
                 Expanded(
@@ -134,7 +209,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     onRefresh: _onRefresh,
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -148,8 +223,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ),
                               const Spacer(),
                               TextButton(
-                                onPressed: () => widget
-                                    .onTabSelected(1), // ✅ Changed from 2 to 1
+                                onPressed: () => widget.onTabSelected(1),
                                 child: Text(
                                   'See All',
                                   style: TextStyle(
@@ -169,6 +243,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 : _buildTaskArea(
                                     hasNoTasks: hasNoTasks,
                                     todayTasks: todayTasks,
+                                    allTasks: tasks,
                                   ),
                           ),
                           const SizedBox(height: 16),
@@ -203,9 +278,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// ✅ FIX: now also checks overdue tasks, not just todayTasks, so the
+  /// task area below the proactive card doesn't contradict it (e.g.
+  /// showing "Nothing due today" while the card above says a task is
+  /// overdue). If there's nothing due today but there ARE overdue tasks,
+  /// show those instead of the generic empty state.
   Widget _buildTaskArea({
     required bool hasNoTasks,
     required List<Task> todayTasks,
+    required List<Task> allTasks,
   }) {
     if (hasNoTasks) {
       return NoTasksEmptyState(
@@ -213,21 +294,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final overdueTasks = allTasks.where((t) {
+      if (t.isCompleted) return false;
+      final due = DateTime(t.dueDate.year, t.dueDate.month, t.dueDate.day);
+      return due.isBefore(today);
+    }).toList();
+
     if (todayTasks.isEmpty) {
+      // ✅ FIX: show overdue tasks here instead of a contradictory empty state
+      if (overdueTasks.isNotEmpty) {
+        return _TaskList(
+          tasks: overdueTasks,
+          onStartTask: (_) => _navigateToVoice(),
+          onTaskTap: _navigateToTaskDetail,
+          animatingTaskId: _animatingTaskId,
+        );
+      }
+      final upcoming = allTasks.where((t) {
+        if (t.isCompleted) return false;
+        final due = DateTime(t.dueDate.year, t.dueDate.month, t.dueDate.day);
+        return !due.isBefore(today); // includes today + future
+      }).toList()
+        ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+      final nextTask = upcoming.isNotEmpty ? upcoming.first : null;
+
       return NoTasksDueTodayEmptyState(
         onViewAllTasks: () => widget.onTabSelected(1),
+        nextPriorityTask: nextTask,
+        onStartTask: _navigateToVoice,
       );
     }
 
-    if (todayTasks.every((t) => t.isCompleted)) {
+    if (todayTasks.every((t) => t.isCompleted) && overdueTasks.isEmpty) {
+      // Find next upcoming task to show below the celebration
+      final upcoming = allTasks.where((t) {
+        if (t.isCompleted) return false;
+        final due = DateTime(t.dueDate.year, t.dueDate.month, t.dueDate.day);
+        return !due.isBefore(today);
+      }).toList()
+        ..sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+      final nextTask = upcoming.isNotEmpty ? upcoming.first : null;
+
+      if (nextTask != null) {
+        // Show next priority card instead of generic "all done"
+        return NoTasksDueTodayEmptyState(
+          onViewAllTasks: () => widget.onTabSelected(1),
+          nextPriorityTask: nextTask,
+          onStartTask: _navigateToVoice,
+        );
+      }
+
+      // Truly nothing left — show celebration
       return AllDoneEmptyState(
         onViewUpcomingTasks: () => widget.onTabSelected(1),
       );
     }
-
+    // Combine active today tasks + overdue so both are visible together
     final activeTodayTasks = todayTasks.where((t) => !t.isCompleted).toList();
+    final combined = [...overdueTasks, ...activeTodayTasks];
+
     return _TaskList(
-      tasks: activeTodayTasks,
+      tasks: combined,
       onStartTask: (_) => _navigateToVoice(),
       onTaskTap: _navigateToTaskDetail,
       animatingTaskId: _animatingTaskId,
@@ -242,7 +373,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) {
     if (hasNoTasks) {
       return ProductivityEmptyState(
-        onAddTask: () => widget.onTabSelected(1), // ✅ Changed from 2 to 1
+        onAddTask: () => widget.onTabSelected(1),
       );
     }
 
@@ -255,7 +386,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Task List and Task Card Widgets (remain unchanged)
+// Task List and Task Card Widgets (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TaskList extends StatelessWidget {
@@ -303,6 +434,7 @@ class _TaskCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return GestureDetector(
       onTap: onTap,
       child: AnimatedOpacity(
@@ -310,69 +442,160 @@ class _TaskCard extends StatelessWidget {
         opacity: isAnimating ? 0.7 : 1.0,
         child: SizedBox(
           width: 165,
-          child: AppCard(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Align(
-                  alignment: Alignment.topRight,
-                  child: PriorityBadge(priority: task.priority),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  task.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    height: 1.3,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.access_time_rounded,
-                      size: 13,
-                      color: theme.textTheme.bodySmall?.color,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      task.dueTime ?? task.formattedDueDate,
-                      style: theme.textTheme.labelSmall,
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: task.isCompleted ? null : onStart,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Accent bar — red if overdue, gradient otherwise ──
+                  Container(
+                    height: 3,
                     decoration: BoxDecoration(
-                      color: task.isCompleted
-                          ? Colors.green.withValues(alpha: 0.15)
-                          : theme.colorScheme.primary,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 200),
-                      child: Text(
-                        task.isCompleted ? '✓ Done' : 'Start Task >',
-                        key: ValueKey(task.isCompleted),
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: task.isCompleted ? Colors.green : Colors.white,
-                        ),
+                      gradient: LinearGradient(
+                        colors: task.isOverdue
+                            ? [Colors.red, Colors.red.shade300]
+                            : const [Color(0xFF1360E2), Color(0xFF7C3AED)],
                       ),
                     ),
                   ),
-                ),
-              ],
+
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // ── Label row: overdue/today tag ────────────
+                          Row(
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: task.isOverdue
+                                      ? Colors.red.withOpacity(0.12)
+                                      : theme.colorScheme.primary
+                                          .withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Icon(
+                                  task.isOverdue
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.north_east_rounded,
+                                  size: 10,
+                                  color: task.isOverdue
+                                      ? Colors.red
+                                      : theme.colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                task.isOverdue ? 'Overdue' : 'Due today',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: task.isOverdue
+                                      ? Colors.red
+                                      : theme.colorScheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Title ────────────────────────────────────
+                          Text(
+                            task.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              height: 1.25,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // ── Date + priority badge ────────────────────
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today_rounded,
+                                size: 11,
+                                color: task.isOverdue
+                                    ? Colors.red
+                                    : theme.textTheme.bodySmall?.color,
+                              ),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(
+                                  task.dueTime ?? task.formattedDueDate,
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    fontSize: 10,
+                                    color: task.isOverdue ? Colors.red : null,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          PriorityBadge(priority: task.priority),
+
+                          const Spacer(),
+
+                          // ── Button ───────────────────────────────────
+                          GestureDetector(
+                            onTap: task.isCompleted ? null : onStart,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 300),
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 9),
+                              decoration: BoxDecoration(
+                                color: task.isCompleted
+                                    ? Colors.green.withOpacity(0.15)
+                                    : theme.colorScheme.primary,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  if (!task.isCompleted) ...[
+                                    const Icon(
+                                      Icons.play_arrow_rounded,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                  ],
+                                  AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 200),
+                                    child: Text(
+                                      task.isCompleted
+                                          ? '✓ Done'
+                                          : 'Start Task',
+                                      key: ValueKey(task.isCompleted),
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: task.isCompleted
+                                            ? Colors.green
+                                            : Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -416,7 +639,7 @@ class _ProductivityCard extends StatelessWidget {
                       size: const Size(120, 120),
                       painter: _GradientArcPainter(
                         progress: animated,
-                        strokeWidth: 14,
+                        strokeWidth: 18, // ← thicker
                         trackColor: theme.dividerColor,
                         startColor: const Color(0xFF1360E2),
                         endColor: const Color(0xFF9B5FFF),

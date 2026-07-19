@@ -17,7 +17,8 @@ class QuizPreferences(BaseModel):
 # User preferences structure
 # --------------------------
 class UserPreferences(BaseModel):
-    notifications_enabled: bool = True        # receive reminders?
+    notifications_enabled: bool = True    
+    notification_permission_asked: bool = False   
     theme: str = "light"        # light or dark mode
     voice_permission: bool = False             
 
@@ -66,6 +67,7 @@ class UserUpdate(BaseModel):
 # --------------------------
 class UserPreferencesUpdate(BaseModel):
     notifications_enabled: Optional[bool] = None
+    notification_permission_asked: Optional[bool] = None 
     theme: Optional[str] = None
     voice_permission: Optional[bool] = None  #
 

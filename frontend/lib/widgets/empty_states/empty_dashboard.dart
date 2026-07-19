@@ -1,9 +1,11 @@
-// lib/widgets/empty_states/empty_dashboard_states.dart
+// lib/widgets/empty_states/empty_dashboard.dart
 
 import 'package:flutter/material.dart';
 import '../../widgets/common/app_card.dart';
+import '../../widgets/common/priority_badge.dart';
+import '../../models/task_model.dart';
 
-/// Empty state for when no tasks exist - shows "Add a high-priority task"
+/// Empty state shown when no tasks exist at all
 class NoTasksEmptyState extends StatelessWidget {
   final VoidCallback onAddTask;
 
@@ -70,17 +72,39 @@ class NoTasksEmptyState extends StatelessWidget {
   }
 }
 
-/// Empty state for when no tasks due today
+/// Empty state for when nothing is due today.
+/// If [nextPriorityTask] is provided, shows the "Next Priority" card
+/// instead of the generic empty state.
 class NoTasksDueTodayEmptyState extends StatelessWidget {
   final VoidCallback onViewAllTasks;
+  final Task? nextPriorityTask;
+  final VoidCallback? onStartTask;
 
   const NoTasksDueTodayEmptyState({
     super.key,
     required this.onViewAllTasks,
+    this.nextPriorityTask,
+    this.onStartTask,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (nextPriorityTask != null) {
+      return ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          SizedBox(
+            width: 165,
+            child: _NextPriorityCard(
+              task: nextPriorityTask!,
+              onStart: onStartTask ?? onViewAllTasks,
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Fallback: nothing due today, nothing upcoming either
     final theme = Theme.of(context);
     return SizedBox(
       height: 180,
@@ -131,6 +155,147 @@ class NoTasksDueTodayEmptyState extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The "Next Priority" card — shown when today is empty but a future task exists.
+/// Matches the mockup exactly: top accent bar, label, title, due date, priority badge, button.
+class _NextPriorityCard extends StatelessWidget {
+  final Task task;
+  final VoidCallback onStart;
+
+  const _NextPriorityCard({
+    required this.task,
+    required this.onStart,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+
+    return SizedBox(
+      height: 185,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Top accent bar (blue → purple gradient) ──────────
+              Container(
+                height: 3,
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF1360E2), Color(0xFF7C3AED)],
+                  ),
+                ),
+              ),
+
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── "Next priority" label with icon badge ────
+                      Row(
+                        children: [
+                          Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Icon(
+                              Icons.north_east_rounded,
+                              size: 11,
+                              color: primary,
+                            ),
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            'Next priority',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: primary,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      // ── Task title ───────────────────────────────
+                      Text(
+                        task.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          height: 1.25,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+
+                      // ── Due date row ─────────────────────────────
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            size: 11,
+                            color: theme.textTheme.bodySmall?.color,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            task.formattedDueDate,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+
+                      // ── Priority badge ────────────────────────────
+                      PriorityBadge(priority: task.priority),
+
+                      const Spacer(),
+
+                      // ── Start Task button ────────────────────────
+                      GestureDetector(
+                        onTap: onStart,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          decoration: BoxDecoration(
+                            color: primary,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'Start Task >',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -192,7 +357,7 @@ class AllDoneEmptyState extends StatelessWidget {
   }
 }
 
-/// Productivity score empty state - shows 0% with message from your design
+/// Productivity score empty state
 class ProductivityEmptyState extends StatelessWidget {
   final VoidCallback onAddTask;
 
@@ -208,7 +373,6 @@ class ProductivityEmptyState extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       child: Row(
         children: [
-          // Circular progress indicator showing 0%
           SizedBox(
             width: 110,
             height: 110,
@@ -225,10 +389,10 @@ class ProductivityEmptyState extends StatelessWidget {
                         AlwaysStoppedAnimation<Color>(theme.dividerColor),
                   ),
                 ),
-                SizedBox(
+                const SizedBox(
                   width: 110,
                   height: 110,
-                  child: const CircularProgressIndicator(
+                  child: CircularProgressIndicator(
                     value: 0.0,
                     strokeWidth: 11,
                     strokeCap: StrokeCap.round,
@@ -244,7 +408,6 @@ class ProductivityEmptyState extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 22),
-          // Right side content
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

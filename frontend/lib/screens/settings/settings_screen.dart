@@ -1,11 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/settings/settings_screen.dart
 // CHANGES:
-//   - Added Account section with Edit Profile option
-//   - Added arrow icon in front of Edit Profile
-//   - Kept original profile picture (Avatar with person icon)
-//   - Removed "See Personal info"
-//   - Replaced all .withOpacity() with .withValues(alpha:)
+//   - Added robot mascot in logout dialog with sad expression
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -21,6 +17,7 @@ import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/voice_fab.dart';
+import '../../widgets/common/robot_mascot.dart'; // ✅ ADDED
 import '../../widgets/layout/section_card.dart';
 import '../../widgets/layout/row_divider.dart';
 import 'profile_screen.dart';
@@ -122,15 +119,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showLogoutDialog() async {
-    final confirmed = await UIFeedback.showConfirmDialog(
-      context,
-      title: 'Log Out',
-      message: 'Are you sure you want to log out?',
-      confirmLabel: 'Log Out',
-      cancelLabel: 'Cancel',
-      confirmColor: Colors.red,
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // ✅ Show custom dialog with sad robot
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        backgroundColor: theme.cardColor,
+        title: Column(
+          children: [
+            // ✅ Sad Robot
+            const RobotMascot(
+              expression: RobotExpression.sad,
+              size: 80,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Log Out',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to log out?',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.textTheme.bodySmall?.color,
+          ),
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          // ✅ Both buttons with same width
+          Row(
+            children: [
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.textTheme.bodySmall?.color,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: theme.dividerColor,
+                        width: 1,
+                      ),
+                    ),
+                    minimumSize:
+                        const Size(double.infinity, 48), // ✅ Fixed height
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade500,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    minimumSize:
+                        const Size(double.infinity, 48), // ✅ Fixed height
+                  ),
+                  child: const Text(
+                    'Log Out',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
-    if (confirmed) _logout();
+
+    if (confirmed == true) {
+      await _logout();
+    }
   }
 
   void _showContactDialog() {
@@ -297,7 +376,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Consumer<AuthProvider>(
                   builder: (_, auth, __) => Column(
                     children: [
-                      // Profile Card - Original design
+                      // Profile Card
                       AppCard(
                         child: Row(
                           children: [
@@ -336,7 +415,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Account Section with Arrow
+                      // Account Section
                       SectionCard(
                         title: 'Account',
                         children: [
@@ -461,7 +540,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// Private widgets
+// Private widgets (unchanged)
 class _PolicySection extends StatelessWidget {
   final String title, content;
   const _PolicySection({required this.title, required this.content});

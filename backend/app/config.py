@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # Connect All
     CONNECT_ALL_CLIENT_ID: str = ""
     CONNECT_ALL_CLIENT_SECRET: str = ""
+    # Orchestrator and lightweight models
+    ORCHESTRATOR_MODEL: str = "openai/gpt-oss-120b"
+    LIGHTWEIGHT_MODEL: str = "openai/gpt-oss-20b"
 
     class Config:
         env_file = str(BASE_DIR / ".env")
