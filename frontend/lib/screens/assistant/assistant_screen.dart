@@ -98,7 +98,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
       _scrollToBottom();
       final messages = provider.messages;
       if (messages.isNotEmpty && messages.last.role == 'assistant') {
-        await _tts.speak(messages.last.content);
+        await _tts.speak(_ttsFriendlyText(messages.last.content));
       }
     }
   }
@@ -148,6 +148,30 @@ class _AssistantScreenState extends State<AssistantScreen> {
 
   String _cleanContent(String content) {
     return content.replaceAll(RegExp(r'\[FILE:[^\]]+\]'), '').trim();
+  }
+
+  // Detects long generated content (essays, emails) so TTS speaks a short
+// spoken-friendly summary instead of reading the whole formatted block —
+// word counts, markdown symbols, and dividers aloud make for a bad demo.
+  bool _isLongGeneratedContent(String content) {
+    return content.contains('📊') && content.contains('words') ||
+        content.contains('📧 Email draft ready') ||
+        content.contains('✏️ Updated draft') ||
+        content.contains('✅ Here') && content.length > 400;
+  }
+
+  String _ttsFriendlyText(String content) {
+    if (_isLongGeneratedContent(content)) {
+      if (content.contains('📧') || content.contains('Email')) {
+        return "Your email draft is ready. You can read it, ask for changes, or say yes to send.";
+      }
+      return "Your document is ready. You can read it, ask for changes, or say yes to download.";
+    }
+    // Strip markdown/formatting symbols for normal short replies
+    return content
+        .replaceAll(RegExp(r'\[FILE:[^\]]+\]'), '')
+        .replaceAll(RegExp(r'[*_─#]'), '')
+        .trim();
   }
 
   Future<void> _downloadFile(String filename) async {

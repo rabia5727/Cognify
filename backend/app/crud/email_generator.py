@@ -14,6 +14,8 @@ _email_llm = ChatGroq(
     model=settings.ORCHESTRATOR_MODEL,
     temperature=0.4,
     max_tokens=1024,
+    timeout=20,
+    max_retries=2,
 )
 
 

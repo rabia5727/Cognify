@@ -33,8 +33,9 @@ _execution_llm = ChatGroq(
     model=settings.LIGHTWEIGHT_MODEL,
     temperature=0.4,
     max_tokens=1024,
+    timeout=20,
+    max_retries=2,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tool 1 — Breakdown Task
