@@ -93,6 +93,7 @@ class DashboardHeader extends StatelessWidget {
   final String userName;
   final bool isNewUser;
   final bool showProactiveCard;
+  final String? dismissedTaskId;
   final VoidCallback onYes;
   final VoidCallback onNo;
   final VoidCallback onProfileTap;
@@ -102,6 +103,7 @@ class DashboardHeader extends StatelessWidget {
     required this.userName,
     required this.isNewUser,
     required this.showProactiveCard,
+    this.dismissedTaskId,
     required this.onYes,
     required this.onNo,
     required this.onProfileTap,
@@ -265,6 +267,7 @@ class DashboardHeader extends StatelessWidget {
                       // Build proactive message from REAL task data
                       final proactiveMessage = _buildProactiveMessage(
                         taskProvider,
+                        dismissedTaskId,
                       );
                       return _ReturningUserMessage(
                         message: proactiveMessage.message,
@@ -284,9 +287,13 @@ class DashboardHeader extends StatelessWidget {
 
   /// Builds a proactive message based on real task data.
   /// Priority: overdue > due today > high priority > general
-  _ProactiveMessage _buildProactiveMessage(TaskProvider taskProvider) {
+  _ProactiveMessage _buildProactiveMessage(
+    TaskProvider taskProvider,
+    String? dismissedTaskId,
+  ) {
     final now = DateTime.now();
-    final tasks = taskProvider.tasks;
+    final tasks =
+        taskProvider.tasks.where((task) => task.id != dismissedTaskId).toList();
 
     if (tasks.isEmpty) {
       return _ProactiveMessage(

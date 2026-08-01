@@ -9,26 +9,28 @@
 // getting stuck.
 
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../constants/app_constant.dart';
 import '../../models/task_model.dart';
-import '../../providers/task_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../utils/ui_feedback.dart';
-import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
-import '../../widgets/common/voice_fab.dart';
+import '../../widgets/common/bottom_nav_bar.dart';
+import '../../widgets/common/notification_permission_sheet.dart';
 import '../../widgets/common/priority_badge.dart';
+import '../../widgets/common/voice_fab.dart';
 import '../../widgets/empty_states/empty_dashboard.dart';
 import '../../widgets/layout/refresh_wrapper.dart';
 import '../../widgets/loading/shimmer_loading.dart';
 import '../assistant/voice_assistant_screen.dart';
 import '../settings/profile_screen.dart';
 import '../workspace/task_detail_screen.dart';
-import '../../widgets/common/notification_permission_sheet.dart';
-import '../../providers/notification_provider.dart';
 
 class DashboardScreen extends StatefulWidget {
   final int currentIndex;
@@ -190,16 +192,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   showProactiveCard: _dismissedTaskId == null,
                   dismissedTaskId: _dismissedTaskId,
                   onYes: () {
-                    // capture BEFORE dismissing — dismissing clears the suggestion
-                    final taskProvider = context.read<TaskProvider>();
-                    final currentTaskId =
-                        _peekCurrentSuggestionTaskId(taskProvider);
-                    final currentTask = taskProvider.tasks
-                        .where((t) => t.id == currentTaskId)
-                        .firstOrNull;
                     _dismissCurrentSuggestion();
-                    // pass task title up to header via a new callback
-                    // handled inside DashboardHeader's Yes button directly
                   },
                   onNo: _dismissCurrentSuggestion,
                   onProfileTap: _navigateToProfile,
