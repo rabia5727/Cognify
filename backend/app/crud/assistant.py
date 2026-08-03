@@ -11,6 +11,7 @@ from app.agents.task_agent      import get_task_agent_tools
 from app.agents.execution_agent import get_execution_agent_tools
 from app.agents.scheduler_agent import get_scheduler_agent_tools
 from app.agents.analytics_agent import get_analytics_agent_tools
+from app.agents.document_agent  import get_document_agent_tools
 
 
 _base_llm = ChatGroq(
@@ -18,6 +19,8 @@ _base_llm = ChatGroq(
     model=settings.ORCHESTRATOR_MODEL,
     temperature=0.7,
     max_tokens=1024,
+    timeout=20,
+    max_retries=2,
 )
 
 # ── Tools whose output is already user-ready ─────────────────────────────────
@@ -126,12 +129,29 @@ async def get_conversation_history(user_id: str, session_id: str, limit: int = 8
     doc = await db["conversations"].find_one({"user_id": user_id, "session_id": session_id})
     if not doc or not doc.get("messages"):
         return []
+
     history = []
     for msg in doc["messages"][-limit:]:
+        content = msg["content"]
+
+        # Compress long passthrough-tool outputs (generated docs/emails) —
+        # the LLM doesn't need to re-read a 500-word essay it already showed
+        # the user just to answer the next unrelated question. Full content
+        # still lives in Mongo untouched; Flutter loads history via a
+        # separate endpoint (get_session_history), so nothing shown to the
+        # user is affected — only what we resend to the LLM.
+        if (
+            msg["role"] == "assistant"
+            and msg.get("intent") in _PASSTHROUGH_TOOLS
+            and len(content) > 400
+        ):
+            content = f"[Earlier generated {msg['intent']} — already shown to user, {len(content)} characters]"
+
         if msg["role"] == "user":
-            history.append(HumanMessage(content=msg["content"]))
+            history.append(HumanMessage(content=content))
         elif msg["role"] == "assistant":
-            history.append(AIMessage(content=msg["content"]))
+            history.append(AIMessage(content=content))
+
     return history
 
 
@@ -217,12 +237,10 @@ _CONFIRM_WORDS = {
 
 
 def _is_confirmation(message: str) -> bool:
-    """Max 6 words — prevents 'make it more formal' triggering DOCX creation."""
+    """Exact-match only — prevents 'ok but make it shorter' from
+    wrongly triggering pending DOCX/email execution via partial word overlap."""
     cleaned = message.lower().strip().rstrip("!.,?")
-    words   = cleaned.split()
-    if len(words) > 6:
-        return False
-    return cleaned in _CONFIRM_WORDS or bool(set(words) & _CONFIRM_WORDS)
+    return cleaned in _CONFIRM_WORDS
 
 
 # ── Main chat function ────────────────────────────────────────────────────────
@@ -255,9 +273,10 @@ async def chat_with_coco(
             get_task_agent_tools(user_id) +
             get_execution_agent_tools(user_id, session_id) +
             get_scheduler_agent_tools(user_id) +
-            get_analytics_agent_tools(user_id)
+            get_analytics_agent_tools(user_id) +
+            get_document_agent_tools(user_id, session_id)
         )
-        tool_map       = {t.name: t for t in all_tools}
+        tool_map = {t.name: t for t in all_tools}
         llm_with_tools = _base_llm.bind_tools(all_tools)
 
         messages = [SystemMessage(content=SYSTEM_PROMPT)]
@@ -327,22 +346,25 @@ async def chat_with_coco(
 
     except Exception as e:
         import traceback
-        print(f"❌ ORCHESTRATOR ERROR: {str(e)}")
+        error_type = type(e).__name__
+        print(f"❌ ORCHESTRATOR ERROR [{error_type}]: {str(e)}")
         print(traceback.format_exc())
 
-        error_reply = (
-            "I'm a bit overwhelmed right now. Please try again in a moment! ⏳"
-            if "rate_limit" in str(e) or "429" in str(e)
-            else "I'm having a moment. Please try again!"
-        )
+        if error_type in ("RateLimitError", "APIStatusError") and "429" in str(e):
+            error_reply = "I'm a bit overwhelmed right now. Please try again in a moment! ⏳"
+        elif error_type in ("APITimeoutError", "TimeoutError"):
+            error_reply = "That took a bit too long — mind trying again? ⏳"
+        elif error_type == "APIConnectionError":
+            error_reply = "I'm having trouble connecting right now. Check your internet and try again!"
+        else:
+            error_reply = "I'm having a moment. Please try again!"
+            if not session_id:
+                new_session = await create_new_session(user_id, first_message=user_message)
+                session_id  = new_session["session_id"]
 
-        if not session_id:
-            new_session = await create_new_session(user_id, first_message=user_message)
-            session_id  = new_session["session_id"]
-
-        await save_message(user_id, session_id, "user",      user_message, source,      "chat")
-        await save_message(user_id, session_id, "assistant", error_reply,  "assistant", "chat")
-        return {"reply": error_reply, "intent": "chat", "session_id": session_id}
+            await save_message(user_id, session_id, "user",      user_message, source,      "chat")
+            await save_message(user_id, session_id, "assistant", error_reply,  "assistant", "chat")
+            return {"reply": error_reply, "intent": "chat", "session_id": session_id}
 
 
 # ── Session management ────────────────────────────────────────────────────────

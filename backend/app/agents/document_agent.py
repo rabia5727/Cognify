@@ -12,8 +12,9 @@ _document_llm = ChatGroq(
     model=settings.ORCHESTRATOR_MODEL,
     temperature=0.3,
     max_tokens=4096,
+    timeout=20,
+    max_retries=2,
 )
-
 
 async def _save_doc_pending(user_id: str, session_id: str, action: dict):
     db = get_database()
@@ -183,8 +184,23 @@ Use # for section headings. Academic but readable tone.""",
 
             content = response.content.strip()
             title   = topic if len(topic) <= 60 else topic[:57] + "..."
+            
+            
+            # Warn (don't silently overwrite) if a different unconfirmed action
+# is already pending — prevents "generate essay" then "draft email"
+# from losing the essay's pending DOCX creation before the user confirms.
+            db = get_database()
+            existing = await db["conversations"].find_one(
+                {"user_id": user_id, "session_id": session_id}, {"pending_action": 1}
+            )
+            existing_pending = existing.get("pending_action") if existing else None
+            collision_note = ""
+            if existing_pending and existing_pending.get("type") != "create_docx":
+                collision_note = (
+                    "⚠️ Note: this replaces your previous unconfirmed "
+                    f"{existing_pending.get('type', 'action')} — say yes now to keep *this* one.\n\n"
+                )
 
-            # Save content as pending_action for optional DOCX creation
             await _save_doc_pending(user_id, session_id, {
                 "type":    "create_docx",
                 "title":   title,
@@ -192,8 +208,7 @@ Use # for section headings. Academic but readable tone.""",
                 "subject": subject,
             })
 
-            # Return FULL content in chat
-            return _build_document_preview(title, content)
+            return collision_note + _build_document_preview(title, content)
 
         except Exception as e:
             return f"Failed to generate solution: {str(e)}"

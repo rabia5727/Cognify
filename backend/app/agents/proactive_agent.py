@@ -20,6 +20,8 @@ _proactive_llm = ChatGroq(
     model=settings.LIGHTWEIGHT_MODEL,
     temperature=0.5,
     max_tokens=512,
+    timeout=20,
+    max_retries=2,
 )
 
 def _to_utc(dt: datetime) -> datetime:

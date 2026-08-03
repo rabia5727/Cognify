@@ -61,6 +61,9 @@ def _format_email_preview(email: dict, changed: bool = False) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 # Tool 1 — Draft Email
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool 1 — Draft Email
+# ─────────────────────────────────────────────────────────────────────────────
 def get_draft_email_tool(user_id: str, session_id: str):
     @tool
     async def draft_email_tool(
@@ -80,14 +83,33 @@ def get_draft_email_tool(user_id: str, session_id: str):
         """
         try:
             from app.crud.email_generator import generate_email_draft
+            
+            # ✅ NEW: Check for pending_action collision before generating
+            db = get_database()
+            existing = await db["conversations"].find_one(
+                {"user_id": user_id, "session_id": session_id}, {"pending_action": 1}
+            )
+            existing_pending = existing.get("pending_action") if existing else None
+            collision_note = ""
+            
+            if existing_pending and existing_pending.get("type") != "send_email":
+                collision_note = (
+                    "⚠️ Note: this replaces your previous unconfirmed "
+                    f"{existing_pending.get('type', 'action')} — say yes now to keep *this* one.\n\n"
+                )
+            
             email = await generate_email_draft(
                 context=context,
                 to=to,
                 tone=tone,
                 email_type=email_type,
             )
+            
             await _save_email_pending(user_id, session_id, email)
-            return _format_email_preview(email)
+            
+            # ✅ Prepend collision warning if there was a collision
+            return collision_note + _format_email_preview(email)
+            
         except Exception as e:
             return f"Failed to draft email: {str(e)}"
 
