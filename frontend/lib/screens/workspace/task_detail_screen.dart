@@ -15,7 +15,7 @@ import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/priority_badge.dart';
-import '../assistant/voice_assistant_screen.dart';
+import '../assistant/assistant_screen.dart';
 import 'edit_task_screen.dart';
 
 class TaskDetailScreen extends StatefulWidget {
@@ -89,10 +89,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 
-  void _goToVoiceAssistant() {
+  void _goToVoiceAssistant(Task task) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const VoiceAssistantScreen()),
+      MaterialPageRoute(
+        builder: (_) => AssistantScreen(
+          initialMessage: 'Help me with: ${task.title}',
+        ),
+      ),
     );
   }
 
@@ -200,7 +204,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
-                            onPressed: _goToVoiceAssistant,
+                            onPressed: () => _goToVoiceAssistant(task),
                             icon: Icon(Icons.auto_awesome_rounded,
                                 size: 16, color: theme.colorScheme.primary),
                             label: Text('Continue with AI',

@@ -7,6 +7,7 @@ import '../../screens/assistant/assistant_screen.dart';
 import '../../screens/notifications/notifications_screen.dart';
 import '../../theme/app_theme.dart';
 import 'app_card.dart';
+import '../../widgets/common/robot_mascot.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SIMPLE HEADER — Settings, Workspace, Analytics, Profile
@@ -252,7 +253,10 @@ class DashboardHeader extends StatelessWidget {
                   shape: BoxShape.circle,
                 ),
                 child: const Center(
-                  child: Text('🤖', style: TextStyle(fontSize: 38)),
+                  child: RobotMascot(
+                    expression: RobotExpression.happy,
+                    size: 56,
+                  ),
                 ),
               ),
             ],

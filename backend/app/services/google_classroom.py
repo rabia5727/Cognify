@@ -149,6 +149,43 @@ class GoogleClassroomService:
         except Exception as e:
             print(f"Error fetching submission: {e}")
             return None
+    @staticmethod
+    async def submit_to_classroom_with_drive_file(
+        user_id: str, course_id: str, assignment_id: str, drive_file_id: str, db
+    ):
+        """
+        Attaches a Google Drive file to the student's submission slot
+        for this assignment, then marks it as turned in — for real.
+        """
+        service = await GoogleClassroomService.get_classroom_service(user_id, db)
+        if not service:
+            raise Exception("Google Classroom not connected")
+
+        submission = await GoogleClassroomService.fetch_assignment_submissions(
+            user_id, course_id, assignment_id, db
+        )
+        if not submission:
+            raise Exception("Could not find your submission slot for this assignment")
+
+        submission_id = submission.get("id")
+
+        # Attach the uploaded Drive file to the submission
+        service.courses().courseWork().studentSubmissions().modifyAttachments(
+            courseId=course_id,
+            courseWorkId=assignment_id,
+            id=submission_id,
+            body={"addAttachments": [{"driveFile": {"id": drive_file_id}}]},
+        ).execute()
+
+        # Mark the assignment as turned in
+        service.courses().courseWork().studentSubmissions().turnIn(
+            courseId=course_id,
+            courseWorkId=assignment_id,
+            id=submission_id,
+            body={},
+        ).execute()
+
+        return {"success": True, "message": "Assignment submitted to Google Classroom"}
 
     @staticmethod
     async def submit_text_submission(user_id: str, course_id: str, assignment_id: str, text: str, db):
