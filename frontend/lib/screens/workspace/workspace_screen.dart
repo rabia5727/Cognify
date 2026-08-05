@@ -3,33 +3,29 @@
 //   - Replaced ALL deprecated .withOpacity() with .withValues(alpha:)
 //   - Fixed overlay dispose in _SortButtonState
 //   - Optimized consumers
-//   - FIX: Calendar dots show ALL tasks including completed
-//   - FIX: Date filtering includes completed tasks when "All" is selected
 
-import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:frontend/services/sync_service.dart';
 import 'package:provider/provider.dart';
-
-import '../../models/project_model.dart';
+import 'package:confetti/confetti.dart';
 import '../../models/task_model.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/project_provider.dart';
+import '../../models/project_model.dart';
 import '../../providers/task_provider.dart';
+import '../../providers/project_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../utils/ui_feedback.dart';
+import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
-import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/empty_states/empty_workspace.dart';
 import '../../widgets/loading/shimmer_loading.dart';
-import 'add_project_screen.dart';
 import 'add_task_screen.dart';
-import 'classroom_sync_screen.dart';
-import 'edit_project_screen.dart';
 import 'edit_task_screen.dart';
-import 'project_detail_screen.dart';
 import 'task_detail_screen.dart';
+import 'add_project_screen.dart';
+import 'edit_project_screen.dart';
+import 'project_detail_screen.dart';
+import 'classroom_sync_screen.dart';
 
 class WorkSpaceScreen extends StatefulWidget {
   final int currentIndex;
@@ -104,7 +100,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
     try {
       await taskProvider.toggleComplete(id);
-      await taskProvider.refreshTasks();
     } catch (_) {
       if (mounted) UIFeedback.showError(context, 'Could not update task.');
     } finally {
@@ -142,11 +137,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
           },
         ),
       ),
-    ).then((_) async {
-      if (mounted) {
-        await context.read<TaskProvider>().refreshTasks();
-      }
-    });
+    );
   }
 
   void _goToEditTask(String id) {
@@ -160,17 +151,18 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
           onTaskUpdated: (updated) async {
             try {
               await context.read<TaskProvider>().updateTask(updated);
-              if (mounted) UIFeedback.showSuccess(context, 'Task updated!');
+              if (mounted) {
+                UIFeedback.showSuccess(context, 'Task updated successfully!');
+              }
             } catch (_) {
-              if (mounted)
+              if (mounted) {
                 UIFeedback.showError(context, 'Failed to update task.');
+              }
             }
           },
         ),
       ),
-    ).then((_) async {
-      if (mounted) await context.read<TaskProvider>().refreshTasks();
-    });
+    );
   }
 
   void _goToTaskDetail(String id) {
@@ -275,6 +267,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   Future<void> _goToProjectDetail(String id) async {
     final project =
         context.read<ProjectProvider>().projects.firstWhere((p) => p.id == id);
+    final allTasks = context.read<TaskProvider>().tasks;
 
     await Navigator.push(
       context,
@@ -296,6 +289,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       ),
     );
 
+    // ✅ Refresh after returning so workspace list is current
     if (mounted) {
       await context.read<ProjectProvider>().refreshProjects();
     }
@@ -328,7 +322,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       _projectFilterIndex = 0;
     });
     try {
-      await SyncService.manualSync(context);
       await Future.wait([
         context.read<TaskProvider>().refreshTasks(),
         context.read<ProjectProvider>().refreshProjects(),
@@ -343,79 +336,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   bool get hasProjectSortActive =>
       _projectPriorityFilterIndex != 0 || _projectCategoryFilterIndex != 0;
 
-  // ─── ✅ FIXED: Check if a date has ANY tasks (including completed) ────
-  bool _hasTasksOnDate(DateTime date, TaskProvider taskProvider) {
-    final taskDate = DateTime(date.year, date.month, date.day);
-    return taskProvider.tasks.any((task) {
-      final taskDueDate = DateTime(
-        task.dueDate.year,
-        task.dueDate.month,
-        task.dueDate.day,
-      );
-      return taskDueDate == taskDate;
-    });
-  }
-
-  // ─── ✅ FIXED: Get filtered tasks including completed when date selected ────
-  List<Task> _getFilteredTasks(TaskProvider taskProvider) {
-    List<Task> result = [];
-
-    // If a specific date is selected
-    if (_selectedDayIndex >= 0 && _calendarDays.isNotEmpty) {
-      final selectedDate =
-          _calendarDays[_selectedDayIndex]['fullDate'] as DateTime;
-
-      // Get ALL tasks for this date (including completed)
-      result = taskProvider.tasks.where((task) {
-        final taskDate = DateTime(
-          task.dueDate.year,
-          task.dueDate.month,
-          task.dueDate.day,
-        );
-        return taskDate == selectedDate;
-      }).toList();
-
-      // Apply status filter based on _filterIndex
-      if (_filterIndex == 1) {
-        // Only completed
-        result = result.where((t) => t.isCompleted).toList();
-      } else if (_filterIndex == 2) {
-        // Only active (not completed)
-        result = result.where((t) => !t.isCompleted).toList();
-      }
-      // _filterIndex == 0 means "All" - show everything including completed
-    } else {
-      // No date selected - use the provider's filtered method
-      result = taskProvider.filtered(
-        statusIndex: _filterIndex,
-        priorityIndex: _priorityFilterIndex,
-        categoryIndex: _categoryFilterIndex,
-        date: null,
-      );
-    }
-
-    // Apply priority filter
-    if (_priorityFilterIndex == 1) {
-      result = result.where((t) => t.priority == Priority.high).toList();
-    } else if (_priorityFilterIndex == 2) {
-      result = result.where((t) => t.priority == Priority.medium).toList();
-    } else if (_priorityFilterIndex == 3) {
-      result = result.where((t) => t.priority == Priority.low).toList();
-    }
-
-    // Apply category filter
-    if (_categoryFilterIndex == 1) {
-      result = result.where((t) => t.category == TaskCategory.email).toList();
-    } else if (_categoryFilterIndex == 2) {
-      result =
-          result.where((t) => t.category == TaskCategory.classroom).toList();
-    } else if (_categoryFilterIndex == 3) {
-      result = result.where((t) => t.category == TaskCategory.general).toList();
-    }
-
-    return result;
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -423,10 +343,17 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
     return Consumer2<TaskProvider, ProjectProvider>(
       builder: (context, taskProvider, projectProvider, _) {
+        final tasks = taskProvider.tasks;
         final projects = projectProvider.projects;
 
-        // ✅ Use the centralized filtering method
-        final filteredTasks = _getFilteredTasks(taskProvider);
+        var filteredTasks = taskProvider.filtered(
+          statusIndex: _filterIndex,
+          priorityIndex: _priorityFilterIndex,
+          categoryIndex: _categoryFilterIndex,
+          date: (_selectedDayIndex >= 0 && _calendarDays.isNotEmpty)
+              ? _calendarDays[_selectedDayIndex]['fullDate'] as DateTime
+              : null,
+        );
 
         return Scaffold(
           backgroundColor: theme.scaffoldBackgroundColor,
@@ -439,20 +366,22 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                   AppHeader(
                     title: 'Workspace',
                     onBack: () => widget.onTabSelected(0),
-                    actions: [
-                      IconButton(
-                        icon: const Icon(Icons.class_),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const ClassroomSyncScreen(),
-                            ),
-                          );
-                        },
-                        tooltip: 'Google Classroom Sync',
-                      ),
-                    ],
+
+                    // actions temporarily removed - will add back after Classroom integration
+                    // actions: [
+                    //   IconButton(
+                    //     icon: const Icon(Icons.class_),
+                    //     onPressed: () {
+                    //       Navigator.push(
+                    //         context,
+                    //         MaterialPageRoute(
+                    //           builder: (_) => const ClassroomSyncScreen(),
+                    //         ),
+                    //       );
+                    //     },
+                    //     tooltip: 'Sync with Google Classroom',
+                    //   ),
+                    // ],
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -481,11 +410,15 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                           final di = i - 1;
                           final date =
                               _calendarDays[di]['fullDate'] as DateTime;
+                          final tasksOnDate = taskProvider.tasksForDate(date);
+                          final hasIncompleteTask =
+                              tasksOnDate.any((task) => !task.isCompleted);
+
                           return _CalendarDay(
                             day: _calendarDays[di]['day'] as String,
                             date: _calendarDays[di]['date'] as String,
                             isSelected: di == _selectedDayIndex,
-                            hasTask: _hasTasksOnDate(date, taskProvider),
+                            hasTask: hasIncompleteTask,
                             onTap: () => setState(() => _selectedDayIndex = di),
                           );
                         },
@@ -631,7 +564,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                           )
                         : _ProjectsList(
                             projects: projects,
-                            allTasks: taskProvider.tasks,
+                            allTasks: tasks,
                             filterIndex: _projectFilterIndex,
                             priorityFilterIndex: _projectPriorityFilterIndex,
                             categoryFilterIndex: _projectCategoryFilterIndex,
@@ -703,8 +636,6 @@ class _FilterChip extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -717,7 +648,7 @@ class _FilterChip extends StatelessWidget {
 }
 
 // ================================================================
-// SORT BUTTON - FIXED VERSION
+// SORT BUTTON
 // ================================================================
 
 class _SortButton extends StatefulWidget {
@@ -908,24 +839,18 @@ class _SortButtonState extends State<_SortButton> {
     );
 
     Overlay.of(context).insert(_overlayEntry!);
-    if (mounted) setState(() => _isOpen = true);
+    setState(() => _isOpen = true);
   }
 
   void _hideDropdown() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    if (mounted) {
-      setState(() => _isOpen = false);
-    }
+    if (mounted) setState(() => _isOpen = false);
   }
 
   @override
   void dispose() {
-    if (_overlayEntry != null) {
-      _overlayEntry?.remove();
-      _overlayEntry = null;
-    }
-    _isOpen = false;
+    _hideDropdown();
     super.dispose();
   }
 
@@ -1002,8 +927,6 @@ class _DropdownMenuItem extends StatelessWidget {
             if (isSelected) const SizedBox(width: 8),
             Text(
               label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
@@ -1116,13 +1039,12 @@ class _CalendarDay extends StatelessWidget {
   final String day, date;
   final bool isSelected, hasTask;
   final VoidCallback onTap;
-  const _CalendarDay({
-    required this.day,
-    required this.date,
-    required this.isSelected,
-    required this.hasTask,
-    required this.onTap,
-  });
+  const _CalendarDay(
+      {required this.day,
+      required this.date,
+      required this.isSelected,
+      required this.hasTask,
+      required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1236,10 +1158,6 @@ class _TasksList extends StatelessWidget {
   }
 }
 
-// ================================================================
-// TASK CARD
-// ================================================================
-
 class _TaskCard extends StatelessWidget {
   final Task task;
   final VoidCallback onTap, onToggle, onEdit, onDelete;
@@ -1330,8 +1248,6 @@ class _TaskCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     task.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
@@ -1368,8 +1284,6 @@ class _TaskCard extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 34),
                 child: Text(
                   task.description,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.textTheme.bodySmall?.color
                         ?.withValues(alpha: 0.7),
@@ -1389,29 +1303,21 @@ class _TaskCard extends StatelessWidget {
                         : theme.textTheme.bodySmall?.color),
                 const SizedBox(width: 5),
                 if (task.isOverdue)
-                  Expanded(
-                    child: Text(
-                      'Overdue',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: Colors.red,
-                      ),
+                  Text(
+                    'Overdue',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.red,
                     ),
                   )
                 else
-                  Expanded(
-                    child: Text(
-                      'Due ${_formatDueDate()} · ${_formatDueTime()}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                  Text(
+                    'Due ${_formatDueDate()} · ${_formatDueTime()}',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 _buildCategoryTag(task.category),
                 const Spacer(),
                 if (!isCompleted)
@@ -1464,14 +1370,12 @@ class _TaskCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 11, color: color),
+          Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
           Text(
             label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
               color: color,
             ),
@@ -1521,6 +1425,7 @@ class _ProjectsList extends StatelessWidget {
     }
 
     if (filterIndex == 0) {
+      // All: exclude 100% completed projects (they belong in Completed tab)
       filtered = filtered.where((p) {
         final total = getTotalCount(p);
         if (total == 0) return true;
@@ -1649,8 +1554,6 @@ class _ProjectCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   project.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -1686,8 +1589,6 @@ class _ProjectCard extends StatelessWidget {
             ),
             child: Text(
               project.category.label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -1729,14 +1630,10 @@ class _ProjectCard extends StatelessWidget {
               Icon(Icons.description_outlined,
                   size: 14, color: theme.textTheme.bodySmall?.color),
               const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  '$completedCount/$totalCount tasks done',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w500,
-                  ),
+              Text(
+                '$completedCount/$totalCount tasks done',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const Spacer(),

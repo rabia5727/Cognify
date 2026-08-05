@@ -6,6 +6,7 @@
 //   - Added Google Drive as fully functional (not "Coming Soon")
 //   - Added "Connect All" button for one-click connection
 //   - Replaced static mock data with real backend data
+//   - Added persistent profile image storage using SharedPreferences
 // ═══════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
@@ -16,7 +17,9 @@ import 'package:frontend/screens/workspace/drive_sync_screen.dart';
 import 'package:frontend/screens/workspace/gmail_sync_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/app_config.dart';
 import '../../providers/auth_provider.dart';
@@ -31,6 +34,8 @@ import '../workspace/classroom_sync_screen.dart';
 import 'change_password_screen.dart';
 import 'edit_name_screen.dart';
 
+const String _profileImageKey = 'profile_image';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -44,9 +49,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _loadProfileImage();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProfileProvider>().loadConnections();
     });
+  }
+
+  // ─── Profile Image Persistence ──────────────────────────────────
+
+  Future<void> _loadProfileImage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final base64Image = prefs.getString(_profileImageKey);
+      if (base64Image != null && base64Image.isNotEmpty) {
+        final bytes = base64Decode(base64Image);
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/profile_image.png');
+        await file.writeAsBytes(bytes);
+        if (mounted) {
+          setState(() => _profileImage = file);
+        }
+      }
+    } catch (e) {
+      // Ignore - no image saved
+    }
+  }
+
+  Future<void> _saveProfileImage(File imageFile) async {
+    try {
+      final bytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_profileImageKey, base64Image);
+    } catch (e) {
+      // Handle error
+    }
+  }
+
+  Future<void> _removeProfileImage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_profileImageKey);
+      if (mounted) {
+        setState(() => _profileImage = null);
+        UIFeedback.showSuccess(context, 'Profile photo removed');
+      }
+    } catch (e) {
+      if (mounted) {
+        UIFeedback.showError(context, 'Failed to remove photo');
+      }
+    }
   }
 
   void _navigateToEditName() {
@@ -363,8 +415,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: 'Remove Photo',
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() => _profileImage = null);
-                  UIFeedback.showSuccess(context, 'Profile photo removed');
+                  _removeProfileImage();
                 }),
           ],
           const SizedBox(height: 12),
@@ -383,8 +434,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final image = await ImagePicker().pickImage(
           source: source, maxWidth: 500, maxHeight: 500, imageQuality: 85);
       if (image != null) {
-        setState(() => _profileImage = File(image.path));
-        if (mounted) UIFeedback.showSuccess(context, 'Photo updated!');
+        final imageFile = File(image.path);
+        await _saveProfileImage(imageFile);
+        if (mounted) {
+          setState(() => _profileImage = imageFile);
+          UIFeedback.showSuccess(context, 'Photo updated!');
+        }
       }
     } catch (e) {
       if (mounted) UIFeedback.showError(context, 'Failed to pick image: $e');
@@ -490,10 +545,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               profileProvider.isClassroomConnected &&
                                   profileProvider.isGmailConnected &&
                                   profileProvider.isDriveConnected;
-                          final anyconnected =
-                              profileProvider.isClassroomConnected ||
-                                  profileProvider.isGmailConnected ||
-                                  profileProvider.isDriveConnected;
 
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,7 +566,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
 
-                              //  CONNECT ALL BUTTON
+                              // CONNECT ALL BUTTON
                               if (!allConnected)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 16),
@@ -540,7 +591,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
 
-                              //disconnect All Button
+                              // DISCONNECT ALL BUTTON
                               if (allConnected)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 16),
@@ -617,7 +668,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 const RowDivider(),
 
-                                // ✅ Google Drive - Now Fully Functional
+                                // Google Drive
                                 _ConnectedAccountRow(
                                   icon: Icons.folder_outlined,
                                   label: 'Google Drive',
@@ -638,7 +689,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   onDisconnect: () => _disconnectDrive(
                                       context, profileProvider),
                                   isLoading: profileProvider.isLoading,
-                                  isComingSoon: false, // ✅ Changed to false
+                                  isComingSoon: false,
                                 ),
                               ]),
                             ],

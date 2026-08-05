@@ -3,7 +3,7 @@ import 'package:frontend/screens/auth/verfication_screen.dart';
 import '../../theme/app_theme.dart';
 import 'auth_screen.dart';
 import '../../utils/ui_feedback.dart';
-import '../../widgets/common/robot_mascot.dart'; // ✅ ADDED
+import '../../widgets/common/robot_mascot.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -15,7 +15,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
-  bool _isEmailSent = false;
+  final bool _isEmailSent = false;
 
   @override
   void dispose() {
@@ -34,23 +34,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     // TODO: Call API to send verification code
     await Future.delayed(const Duration(seconds: 1));
 
-    setState(() {
-      _isLoading = false;
-      _isEmailSent = true;
-    });
-
-    // Navigate to verification screen after a delay
-    if (mounted && _isEmailSent) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                VerificationScreen(email: _emailController.text.trim()),
-          ),
-        );
-      }
+    setState(() => _isLoading = false);
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              VerificationScreen(email: _emailController.text.trim()),
+        ),
+      );
     }
   }
 
@@ -65,7 +57,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // ✅ Robot Mascot instead of emoji
+              // Robot Mascot
               Container(
                 width: 70,
                 height: 70,

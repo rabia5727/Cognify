@@ -2,10 +2,15 @@
 // FILE: lib/screens/settings/settings_screen.dart
 // CHANGES:
 //   - Added robot mascot in logout dialog with sad expression
+//   - Added persistent profile image from SharedPreferences
 // ═══════════════════════════════════════════════════════════════════
+
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../constants/app_constant.dart';
@@ -17,11 +22,13 @@ import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/assistant_fab.dart';
-import '../../widgets/common/robot_mascot.dart'; // ✅ ADDED
+import '../../widgets/common/robot_mascot.dart';
 import '../../widgets/layout/section_card.dart';
 import '../../widgets/layout/row_divider.dart';
 import 'profile_screen.dart';
 import '../../services/user_service.dart';
+
+const String _profileImageKey = 'profile_image';
 
 class SettingsScreen extends StatefulWidget {
   final int currentIndex;
@@ -44,6 +51,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _loadPreferences();
+  }
+
+  Future<String?> _getProfileImage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_profileImageKey);
+    } catch (e) {
+      return null;
+    }
   }
 
   Future<void> _loadPreferences() async {
@@ -120,9 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showLogoutDialog() async {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
-    // ✅ Show custom dialog with sad robot
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -133,7 +147,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: theme.cardColor,
         title: Column(
           children: [
-            // ✅ Sad Robot
             const RobotMascot(
               expression: RobotExpression.sad,
               size: 80,
@@ -156,7 +169,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          // ✅ Both buttons with same width
           Row(
             children: [
               Expanded(
@@ -172,8 +184,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         width: 1,
                       ),
                     ),
-                    minimumSize:
-                        const Size(double.infinity, 48), // ✅ Fixed height
+                    minimumSize: const Size(double.infinity, 48),
                   ),
                   child: const Text(
                     'Cancel',
@@ -192,8 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    minimumSize:
-                        const Size(double.infinity, 48), // ✅ Fixed height
+                    minimumSize: const Size(double.infinity, 48),
                   ),
                   child: const Text(
                     'Log Out',
@@ -376,42 +386,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Consumer<AuthProvider>(
                   builder: (_, auth, __) => Column(
                     children: [
-                      // Profile Card
-                      AppCard(
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 56,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary
-                                      .withValues(alpha: 0.1),
-                                  shape: BoxShape.circle),
-                              child: Icon(Icons.person_rounded,
-                                  size: 30, color: theme.colorScheme.primary),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(auth.userName,
-                                      style: theme.textTheme.titleMedium
-                                          ?.copyWith(
-                                              fontWeight: FontWeight.w700)),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    auth.userEmail,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: theme.textTheme.bodySmall?.color,
-                                    ),
+                      // Profile Card with Image
+                      FutureBuilder<String?>(
+                        future: _getProfileImage(),
+                        builder: (context, snapshot) {
+                          return AppCard(
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 56,
+                                  height: 56,
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary
+                                        .withValues(alpha: 0.1),
+                                    shape: BoxShape.circle,
                                   ),
-                                ],
-                              ),
+                                  child: snapshot.hasData &&
+                                          snapshot.data != null &&
+                                          snapshot.data!.isNotEmpty
+                                      ? ClipOval(
+                                          child: Image.memory(
+                                            base64Decode(snapshot.data!),
+                                            width: 56,
+                                            height: 56,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Icon(
+                                              Icons.person_rounded,
+                                              size: 30,
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                          ),
+                                        )
+                                      : Icon(
+                                          Icons.person_rounded,
+                                          size: 30,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                ),
+                                const SizedBox(width: 16),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        auth.userName,
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                                fontWeight: FontWeight.w700),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        auth.userEmail,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color:
+                                              theme.textTheme.bodySmall?.color,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                       const SizedBox(height: 20),
 
@@ -540,7 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// Private widgets (unchanged)
+// Private widgets
 class _PolicySection extends StatelessWidget {
   final String title, content;
   const _PolicySection({required this.title, required this.content});
