@@ -3,6 +3,8 @@
 //   - Replaced ALL deprecated .withOpacity() with .withValues(alpha:)
 //   - Fixed overlay dispose in _SortButtonState
 //   - Optimized consumers
+//   - FIX: Calendar dots show ALL tasks including completed
+//   - FIX: Date filtering includes completed tasks when "All" is selected
 
 import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
@@ -102,7 +104,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
     try {
       await taskProvider.toggleComplete(id);
-      // Force refresh to get confirmed state from backend
       await taskProvider.refreshTasks();
     } catch (_) {
       if (mounted) UIFeedback.showError(context, 'Could not update task.');
@@ -142,7 +143,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
         ),
       ),
     ).then((_) async {
-      // Refresh after returning so real backend ID is in the list
       if (mounted) {
         await context.read<TaskProvider>().refreshTasks();
       }
@@ -275,7 +275,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   Future<void> _goToProjectDetail(String id) async {
     final project =
         context.read<ProjectProvider>().projects.firstWhere((p) => p.id == id);
-    final allTasks = context.read<TaskProvider>().tasks;
 
     await Navigator.push(
       context,
@@ -297,7 +296,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       ),
     );
 
-    // ✅ Refresh after returning so workspace list is current
     if (mounted) {
       await context.read<ProjectProvider>().refreshProjects();
     }
@@ -330,7 +328,6 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       _projectFilterIndex = 0;
     });
     try {
-      //sync classroom and Gmail before Refreshing tasks
       await SyncService.manualSync(context);
       await Future.wait([
         context.read<TaskProvider>().refreshTasks(),
@@ -346,6 +343,79 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
   bool get hasProjectSortActive =>
       _projectPriorityFilterIndex != 0 || _projectCategoryFilterIndex != 0;
 
+  // ─── ✅ FIXED: Check if a date has ANY tasks (including completed) ────
+  bool _hasTasksOnDate(DateTime date, TaskProvider taskProvider) {
+    final taskDate = DateTime(date.year, date.month, date.day);
+    return taskProvider.tasks.any((task) {
+      final taskDueDate = DateTime(
+        task.dueDate.year,
+        task.dueDate.month,
+        task.dueDate.day,
+      );
+      return taskDueDate == taskDate;
+    });
+  }
+
+  // ─── ✅ FIXED: Get filtered tasks including completed when date selected ────
+  List<Task> _getFilteredTasks(TaskProvider taskProvider) {
+    List<Task> result = [];
+
+    // If a specific date is selected
+    if (_selectedDayIndex >= 0 && _calendarDays.isNotEmpty) {
+      final selectedDate =
+          _calendarDays[_selectedDayIndex]['fullDate'] as DateTime;
+
+      // Get ALL tasks for this date (including completed)
+      result = taskProvider.tasks.where((task) {
+        final taskDate = DateTime(
+          task.dueDate.year,
+          task.dueDate.month,
+          task.dueDate.day,
+        );
+        return taskDate == selectedDate;
+      }).toList();
+
+      // Apply status filter based on _filterIndex
+      if (_filterIndex == 1) {
+        // Only completed
+        result = result.where((t) => t.isCompleted).toList();
+      } else if (_filterIndex == 2) {
+        // Only active (not completed)
+        result = result.where((t) => !t.isCompleted).toList();
+      }
+      // _filterIndex == 0 means "All" - show everything including completed
+    } else {
+      // No date selected - use the provider's filtered method
+      result = taskProvider.filtered(
+        statusIndex: _filterIndex,
+        priorityIndex: _priorityFilterIndex,
+        categoryIndex: _categoryFilterIndex,
+        date: null,
+      );
+    }
+
+    // Apply priority filter
+    if (_priorityFilterIndex == 1) {
+      result = result.where((t) => t.priority == Priority.high).toList();
+    } else if (_priorityFilterIndex == 2) {
+      result = result.where((t) => t.priority == Priority.medium).toList();
+    } else if (_priorityFilterIndex == 3) {
+      result = result.where((t) => t.priority == Priority.low).toList();
+    }
+
+    // Apply category filter
+    if (_categoryFilterIndex == 1) {
+      result = result.where((t) => t.category == TaskCategory.email).toList();
+    } else if (_categoryFilterIndex == 2) {
+      result =
+          result.where((t) => t.category == TaskCategory.classroom).toList();
+    } else if (_categoryFilterIndex == 3) {
+      result = result.where((t) => t.category == TaskCategory.general).toList();
+    }
+
+    return result;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -353,17 +423,10 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
     return Consumer2<TaskProvider, ProjectProvider>(
       builder: (context, taskProvider, projectProvider, _) {
-        final tasks = taskProvider.tasks;
         final projects = projectProvider.projects;
 
-        var filteredTasks = taskProvider.filtered(
-          statusIndex: _filterIndex,
-          priorityIndex: _priorityFilterIndex,
-          categoryIndex: _categoryFilterIndex,
-          date: (_selectedDayIndex >= 0 && _calendarDays.isNotEmpty)
-              ? _calendarDays[_selectedDayIndex]['fullDate'] as DateTime
-              : null,
-        );
+        // ✅ Use the centralized filtering method
+        final filteredTasks = _getFilteredTasks(taskProvider);
 
         return Scaffold(
           backgroundColor: theme.scaffoldBackgroundColor,
@@ -416,15 +479,13 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                             );
                           }
                           final di = i - 1;
+                          final date =
+                              _calendarDays[di]['fullDate'] as DateTime;
                           return _CalendarDay(
                             day: _calendarDays[di]['day'] as String,
                             date: _calendarDays[di]['date'] as String,
                             isSelected: di == _selectedDayIndex,
-                            hasTask: taskProvider
-                                .tasksForDate(
-                                  _calendarDays[di]['fullDate'] as DateTime,
-                                )
-                                .isNotEmpty,
+                            hasTask: _hasTasksOnDate(date, taskProvider),
                             onTap: () => setState(() => _selectedDayIndex = di),
                           );
                         },
@@ -570,7 +631,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                           )
                         : _ProjectsList(
                             projects: projects,
-                            allTasks: tasks,
+                            allTasks: taskProvider.tasks,
                             filterIndex: _projectFilterIndex,
                             priorityFilterIndex: _projectPriorityFilterIndex,
                             categoryFilterIndex: _projectCategoryFilterIndex,
@@ -860,7 +921,6 @@ class _SortButtonState extends State<_SortButton> {
 
   @override
   void dispose() {
-    // Clean up overlay without calling setState
     if (_overlayEntry != null) {
       _overlayEntry?.remove();
       _overlayEntry = null;
@@ -1056,12 +1116,13 @@ class _CalendarDay extends StatelessWidget {
   final String day, date;
   final bool isSelected, hasTask;
   final VoidCallback onTap;
-  const _CalendarDay(
-      {required this.day,
-      required this.date,
-      required this.isSelected,
-      required this.hasTask,
-      required this.onTap});
+  const _CalendarDay({
+    required this.day,
+    required this.date,
+    required this.isSelected,
+    required this.hasTask,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1174,6 +1235,10 @@ class _TasksList extends StatelessWidget {
     );
   }
 }
+
+// ================================================================
+// TASK CARD
+// ================================================================
 
 class _TaskCard extends StatelessWidget {
   final Task task;
@@ -1456,7 +1521,6 @@ class _ProjectsList extends StatelessWidget {
     }
 
     if (filterIndex == 0) {
-      // All: exclude 100% completed projects (they belong in Completed tab)
       filtered = filtered.where((p) {
         final total = getTotalCount(p);
         if (total == 0) return true;
