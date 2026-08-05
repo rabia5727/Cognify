@@ -24,7 +24,7 @@ import '../../widgets/common/app_header.dart';
 import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/notification_permission_sheet.dart';
 import '../../widgets/common/priority_badge.dart';
-import '../../widgets/common/voice_fab.dart';
+import '../../widgets/common/assistant_fab.dart';
 import '../../widgets/empty_states/empty_dashboard.dart';
 import '../../widgets/layout/refresh_wrapper.dart';
 import '../../widgets/loading/shimmer_loading.dart';
@@ -259,7 +259,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           },
         ),
       ),
-      floatingActionButton: const VoiceFab(heroTag: 'fab_dashboard'),
+      floatingActionButton: const AiChatFab(heroTag: 'fab_dashboard'),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Consumer<AuthProvider>(
         builder: (_, auth, __) => BottomNavBar(

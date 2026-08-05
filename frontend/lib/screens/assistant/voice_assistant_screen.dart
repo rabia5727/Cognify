@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import '../../constants/app_constant.dart';
 import '../../widgets/common/app_header.dart';
 import 'assistant_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/user_service.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   const VoiceAssistantScreen({super.key});
@@ -84,6 +86,12 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
 
   Future<void> _startRecording() async {
     final hasPermission = await _recorder.hasPermission();
+
+    // ✅ Keep the Settings toggle truthful — always reflects real OS state
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('voice_permission_enabled', hasPermission);
+    await UserService.updatePreferences(voicePermission: hasPermission);
+
     if (!hasPermission) {
       if (mounted) Navigator.pop(context);
       return;

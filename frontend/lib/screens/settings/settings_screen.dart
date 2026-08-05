@@ -16,7 +16,7 @@ import '../../theme/theme_notifier.dart';
 import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/app_card.dart';
-import '../../widgets/common/voice_fab.dart';
+import '../../widgets/common/assistant_fab.dart';
 import '../../widgets/common/robot_mascot.dart'; // ✅ ADDED
 import '../../widgets/layout/section_card.dart';
 import '../../widgets/layout/row_divider.dart';
@@ -527,7 +527,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       ),
-      floatingActionButton: const VoiceFab(),
+      floatingActionButton: const AiChatFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Consumer<AuthProvider>(
         builder: (_, auth, __) => BottomNavBar(

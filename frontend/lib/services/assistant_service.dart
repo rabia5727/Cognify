@@ -213,7 +213,7 @@ class AssistantService {
         request.headers['Authorization'] = 'Bearer $token';
       }
       request.files
-          .add(await http.MultipartFile.fromPath('file', audioFilePath));
+          .add(await http.MultipartFile.fromPath('audio', audioFilePath));
 
       final streamedResponse =
           await request.send().timeout(const Duration(seconds: 30));
