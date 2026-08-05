@@ -3,6 +3,7 @@ import 'package:frontend/screens/auth/verfication_screen.dart';
 import '../../theme/app_theme.dart';
 import 'auth_screen.dart';
 import '../../utils/ui_feedback.dart';
+import '../../widgets/common/robot_mascot.dart'; // ✅ ADDED
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -14,7 +15,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
   bool _isLoading = false;
-  final bool _isEmailSent = false;
+  bool _isEmailSent = false;
 
   @override
   void dispose() {
@@ -33,15 +34,23 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     // TODO: Call API to send verification code
     await Future.delayed(const Duration(seconds: 1));
 
-    setState(() => _isLoading = false);
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) =>
-              VerificationScreen(email: _emailController.text.trim()),
-        ),
-      );
+    setState(() {
+      _isLoading = false;
+      _isEmailSent = true;
+    });
+
+    // Navigate to verification screen after a delay
+    if (mounted && _isEmailSent) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                VerificationScreen(email: _emailController.text.trim()),
+          ),
+        );
+      }
     }
   }
 
@@ -56,7 +65,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Robot/AI Icon (as in login screen)
+              // ✅ Robot Mascot instead of emoji
               Container(
                 width: 70,
                 height: 70,
@@ -65,7 +74,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   color: const Color(0xFFF0F4FF),
                 ),
                 child: const Center(
-                  child: Text('🤖', style: TextStyle(fontSize: 36)),
+                  child: RobotMascot(
+                    expression: RobotExpression.thinking,
+                    size: 50,
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
