@@ -4,28 +4,30 @@
 //   - Fixed overlay dispose in _SortButtonState
 //   - Optimized consumers
 
+import 'package:confetti/confetti.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:frontend/services/sync_service.dart';
 import 'package:provider/provider.dart';
-import 'package:confetti/confetti.dart';
-import '../../models/task_model.dart';
+
 import '../../models/project_model.dart';
-import '../../providers/task_provider.dart';
-import '../../providers/project_provider.dart';
+import '../../models/task_model.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/project_provider.dart';
+import '../../providers/task_provider.dart';
 import '../../utils/ui_feedback.dart';
-import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/app_header.dart';
+import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/empty_states/empty_workspace.dart';
 import '../../widgets/loading/shimmer_loading.dart';
-import 'add_task_screen.dart';
-import 'edit_task_screen.dart';
-import 'task_detail_screen.dart';
 import 'add_project_screen.dart';
-import 'edit_project_screen.dart';
-import 'project_detail_screen.dart';
+import 'add_task_screen.dart';
 import 'classroom_sync_screen.dart';
+import 'edit_project_screen.dart';
+import 'edit_task_screen.dart';
+import 'project_detail_screen.dart';
+import 'task_detail_screen.dart';
 
 class WorkSpaceScreen extends StatefulWidget {
   final int currentIndex;
@@ -100,6 +102,8 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
     try {
       await taskProvider.toggleComplete(id);
+      // Force refresh to get confirmed state from backend
+      await taskProvider.refreshTasks();
     } catch (_) {
       if (mounted) UIFeedback.showError(context, 'Could not update task.');
     } finally {
@@ -137,7 +141,12 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
           },
         ),
       ),
-    );
+    ).then((_) async {
+      // Refresh after returning so real backend ID is in the list
+      if (mounted) {
+        await context.read<TaskProvider>().refreshTasks();
+      }
+    });
   }
 
   void _goToEditTask(String id) {
@@ -151,18 +160,17 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
           onTaskUpdated: (updated) async {
             try {
               await context.read<TaskProvider>().updateTask(updated);
-              if (mounted) {
-                UIFeedback.showSuccess(context, 'Task updated successfully!');
-              }
+              if (mounted) UIFeedback.showSuccess(context, 'Task updated!');
             } catch (_) {
-              if (mounted) {
+              if (mounted)
                 UIFeedback.showError(context, 'Failed to update task.');
-              }
             }
           },
         ),
       ),
-    );
+    ).then((_) async {
+      if (mounted) await context.read<TaskProvider>().refreshTasks();
+    });
   }
 
   void _goToTaskDetail(String id) {
@@ -322,6 +330,8 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       _projectFilterIndex = 0;
     });
     try {
+      //sync classroom and Gmail before Refreshing tasks
+      await SyncService.manualSync(context);
       await Future.wait([
         context.read<TaskProvider>().refreshTasks(),
         context.read<ProjectProvider>().refreshProjects(),
@@ -366,22 +376,20 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                   AppHeader(
                     title: 'Workspace',
                     onBack: () => widget.onTabSelected(0),
-
-                    // actions temporarily removed - will add back after Classroom integration
-                    // actions: [
-                    //   IconButton(
-                    //     icon: const Icon(Icons.class_),
-                    //     onPressed: () {
-                    //       Navigator.push(
-                    //         context,
-                    //         MaterialPageRoute(
-                    //           builder: (_) => const ClassroomSyncScreen(),
-                    //         ),
-                    //       );
-                    //     },
-                    //     tooltip: 'Sync with Google Classroom',
-                    //   ),
-                    // ],
+                    actions: [
+                      IconButton(
+                        icon: const Icon(Icons.class_),
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ClassroomSyncScreen(),
+                            ),
+                          );
+                        },
+                        tooltip: 'Google Classroom Sync',
+                      ),
+                    ],
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -408,17 +416,15 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
                             );
                           }
                           final di = i - 1;
-                          final date =
-                              _calendarDays[di]['fullDate'] as DateTime;
-                          final tasksOnDate = taskProvider.tasksForDate(date);
-                          final hasIncompleteTask =
-                              tasksOnDate.any((task) => !task.isCompleted);
-
                           return _CalendarDay(
                             day: _calendarDays[di]['day'] as String,
                             date: _calendarDays[di]['date'] as String,
                             isSelected: di == _selectedDayIndex,
-                            hasTask: hasIncompleteTask,
+                            hasTask: taskProvider
+                                .tasksForDate(
+                                  _calendarDays[di]['fullDate'] as DateTime,
+                                )
+                                .isNotEmpty,
                             onTap: () => setState(() => _selectedDayIndex = di),
                           );
                         },
@@ -636,6 +642,8 @@ class _FilterChip extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -648,7 +656,7 @@ class _FilterChip extends StatelessWidget {
 }
 
 // ================================================================
-// SORT BUTTON
+// SORT BUTTON - FIXED VERSION
 // ================================================================
 
 class _SortButton extends StatefulWidget {
@@ -839,18 +847,25 @@ class _SortButtonState extends State<_SortButton> {
     );
 
     Overlay.of(context).insert(_overlayEntry!);
-    setState(() => _isOpen = true);
+    if (mounted) setState(() => _isOpen = true);
   }
 
   void _hideDropdown() {
     _overlayEntry?.remove();
     _overlayEntry = null;
-    if (mounted) setState(() => _isOpen = false);
+    if (mounted) {
+      setState(() => _isOpen = false);
+    }
   }
 
   @override
   void dispose() {
-    _hideDropdown();
+    // Clean up overlay without calling setState
+    if (_overlayEntry != null) {
+      _overlayEntry?.remove();
+      _overlayEntry = null;
+    }
+    _isOpen = false;
     super.dispose();
   }
 
@@ -927,6 +942,8 @@ class _DropdownMenuItem extends StatelessWidget {
             if (isSelected) const SizedBox(width: 8),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
@@ -1248,6 +1265,8 @@ class _TaskCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     task.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
@@ -1284,6 +1303,8 @@ class _TaskCard extends StatelessWidget {
                 padding: const EdgeInsets.only(left: 34),
                 child: Text(
                   task.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.textTheme.bodySmall?.color
                         ?.withValues(alpha: 0.7),
@@ -1303,21 +1324,29 @@ class _TaskCard extends StatelessWidget {
                         : theme.textTheme.bodySmall?.color),
                 const SizedBox(width: 5),
                 if (task.isOverdue)
-                  Text(
-                    'Overdue',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: Colors.red,
+                  Expanded(
+                    child: Text(
+                      'Overdue',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.red,
+                      ),
                     ),
                   )
                 else
-                  Text(
-                    'Due ${_formatDueDate()} · ${_formatDueTime()}',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      'Due ${_formatDueDate()} · ${_formatDueTime()}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 _buildCategoryTag(task.category),
                 const Spacer(),
                 if (!isCompleted)
@@ -1370,12 +1399,14 @@ class _TaskCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: color),
+          Icon(icon, size: 11, color: color),
           const SizedBox(width: 4),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 9,
               fontWeight: FontWeight.w600,
               color: color,
             ),
@@ -1554,6 +1585,8 @@ class _ProjectCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   project.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
@@ -1589,6 +1622,8 @@ class _ProjectCard extends StatelessWidget {
             ),
             child: Text(
               project.category.label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -1630,10 +1665,14 @@ class _ProjectCard extends StatelessWidget {
               Icon(Icons.description_outlined,
                   size: 14, color: theme.textTheme.bodySmall?.color),
               const SizedBox(width: 6),
-              Text(
-                '$completedCount/$totalCount tasks done',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w500,
+              Expanded(
+                child: Text(
+                  '$completedCount/$totalCount tasks done',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
               const Spacer(),
