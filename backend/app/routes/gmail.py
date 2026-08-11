@@ -10,16 +10,14 @@
 #   POST /gmail/disconnect - Remove Gmail tokens
 
 import os
-# Force oauthlib to allow merged/incremental scopes (Gmail + Classroom) without crashing
-os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
-
+import requests
+import urllib.parse
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 from datetime import datetime
 from bson import ObjectId
-from google_auth_oauthlib.flow import Flow
 
 from app.db.connection import get_database
 from app.utils.dependencies import get_current_user
@@ -47,23 +45,6 @@ def _gmail_client_secret() -> str:
     return settings.GMAIL_CLIENT_SECRET or settings.GOOGLE_CLIENT_SECRET
 
 
-def get_flow():
-    """Create OAuth flow instance for Gmail"""
-    return Flow.from_client_config(
-        {
-            "web": {
-                "client_id": _gmail_client_id(),
-                "client_secret": _gmail_client_secret(),
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [MOBILE_REDIRECT_URI]
-            }
-        },
-        scopes=SCOPES,
-        redirect_uri=MOBILE_REDIRECT_URI
-    )
-
-
 class CreateTaskRequest(BaseModel):
     title: str
     description: Optional[str] = None
@@ -73,41 +54,46 @@ class CreateTaskRequest(BaseModel):
 
 
 # ─────────────────────────────────────────────────────────────────
-# OAUTH ENDPOINTS
+# OAUTH ENDPOINTS - NO PKCE
 # ─────────────────────────────────────────────────────────────────
 
 @router.get("/oauth/mobile-auth")
 async def mobile_oauth_auth(current_user: dict = Depends(get_current_user)):
-    """Generate OAuth URL for Gmail connection"""
-    flow = get_flow()
+    """Generate OAuth URL for Gmail connection - NO PKCE"""
     state = str(ObjectId())
-    #get code verifier and challenge for PKCE
-    code_verifier = flow.code_verifier
+    
     db = get_database()
     await db.oauth_states.insert_one({
         "state": state,
         "user_id": str(current_user["_id"]),
         "service": "gmail",
-        "code_verifier": code_verifier,
         "created_at": datetime.utcnow()
     })
     
-    auth_url, _ = flow.authorization_url(
-        access_type='offline',
-        include_granted_scopes='true',
-        prompt='consent',
-        state=state
-    )
+    # ✅ Build OAuth URL manually - NO PKCE
+    params = {
+        "client_id": _gmail_client_id(),
+        "redirect_uri": MOBILE_REDIRECT_URI,
+        "scope": " ".join(SCOPES),
+        "response_type": "code",
+        "access_type": "offline",
+        "include_granted_scopes": "true",
+        "prompt": "consent",
+        "state": state
+    }
+    
+    auth_url = "https://accounts.google.com/o/oauth2/auth?" + urllib.parse.urlencode(params)
     print("=" * 60)
     print("🔍 GENERATED AUTH URL:")
     print(auth_url)
     print("=" * 60)
+    
     return {"auth_url": auth_url, "state": state}
 
 
 @router.get("/oauth/mobile-callback")
 async def mobile_oauth_callback(code: str, state: str):
-    """Handle Gmail OAuth callback"""
+    """Handle Gmail OAuth callback - NO PKCE"""
     db = get_database()
     
     try:
@@ -116,22 +102,32 @@ async def mobile_oauth_callback(code: str, state: str):
             return HTMLResponse("Invalid state", status_code=400)
         
         user_id = stored_state["user_id"]
-        code_verifier = stored_state.get("code_verifier")
         await db.oauth_states.delete_one({"state": state})
         
-        flow = get_flow()
-        if code_verifier:
-            flow.code_verifier = code_verifier
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
+        # ✅ Exchange code for tokens using requests - NO PKCE
+        token_url = "https://oauth2.googleapis.com/token"
+        data = {
+            "client_id": _gmail_client_id(),
+            "client_secret": _gmail_client_secret(),
+            "code": code,
+            "redirect_uri": MOBILE_REDIRECT_URI,
+            "grant_type": "authorization_code"
+        }
+        
+        response = requests.post(token_url, data=data)
+        token_data = response.json()
+        
+        if "error" in token_data:
+            print(f"❌ Token error: {token_data}")
+            return HTMLResponse(f"Token error: {token_data}", status_code=400)
         
         # Store tokens
         await db.users.update_one(
             {"_id": ObjectId(user_id)},
             {"$set": {
                 "gmail_tokens": {
-                    "access_token": credentials.token,
-                    "refresh_token": credentials.refresh_token,
+                    "access_token": token_data.get("access_token"),
+                    "refresh_token": token_data.get("refresh_token"),
                     "connected_at": datetime.utcnow()
                 }
             }}
@@ -148,7 +144,7 @@ async def mobile_oauth_callback(code: str, state: str):
         """)
         
     except Exception as e:
-        print(f"Error during Gmail OAuth callback: {str(e)}")
+        print(f"❌ Gmail OAuth Error: {e}")
         return HTMLResponse(f"Connection failed: {str(e)}", status_code=400)
 
 

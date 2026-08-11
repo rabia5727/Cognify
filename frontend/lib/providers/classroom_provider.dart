@@ -1,15 +1,3 @@
-// Purpose: State management for Classroom data
-// State:
-//   - List of courses with sync status
-//   - Currently syncing flag
-//   - Last sync time
-//   - Pending assignments count
-// Methods:
-//   - loadCourses()
-//   - toggleCourseSync()
-//   - archiveCourse()
-//   - triggerSync()
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,40 +10,58 @@ class ClassroomProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isSyncing = false;
   DateTime? _lastSyncTime;
+  String? _error;
 
   List<Map<String, dynamic>> get courses => _courses;
   List<Map<String, dynamic>> get archivedCourses => _archivedCourses;
   bool get isLoading => _isLoading;
   bool get isSyncing => _isSyncing;
   DateTime? get lastSyncTime => _lastSyncTime;
+  String? get error => _error;
 
-  // Load all courses from backend
+  // ── Load courses + auto-sync assignments ─────────────────────
   Future<void> loadCourses() async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
     try {
       final allCourses = await GoogleClassroomService.getCourses();
 
-      // Separate active and archived courses
       _courses = allCourses.where((c) => c['archived'] != true).toList();
       _archivedCourses =
           allCourses.where((c) => c['archived'] == true).toList();
 
       _isLoading = false;
       notifyListeners();
+
+      // ✅ Auto-sync assignments after loading courses
+      if (_courses.isNotEmpty) {
+        await _autoSync();
+      }
     } catch (e) {
       _isLoading = false;
+      _error = e.toString();
       notifyListeners();
-      rethrow;
     }
   }
 
-  // Toggle sync status for a course
+  // ── Background auto-sync (silent, no loading indicator) ──────
+  Future<void> _autoSync() async {
+    try {
+      await GoogleClassroomService.syncAllAssignments();
+      _lastSyncTime = DateTime.now();
+      notifyListeners();
+    } catch (e) {
+      // Auto-sync failures are silent — don't disrupt the UI
+      print('Auto-sync error: $e');
+    }
+  }
+
+  // ── Toggle sync status for a course ──────────────────────────
   Future<void> toggleCourseSync(String courseId, bool enabled) async {
     await GoogleClassroomService.toggleCourseSync(courseId, enabled);
 
-    // Update local state
     final index = _courses.indexWhere((c) => c['id'] == courseId);
     if (index != -1) {
       _courses[index]['enabled'] = enabled;
@@ -63,11 +69,10 @@ class ClassroomProvider extends ChangeNotifier {
     }
   }
 
-  // Archive a course
+  // ── Archive a course ──────────────────────────────────────────
   Future<void> archiveCourse(String courseId) async {
     await GoogleClassroomService.archiveCourse(courseId);
 
-    // Move from active to archived
     final course = _courses.firstWhere((c) => c['id'] == courseId);
     _courses.removeWhere((c) => c['id'] == courseId);
     course['archived'] = true;
@@ -75,11 +80,10 @@ class ClassroomProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Restore an archived course
+  // ── Restore an archived course ────────────────────────────────
   Future<void> restoreCourse(String courseId) async {
     await GoogleClassroomService.restoreCourse(courseId);
 
-    // Move from archived to active
     final course = _archivedCourses.firstWhere((c) => c['id'] == courseId);
     _archivedCourses.removeWhere((c) => c['id'] == courseId);
     course['archived'] = false;
@@ -87,7 +91,7 @@ class ClassroomProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Sync all enabled courses
+  // ── Manual sync (triggered by "Sync All" button) ─────────────
   Future<Map<String, dynamic>> syncAllAssignments(BuildContext context) async {
     _isSyncing = true;
     notifyListeners();
@@ -95,14 +99,11 @@ class ClassroomProvider extends ChangeNotifier {
     try {
       final result = await GoogleClassroomService.syncAllAssignments();
       _lastSyncTime = DateTime.now();
-      //don't need to reload courses here since sync doesn't change course list, just tasks. We will refresh tasks separately
-      // or use a callback
-      //immedttiately refresh tasks
+
+      // Refresh task list in TaskProvider after sync
       if (context.mounted) {
         await context.read<TaskProvider>().refreshTasks();
       }
-
-      //show notification for new tasks synced
 
       _isSyncing = false;
       notifyListeners();
@@ -114,8 +115,7 @@ class ClassroomProvider extends ChangeNotifier {
     }
   }
 
-  // Get enabled courses count
-  int get enabledCoursesCount {
-    return _courses.where((c) => c['enabled'] == true).length;
-  }
+  // ── Helpers ───────────────────────────────────────────────────
+  int get enabledCoursesCount =>
+      _courses.where((c) => c['enabled'] == true).length;
 }

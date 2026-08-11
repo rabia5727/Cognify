@@ -43,8 +43,8 @@ SCOPES = [
 ]
 
 # Redirect URIs
-WEB_REDIRECT_URI = f"{settings.API_URL}/classroom/oauth/callback" if hasattr(settings, 'API_URL') else "http://localhost:8000/classroom/oauth/callback"
-MOBILE_REDIRECT_URI = f"{settings.API_URL}/classroom/oauth/mobile-callback" if hasattr(settings, 'API_URL') else "http://localhost:8000/classroom/oauth/mobile-callback"
+WEB_REDIRECT_URI = f"{settings.API_URL}/classroom/oauth/callback"
+MOBILE_REDIRECT_URI = f"{settings.API_URL}/classroom/oauth/mobile-callback"
 
 
 def get_flow(redirect_uri: str = None):
@@ -73,7 +73,10 @@ def create_pkce_pair():
     return code_verifier, code_challenge
 
 
-# Request/Response Models
+# ─────────────────────────────────────────────────────────────────
+# REQUEST / RESPONSE MODELS
+# ─────────────────────────────────────────────────────────────────
+
 class ToggleCourseRequest(BaseModel):
     enabled: bool
 
@@ -105,10 +108,10 @@ async def get_synced_courses(db, user_id: str) -> Dict[str, Dict]:
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     if not user:
         return {}
-    
+
     classroom_settings = user.get('classroom_settings', {})
     synced_courses = classroom_settings.get('synced_courses', {})
-    
+
     # If it's an array (old format), convert to dict on the fly
     if isinstance(synced_courses, list):
         new_format = {}
@@ -120,26 +123,25 @@ async def get_synced_courses(db, user_id: str) -> Dict[str, Dict]:
                     'archived': course.get('archived', False),
                     'last_sync': course.get('last_sync')
                 }
-        # Save back in correct format
         await db.users.update_one(
             {"_id": ObjectId(user_id)},
             {"$set": {"classroom_settings.synced_courses": new_format}}
         )
         return new_format
-    
+
     return synced_courses
 
 
 async def update_course_sync_status(db, user_id: str, course_id: str, data: Dict[str, Any]):
     """Update sync status for a specific course"""
     synced_courses = await get_synced_courses(db, user_id)
-    
+
     if course_id not in synced_courses:
         synced_courses[course_id] = {'course_id': course_id}
-    
+
     synced_courses[course_id].update(data)
     synced_courses[course_id]['updated_at'] = datetime.utcnow()
-    
+
     await db.users.update_one(
         {"_id": ObjectId(user_id)},
         {"$set": {"classroom_settings.synced_courses": synced_courses}}
@@ -154,7 +156,9 @@ async def store_oauth_tokens(db, user_id: str, credentials):
             "classroom_tokens": {
                 "access_token": credentials.token,
                 "refresh_token": credentials.refresh_token,
-                "expires_at": datetime.utcfromtimestamp(credentials.expiry.timestamp()) if credentials.expiry else None,
+                "expires_at": datetime.utcfromtimestamp(
+                    credentials.expiry.timestamp()
+                ) if credentials.expiry else None,
                 "connected_at": datetime.utcnow()
             }
         }}
@@ -167,7 +171,7 @@ async def store_oauth_tokens(db, user_id: str, credentials):
 
 @router.get("/oauth/url")
 async def get_oauth_url(current_user: dict = Depends(get_current_user)):
-    """Generate Google OAuth URL (deprecated - use /oauth/mobile-auth for mobile apps)"""
+    """Generate Google OAuth URL (deprecated)"""
     flow = get_flow()
     auth_url, state = flow.authorization_url(
         access_type='offline',
@@ -179,14 +183,12 @@ async def get_oauth_url(current_user: dict = Depends(get_current_user)):
 
 @router.get("/oauth/mobile-auth")
 async def mobile_oauth_auth(current_user: dict = Depends(get_current_user)):
-    """Generate OAuth URL for mobile app to open in WebView"""
+    """Generate OAuth URL for mobile app"""
     flow = get_flow(redirect_uri=MOBILE_REDIRECT_URI)
-    
-    # Generate a state parameter to verify the callback
+
     state = str(ObjectId())
     code_verifier, code_challenge = create_pkce_pair()
 
-    # Store state in database to verify later
     db = get_database()
     await db.oauth_states.insert_one({
         "state": state,
@@ -195,7 +197,7 @@ async def mobile_oauth_auth(current_user: dict = Depends(get_current_user)):
         "code_verifier": code_verifier,
         "created_at": datetime.utcnow()
     })
-    
+
     auth_url, _ = flow.authorization_url(
         access_type='offline',
         include_granted_scopes='true',
@@ -204,7 +206,7 @@ async def mobile_oauth_auth(current_user: dict = Depends(get_current_user)):
         code_challenge=code_challenge,
         code_challenge_method='S256'
     )
-    
+
     return {"auth_url": auth_url, "state": state}
 
 
@@ -215,73 +217,62 @@ async def oauth_callback(code: str, state: str = None):
         flow = get_flow()
         flow.fetch_token(code=code)
         credentials = flow.credentials
-
-        # For web, we redirect to a success page
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/classroom/success?access_token={credentials.token}&refresh_token={credentials.refresh_token}")
-        
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/classroom/success"
+                f"?access_token={credentials.token}"
+                f"&refresh_token={credentials.refresh_token}"
+        )
     except Exception as e:
-        return RedirectResponse(url=f"{settings.FRONTEND_URL}/classroom/error?message={str(e)}")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_URL}/classroom/error?message={str(e)}"
+        )
 
 
 @router.get("/oauth/mobile-callback")
-async def mobile_oauth_callback(
-    code: str,
-    state: str,
-):
-    """
-    Handle OAuth callback for mobile app
-    """
+async def mobile_oauth_callback(code: str, state: str):
+    """Handle OAuth callback for mobile app"""
     db = get_database()
-    
+
     try:
-        # Verify state and get user_id from stored state
         stored_state = await db.oauth_states.find_one({"state": state})
         if not stored_state:
-            return HTMLResponse(content=""" 
-                            <html>
-                            <body style="font-family:sans-serif; text-align: center; padding: 40px;">
-                                <h2>Connection Failed</h2>
-                                <p>Invalid or expired state parameter. Please try connecting again.</p>
-                            </body>
-                            </html>
-                        """, status_code=400)
+            return HTMLResponse(content="""
+                <html><body style="font-family:sans-serif;text-align:center;padding:40px">
+                <h2>Connection Failed</h2>
+                <p>Invalid or expired session. Please try again.</p>
+                </body></html>
+            """, status_code=400)
 
         user_id = stored_state["user_id"]
         code_verifier = stored_state.get("code_verifier")
         await db.oauth_states.delete_one({"state": state})
-        
-        # Verify user matches
-        #if stored_state["user_id"] != str(current_user["_id"]):
-         #   raise HTTPException(status_code=400, detail="User mismatch")
-        
-        # use the stored code_verifier to complete the OAuth flow
+
         flow = get_flow(redirect_uri=MOBILE_REDIRECT_URI)
         flow.fetch_token(code=code, code_verifier=code_verifier)
         credentials = flow.credentials
-        
-        # Store tokens for the user
+
         await store_oauth_tokens(db, user_id, credentials)
-        #return the HTML page so webview shows success
-        return HTMLResponse(content=""" 
-                            <html>
-                            <body style="font-family:sans-serif; text-align: center; padding: 40px;
-                            background : #f0f4FF";
-                            <div style = "margin-top: 80x">
-                            <h2 style ="color: #1360E2"> Connected!</h2>
-                            <p>You have successfully connected to Google Classroom.</p>
-                            <p style="color: #64748B;"> You can now return to the app.</p>
-                            </div>
-                            </body>
-                            </html>
-                        """)
+
+        return HTMLResponse(content="""
+            <html>
+            <body style="font-family:sans-serif;text-align:center;
+                         padding:40px;background:#f0f4ff">
+              <div style="margin-top:80px">
+                <h2 style="color:#1360E2">✅ Connected!</h2>
+                <p>Google Classroom connected successfully.</p>
+                <p style="color:#64748B">You can now return to the app.</p>
+              </div>
+            </body>
+            </html>
+        """)
+
     except Exception as e:
         return HTMLResponse(content=f"""
-                            <html>
-                            <body style="font-family:sans-serif; text-align: center; padding: 40px;">
-                                <h2 style="color: #E53E3E;">Connection Failed</h2>
-                                <p>{str(e)}</p>
-                                </body></html>
-                        """, status_code=400)
+            <html><body style="font-family:sans-serif;text-align:center;padding:40px">
+            <h2 style="color:#E53E3E">Connection Failed</h2>
+            <p>{str(e)}</p>
+            </body></html>
+        """, status_code=400)
 
 
 @router.post("/connect")
@@ -289,7 +280,7 @@ async def connect_classroom(
     request: ConnectClassroomRequest,
     current_user: dict = Depends(get_current_user)
 ):
-    """Store Google Classroom OAuth tokens for user (manual fallback)"""
+    """Store Google Classroom OAuth tokens (manual fallback)"""
     db = get_database()
     user_id = ObjectId(current_user["_id"])
 
@@ -315,26 +306,23 @@ async def get_courses(current_user: dict = Depends(get_current_user)):
     """Get all courses from Google Classroom with sync status"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
-    # Check if user has Google Classroom connected
+
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     has_tokens = 'classroom_tokens' in user if user else False
-    
+
     if not has_tokens:
         return {"courses": [], "connected": False}
-    
-    # Fetch courses from Google Classroom API
+
     courses = await GoogleClassroomService.fetch_courses(user_id, db)
     synced_courses = await get_synced_courses(db, user_id)
-    
-    # Add sync status to each course
+
     for course in courses:
         course_id = course.get('id')
         course_settings = synced_courses.get(course_id, {})
         course['enabled'] = course_settings.get('enabled', True)
         course['archived'] = course_settings.get('archived', False)
         course['last_sync'] = course_settings.get('last_sync')
-    
+
     return {"courses": courses, "connected": True}
 
 
@@ -347,12 +335,12 @@ async def toggle_course_sync(
     """Enable or disable sync for a specific course"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
+
     await update_course_sync_status(
         db, user_id, course_id,
         {'enabled': request.enabled}
     )
-    
+
     return {"message": "Course sync status updated", "enabled": request.enabled}
 
 
@@ -361,15 +349,15 @@ async def archive_course(
     course_id: str,
     current_user: dict = Depends(get_current_user)
 ):
-    """Archive a course (hide from active list)"""
+    """Archive a course"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
+
     await update_course_sync_status(
         db, user_id, course_id,
         {'archived': True, 'enabled': False}
     )
-    
+
     return {"message": "Course archived"}
 
 
@@ -381,12 +369,12 @@ async def restore_course(
     """Restore an archived course"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
+
     await update_course_sync_status(
         db, user_id, course_id,
         {'archived': False}
     )
-    
+
     return {"message": "Course restored successfully"}
 
 
@@ -398,10 +386,11 @@ async def get_course_assignments(
     """Get assignments for a specific course"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
-    assignments = await GoogleClassroomService.fetch_assignments(user_id, course_id, db)
-    
-    # Check which assignments are already synced to Cognify
+
+    assignments = await GoogleClassroomService.fetch_assignments(
+        user_id, course_id, db
+    )
+
     for assignment in assignments:
         existing = await db.tasks.find_one({
             "user_id": user_id,
@@ -409,12 +398,12 @@ async def get_course_assignments(
             "source": "google_classroom"
         })
         assignment['is_synced'] = existing is not None
-    
+
     return {"assignments": assignments}
 
 
 # ─────────────────────────────────────────────────────────────────
-# SYNC ENDPOINTS
+# SYNC ENDPOINT  ← MAIN FIX IS HERE
 # ─────────────────────────────────────────────────────────────────
 
 @router.post("/sync")
@@ -422,68 +411,94 @@ async def sync_assignments(current_user: dict = Depends(get_current_user)):
     """Sync all assignments from enabled courses"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
-    # Get enabled courses
+
+    # Get explicitly configured courses
     synced_courses = await get_synced_courses(db, user_id)
-    enabled_courses = [
-        course_id for course_id, settings in synced_courses.items()
-        if settings.get('enabled', True) and not settings.get('archived', False)
-    ]
-    
+
+    # ✅ Fix 1: if user never toggled anything, fall back to ALL Google courses
+    if not synced_courses:
+        print("📋 No synced_courses config found — fetching all courses from Google")
+        all_courses = await GoogleClassroomService.fetch_courses(user_id, db)
+        enabled_course_ids = [course['id'] for course in all_courses]
+        print(f"✅ Will sync {len(enabled_course_ids)} courses")
+    else:
+        enabled_course_ids = [
+            course_id for course_id, config in synced_courses.items()
+            if config.get('enabled', True) and not config.get('archived', False)
+        ]
+        print(f"✅ Will sync {len(enabled_course_ids)} enabled courses")
+
     new_tasks_count = 0
     synced_assignments = []
-    
-    for course_id in enabled_courses:
-        assignments = await GoogleClassroomService.fetch_assignments(user_id, course_id, db)
-        
-        for assignment in assignments:
-            assignment_id = assignment.get('id')
-            
-            # Check if already synced
-            existing_task = await db.tasks.find_one({
-                "user_id": user_id,
-                "source_id": assignment_id,
-                "source": "google_classroom"
-            })
-            
-            if not existing_task:
-                # Parse due date if exists
-                due_date = None
-                if assignment.get('dueDate'):
-                    due = assignment['dueDate']
-                    due_date = datetime(
-                        due.get('year', 2024),
-                        due.get('month', 1),
-                        due.get('day', 1)
+    errors = []
+
+    for course_id in enabled_course_ids:
+        try:
+            assignments = await GoogleClassroomService.fetch_assignments(
+                user_id, course_id, db
+            )
+            print(f"📖 Course {course_id}: found {len(assignments)} assignments")
+
+            for assignment in assignments:
+                assignment_id = assignment.get('id')
+
+                # ✅ Fix 2: use string user_id (matches how create_task stores it)
+                existing_task = await db.tasks.find_one({
+                    "user_id": user_id,
+                    "source_id": assignment_id,
+                    "source": "google_classroom"
+                })
+
+                if not existing_task:
+                    # Parse due date safely
+                    due_date = None
+                    if assignment.get('dueDate'):
+                        due = assignment['dueDate']
+                        try:
+                            due_date = datetime(
+                                due.get('year', 2024),
+                                due.get('month', 1),
+                                due.get('day', 1)
+                            )
+                        except Exception as date_err:
+                            print(f"⚠️ Could not parse due date: {date_err}")
+                            due_date = None
+
+                    task_data = TaskCreate(
+                        title=assignment.get('title', 'Untitled Assignment'),
+                        description=assignment.get('description', ''),
+                        priority="medium",
+                        category="academic",
+                        due_date=due_date,
+                        source="google_classroom",
+                        source_id=assignment_id,
+                        course_id=course_id,
                     )
-                
-                # Create task in Cognify
-                task_data = TaskCreate(
-                    title=assignment.get('title', 'Untitled Assignment'),
-                    description=assignment.get('description', ''),
-                    priority="medium",
-                    category="academic",
-                    due_date=due_date,
-                    source="google_classroom",
-                    source_id=assignment_id,
-                    course_id=course_id,
-                    max_points=assignment.get('maxPoints', 0),
-                    alternate_link=assignment.get('alternateLink', '')
-                )
-                await create_task(task_data, user_id)
-                new_tasks_count += 1
-                synced_assignments.append(assignment.get('title'))
-        
-        # Update last sync time
-        await update_course_sync_status(
-            db, user_id, course_id,
-            {'last_sync': datetime.utcnow()}
-        )
-    
+                    await create_task(task_data, user_id)
+                    new_tasks_count += 1
+                    synced_assignments.append(assignment.get('title'))
+                    print(f"✅ Created task: {assignment.get('title')}")
+                else:
+                    print(f"⏭️ Already exists: {assignment.get('title')}")
+
+            # Update last sync time for this course
+            await update_course_sync_status(
+                db, user_id, course_id,
+                {'last_sync': datetime.utcnow()}
+            )
+
+        except Exception as course_err:
+            print(f"❌ Error syncing course {course_id}: {course_err}")
+            errors.append(str(course_err))
+            continue  # don't let one failed course stop others
+
+    print(f"🎯 Sync complete: {new_tasks_count} new tasks created")
+
     return {
         "message": f"Sync completed. {new_tasks_count} new assignments added.",
         "new_tasks_count": new_tasks_count,
-        "synced_assignments": synced_assignments
+        "synced_assignments": synced_assignments,
+        "errors": errors if errors else None
     }
 
 
@@ -499,7 +514,7 @@ async def submit_text(
     """Submit a text answer to a Google Classroom assignment"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
+
     try:
         result = await GoogleClassroomService.submit_text_submission(
             user_id=user_id,
@@ -521,7 +536,7 @@ async def submit_file(
     """Submit a file link to a Google Classroom assignment"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
+
     try:
         result = await GoogleClassroomService.submit_file_submission(
             user_id=user_id,
@@ -536,7 +551,7 @@ async def submit_file(
 
 
 # ─────────────────────────────────────────────────────────────────
-# HEALTH & DISCONNECT ENDPOINTS
+# HEALTH & DISCONNECT
 # ─────────────────────────────────────────────────────────────────
 
 @router.get("/health")
@@ -544,13 +559,14 @@ async def classroom_health(current_user: dict = Depends(get_current_user)):
     """Check if Classroom integration is working"""
     db = get_database()
     user_id = str(current_user["_id"])
-    
+
     user = await db.users.find_one({"_id": ObjectId(user_id)})
     has_tokens = 'classroom_tokens' in user if user else False
-    
+
     return {
         "connected": has_tokens,
-        "message": "Classroom integration is ready" if has_tokens else "Not connected to Google Classroom"
+        "message": "Classroom integration is ready" if has_tokens
+                   else "Not connected to Google Classroom"
     }
 
 
@@ -559,10 +575,10 @@ async def disconnect_classroom(current_user: dict = Depends(get_current_user)):
     """Disconnect Google Classroom account"""
     db = get_database()
     user_id = ObjectId(current_user["_id"])
-    
+
     await db.users.update_one(
         {"_id": user_id},
         {"$unset": {"classroom_tokens": "", "classroom_settings": ""}}
     )
-    
+
     return {"message": "Google Classroom disconnected successfully"}

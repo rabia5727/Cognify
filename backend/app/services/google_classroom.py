@@ -55,13 +55,16 @@ class GoogleClassroomService:
     @staticmethod
     async def fetch_courses(user_id: str, db):
         """Fetch all courses for user"""
+        print("📚 fetch_courses called")
         service = await GoogleClassroomService.get_classroom_service(user_id, db)
         if not service:
+            print("❌ No service available")
             return []
         
         try:
             results = service.courses().list(pageSize=50).execute()
             courses = results.get('courses', [])
+            print(f"✅ Found {len(courses)} courses")
             
             # Process courses to match frontend expectations
             processed_courses = []
@@ -79,33 +82,38 @@ class GoogleClassroomService:
                 })
             return processed_courses
         except Exception as e:
-            print(f"Error fetching courses: {e}")
+            print(f"❌ Error fetching courses: {e}")
             return []
     
     @staticmethod
     async def fetch_assignments(user_id: str, course_id: str, db):
         """Fetch assignments for a specific course"""
-        print(f"fetch_assignments called for course: {course_id}")
+        print(f"🔍 fetch_assignments called for course: {course_id}")
         service = await GoogleClassroomService.get_classroom_service(user_id, db)
         if not service:
             print("❌ No service available")
             return []
         
         try:
-            print(f"Calling Google Classroom API for course: {course_id}")
+            print(f"📡 Calling Google Classroom API for course: {course_id}")
             results = service.courses().courseWork().list(
                 courseId=course_id,
                 courseWorkStates='PUBLISHED'
             ).execute()
             
             assignments = results.get('courseWork', [])
+            print(f"✅ Found {len(assignments)} assignments in course {course_id}")
             
-            #print first assignment for debugging
+            # Print first 3 assignments for debugging
             if assignments:
-                print(f"📝 Sample assignment: {assignments[0].get('title')}")   
+                print(f"📝 First 3 assignments:")
+                for i, assignment in enumerate(assignments[:3]):
+                    print(f"   {i+1}. {assignment.get('title')} (ID: {assignment.get('id')})")
+                    print(f"      State: {assignment.get('state')}")
+                    print(f"      Due: {assignment.get('dueDate')}")
             else:
-                print("⚠️ No assignments found in this course")
-            
+                print("⚠️ No PUBLISHED assignments found in this course")
+                print("   Check if assignments are PUBLISHED (not DRAFT or SCHEDULED)")
             
             # Process assignments to match frontend expectations
             processed_assignments = []
@@ -126,7 +134,7 @@ class GoogleClassroomService:
                 })
             return processed_assignments
         except Exception as e:
-            print(f"Error fetching assignments for course {course_id}: {e}")
+            print(f"❌ Error fetching assignments for course {course_id}: {e}")
             return []
 
     @staticmethod
@@ -147,7 +155,7 @@ class GoogleClassroomService:
                 return submissions[0]  # Return the first submission
             return None
         except Exception as e:
-            print(f"Error fetching submission: {e}")
+            print(f"❌ Error fetching submission: {e}")
             return None
 
     @staticmethod
@@ -157,11 +165,6 @@ class GoogleClassroomService:
         if not service:
             raise Exception("Google Classroom not connected")
 
-        # Many Classroom submission flows require studentSubmission IDs and Drive uploads.
-        # To keep a reliable behavior regardless of API availability, persist a local
-        # submission record and return a simulated success. This lets the frontend show
-        # a successful submission while a future integration step can reconcile with
-        # the real Classroom API if desired.
         try:
             doc = {
                 'user_id': ObjectId(user_id) if isinstance(user_id, str) and len(user_id) == 24 else user_id,
@@ -175,7 +178,7 @@ class GoogleClassroomService:
             await db.classroom_submissions.insert_one(doc)
             return {'success': True, 'message': 'Submission recorded (simulated)'}
         except Exception as e:
-            print(f"Error recording text submission: {e}")
+            print(f"❌ Error recording text submission: {e}")
             raise Exception(f"Failed to record submission: {str(e)}")
     
     @staticmethod
@@ -185,9 +188,6 @@ class GoogleClassroomService:
         if not service:
             raise Exception("Google Classroom not connected")
 
-        # Record the file submission locally (simulation). For a full implementation
-        # we would upload the file to Drive and attach the Drive file ID to the
-        # studentSubmission via the Classroom API.
         try:
             doc = {
                 'user_id': ObjectId(user_id) if isinstance(user_id, str) and len(user_id) == 24 else user_id,
@@ -201,31 +201,41 @@ class GoogleClassroomService:
             await db.classroom_submissions.insert_one(doc)
             return {'success': True, 'message': 'File submission recorded (simulated)'}
         except Exception as e:
-            print(f"Error recording file submission: {e}")
+            print(f"❌ Error recording file submission: {e}")
             raise Exception(f"Failed to record file submission: {str(e)}")
     
     @staticmethod
     async def sync_new_assignments(user_id: str, db):
         """Find and sync new assignments from Google Classroom"""
+        print("🔄 sync_new_assignments called")
         courses = await GoogleClassroomService.fetch_courses(user_id, db)
+        print(f"📚 Processing {len(courses)} courses")
         new_assignments = []
         
         for course in courses:
             course_id = course['id']
+            course_name = course.get('name', 'Unknown')
+            print(f"  📖 Checking course: {course_name} ({course_id})")
+            
             assignments = await GoogleClassroomService.fetch_assignments(user_id, course_id, db)
+            print(f"     Found {len(assignments)} assignments in {course_name}")
             
             for assignment in assignments:
                 # Check if assignment already exists in Cognify tasks
                 existing_task = await db.tasks.find_one({
                     "user_id": ObjectId(user_id),
-                    "google_classroom_id": assignment['id'],
+                    "source_id": assignment['id'],
                     "source": "google_classroom"
                 })
                 
-                if not existing_task:
+                if existing_task:
+                    print(f"     ⏭️ Assignment already exists: {assignment.get('title')}")
+                else:
+                    print(f"     ✅ NEW assignment found: {assignment.get('title')}")
                     new_assignments.append({
                         'course': course,
                         'assignment': assignment
                     })
         
+        print(f"🎯 Total new assignments to sync: {len(new_assignments)}")
         return new_assignments
