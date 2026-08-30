@@ -6,7 +6,14 @@
 #   - is_actionable_ai() - AI API fallback check
 #   - extract_task_info() - Pull title/date/sender/snippet/thread_id
 #   - sync_emails() - Full sync flow: fetch → classify → create tasks
-
+#
+# IMPORTANT: googleapiclient is synchronous — every .execute() call blocks
+# the whole FastAPI event loop for its duration if called directly inside
+# an async def (verified: a single sync stalled an unrelated request for
+# ~10s). All calls here go through asyncio.to_thread(); per-message fetches
+# in fetch_emails() also run concurrently via asyncio.gather instead of a
+# sequential loop.
+import asyncio
 import re
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
@@ -40,10 +47,14 @@ class GmailService:
     
     # Meeting/Communication
     r'meeting\s+(?:at|with|tomorrow|today|schedule|agenda)',
-    r'call\s+(?:at|with|today|tomorrow|schedule)',
+    # NOTE: a "call with/at/schedule" pattern used to live here, but
+    # generic phrases like "schedule a call with us" are just as common
+    # in marketing copy as real requests — removed as a hard keyword
+    # match; the AI fallback (is_actionable_ai) handles "let's have a
+    # call" style requests correctly with actual context, which regex
+    # can't distinguish from a sales pitch.
     r'follow[- ]?up',
-    r'reminder',
-    
+
     # Actions/Requests
     r'action\s*required',
     r'please\s*(?:review|approve|confirm|send|complete|respond|submit)',
@@ -54,21 +65,26 @@ class GmailService:
     r'feedback\s+needed',
     r'approval\s+needed',
     r'response\s+needed',
-    
-    # Deadlines
-    r'due\s*(?:date)?',
+
+    # Deadlines — bare "reminder"/"due"/"urgent"/"asap" removed: they're
+    # just as common in personal mail ("reminder: dentist appointment",
+    # "rent due", "urgent: family matter") as work mail, so on their own
+    # they let non-work email through. "deadline" alone stays since it's
+    # overwhelmingly a work/academic word.
     r'deadline',
-    r'asap',
-    r'urgent',
     r'by\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|\d{1,2}/\d{1,2})',
-    
+
     # Documents/Submissions
     r'invoice',
-    r'submit\s+(?:your|the|report|assignment|project)',
+    # Requires a real work object after "submit your/the" — the previous
+    # version (`submit\s+(?:your|the|report|assignment|project)`) treated
+    # "your"/"the" alone as satisfying the whole pattern, so "submit your
+    # build [for a hackathon]" matched a promo email just as well as
+    # "submit your report" matched a real one.
+    r'submit\s+(?:your|the)\s+(?:report|assignment|project|proposal|work|homework|paper|form)',
     r'attached\s+is\s+the',
     r'please\s+find\s+attached',
     r'file\s+upload',
-    r'document',
     r'proposal',
     r'budget',
     r'contract',
@@ -172,28 +188,40 @@ class GmailService:
             return None
         
         tokens = user['gmail_tokens']
+        # Tokens minted via "Connect All" were issued under CONNECT_ALL_CLIENT_ID,
+        # not GMAIL_CLIENT_ID — refreshing under the wrong client gets
+        # rejected by Google with "unauthorized_client".
+        if tokens.get('oauth_client') == 'connect_all':
+            client_id = settings.CONNECT_ALL_CLIENT_ID
+            client_secret = settings.CONNECT_ALL_CLIENT_SECRET
+        else:
+            client_id = GmailService._client_id()
+            client_secret = GmailService._client_secret()
+
         creds = Credentials(
             token=tokens.get('access_token'),
             refresh_token=tokens.get('refresh_token'),
             token_uri='https://oauth2.googleapis.com/token',
-            client_id=GmailService._client_id(),
-            client_secret=GmailService._client_secret(),
-            scopes=GmailService.SCOPES
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=GmailService.SCOPES,
+            expiry=tokens.get('expires_at'),
         )
-        
+
         if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            await asyncio.to_thread(creds.refresh, Request())
+            # creds.expiry is already a naive UTC datetime — store it
+            # directly. Round-tripping through .timestamp() treats it as
+            # local time and shifts it by the server's UTC offset.
             await db.users.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": {
                     "gmail_tokens.access_token": creds.token,
-                    "gmail_tokens.expires_at": datetime.utcfromtimestamp(
-                        creds.expiry.timestamp()
-                    ) if creds.expiry else None
+                    "gmail_tokens.expires_at": creds.expiry,
                 }}
             )
-        
-        return build('gmail', 'v1', credentials=creds)
+
+        return await asyncio.to_thread(build, 'gmail', 'v1', credentials=creds)
     
     @staticmethod
     async def fetch_emails(user_id: str, db, max_results: int = 50) -> List[Dict]:
@@ -204,28 +232,38 @@ class GmailService:
         
         try:
             # Get messages from inbox (excluding spam)
-            results = service.users().messages().list(
-                userId='me',
-                maxResults=max_results,
-                q='in:inbox -in:spam -in:trash'
-            ).execute()
-            
+            results = await asyncio.to_thread(
+                service.users().messages().list(
+                    userId='me',
+                    maxResults=max_results,
+                    q='in:inbox -in:spam -in:trash'
+                ).execute
+            )
+
             messages = results.get('messages', [])
             if not messages:
                 return []
-            
+
+            # Sequential, not parallel: this `service` object's underlying
+            # httplib2 transport isn't safe for concurrent use across
+            # threads (running these via asyncio.gather deadlocked the
+            # whole request). Each call still goes through asyncio.to_thread
+            # though, so it doesn't block the event loop the way a direct
+            # .execute() would — other requests keep being served while
+            # this runs, it just doesn't run its own steps in parallel.
             emails = []
             for msg in messages:
-                # Get full email details
-                email_data = service.users().messages().get(
-                    userId='me',
-                    id=msg['id'],
-                    format='full'
-                ).execute()
-                
-                parsed = GmailService._parse_email(email_data)
-                emails.append(parsed)
-            
+                try:
+                    email_data = await asyncio.to_thread(
+                        service.users().messages().get(
+                            userId='me', id=msg['id'], format='full'
+                        ).execute
+                    )
+                    emails.append(GmailService._parse_email(email_data))
+                except Exception as e:
+                    print(f"Failed to fetch message {msg['id']}: {e}")
+                    continue
+
             return emails
             
         except Exception as e:
@@ -301,25 +339,36 @@ class GmailService:
         return body[:5000]  # Limit body size
     
     @staticmethod
+    def is_ignored(text: str, sender: str = "") -> bool:
+        """
+        True if the sender/content matches a known junk pattern (system
+        mail, newsletters, auto-replies). Shared by the keyword check and
+        the AI fallback, so the AI classifier never spends a call — or
+        risks misreading a sale as a "deadline" — on obvious junk mail.
+        """
+        text_lower = text.lower()
+
+        for ignore_sender in GmailService.IGNORE_SENDERS:
+            if re.search(ignore_sender, sender.lower()):
+                return True
+
+        for pattern in GmailService.IGNORE_PATTERNS:
+            if re.search(pattern, text_lower):
+                return True
+
+        return False
+
+    @staticmethod
     def is_actionable_keyword(text: str, sender: str = "") -> Tuple[bool, Dict]:
         """
         Check if email is actionable using keyword matching.
         Returns: (is_actionable, extracted_info)
         """
         text_lower = text.lower()
-        
-        # ❌ Check sender first - block known system senders
-        for ignore_sender in GmailService.IGNORE_SENDERS:
-            if re.search(ignore_sender, sender.lower()):
-                print(f"🚫 Ignored email from system sender: {sender}")
-                return False, {}
-        
-        # ❌ Check ignore patterns
-        for pattern in GmailService.IGNORE_PATTERNS:
-            if re.search(pattern, text_lower):
-                print(f"🚫 Ignored email: matches '{pattern}'")
-                return False, {}
-        
+
+        if GmailService.is_ignored(text, sender):
+            return False, {}
+
         # ✅ Check actionable keywords
         matched_keywords = []
         for pattern in GmailService.ACTION_KEYWORDS:
@@ -360,17 +409,69 @@ class GmailService:
     @staticmethod
     async def is_actionable_ai(text: str) -> Tuple[bool, Dict]:
         """
-        Check if email is actionable using Claude/AI.
-        Only called if keyword check doesn't find a match.
+        AI fallback classifier — only called when keyword matching finds
+        nothing. Regex patterns miss natural phrasing (e.g. "need the
+        report till 10am" doesn't contain "report due"/"by <day>"/any
+        recognized deadline word), so this catches what the fixed keyword
+        list can't anticipate, without replacing it as the primary (free,
+        fast) check.
         """
         try:
-            # TODO: Replace with actual Claude API call
-            # For now, return a conservative "not actionable"
-            # This will be implemented when AI assistant is ready
-            return False, {}
-            
+            from langchain_groq import ChatGroq
+            from langchain_core.messages import HumanMessage
+            from app.config import settings
+
+            # Uses the stronger orchestrator model, not the lightweight one:
+            # this fallback only runs on the small subset of emails keyword
+            # matching didn't already resolve, so the volume is low but the
+            # judgment call (work/academic vs. personal, not just
+            # "actionable") needs real reasoning — the lightweight model
+            # mis-flagged "URGENT: family emergency, call me back" and
+            # "subscription payment due" as actionable in testing.
+            llm = ChatGroq(
+                api_key=settings.GROQ_API_KEY,
+                model=settings.ORCHESTRATOR_MODEL,
+                temperature=0,
+                max_tokens=60,
+                timeout=15,
+                max_retries=1,
+            )
+            prompt = (
+                "Is this email WORK or ACADEMIC related, AND does it "
+                "require the recipient to DO something — a task, "
+                "deadline, submission, or request from a colleague, "
+                "manager, client, professor, or classmate? Both must be "
+                "true to count as actionable.\n\n"
+                "Say NOT actionable for: personal/family/social email "
+                "(even if it asks you to do something — a personal "
+                "reminder, appointment, or favor is not work/academic), "
+                "FYIs, notifications, newsletters, receipts, promotions, "
+                "or automated alerts.\n\n"
+                "Reply with ONLY these two lines, nothing else:\n"
+                "ACTIONABLE: yes or no\n"
+                "PRIORITY: high, medium, or low\n\n"
+                f"Email:\n{text[:800]}"
+            )
+            response = await llm.ainvoke([HumanMessage(content=prompt)])
+            raw = (response.content or "").lower()
+
+            if "actionable: yes" not in raw:
+                return False, {}
+
+            priority = "medium"
+            if "priority: high" in raw:
+                priority = "high"
+            elif "priority: low" in raw:
+                priority = "low"
+
+            return True, {
+                "matched_keywords": ["ai_classified"],
+                "suggested_due_date": None,
+                "suggested_priority": priority,
+            }
+
         except Exception as e:
-            print(f"❌ AI check failed: {e}")
+            print(f"AI check failed: {e}")
             return False, {}
     
     @staticmethod
@@ -456,7 +557,19 @@ class GmailService:
                 is_actionable, classification = GmailService.is_actionable_keyword(
                     text_to_analyze, sender
                 )
-            
+
+                # Keyword lists can't anticipate every phrasing (e.g. "need
+                # the report till 10am" has no recognized deadline word) —
+                # fall back to the AI classifier, but only for mail that
+                # isn't already known junk (is_ignored), so it's not
+                # wasted on newsletters/system mail.
+                if not is_actionable and not GmailService.is_ignored(text_to_analyze, sender):
+                    is_actionable, classification = await GmailService.is_actionable_ai(
+                        text_to_analyze
+                    )
+                    if is_actionable:
+                        print(f"AI classified as actionable: '{subject}'")
+
             # Store email in database regardless
             await db.gmail_emails.insert_one({
                 "user_id": ObjectId(user_id),
@@ -524,12 +637,22 @@ class GmailService:
         }
     
     @staticmethod
-    async def get_stored_emails(user_id: str, db, limit: int = 50) -> List[Dict]:
-        """Get stored emails from database"""
-        cursor = db.gmail_emails.find({
-            "user_id": ObjectId(user_id)
-        }).sort("created_at", -1).limit(limit)
-        
+    async def get_stored_emails(
+        user_id: str, db, limit: int = 50, actionable_only: bool = True
+    ) -> List[Dict]:
+        """
+        Get stored emails from database. Every fetched email gets stored
+        (that's what makes the sync's dedup check work — re-fetching the
+        same 50 inbox emails every sync shouldn't re-run classification on
+        each one), but actionable_only=True means what the user actually
+        sees is scoped to work/academic mail, not the raw inbox.
+        """
+        query = {"user_id": ObjectId(user_id)}
+        if actionable_only:
+            query["is_actionable"] = True
+
+        cursor = db.gmail_emails.find(query).sort("created_at", -1).limit(limit)
+
         emails = await cursor.to_list(length=limit)
         return emails
     
@@ -541,11 +664,13 @@ class GmailService:
             return False
         
         try:
-            service.users().messages().modify(
-                userId='me',
-                id=email_id,
-                body={'removeLabelIds': ['UNREAD']}
-            ).execute()
+            await asyncio.to_thread(
+                service.users().messages().modify(
+                    userId='me',
+                    id=email_id,
+                    body={'removeLabelIds': ['UNREAD']}
+                ).execute
+            )
             return True
         except Exception as e:
             print(f"❌ Error marking email as read: {e}")
@@ -559,12 +684,39 @@ class GmailService:
             return False
         
         try:
-            service.users().messages().modify(
-                userId='me',
-                id=email_id,
-                body={'removeLabelIds': ['INBOX']}
-            ).execute()
+            await asyncio.to_thread(
+                service.users().messages().modify(
+                    userId='me',
+                    id=email_id,
+                    body={'removeLabelIds': ['INBOX']}
+                ).execute
+            )
             return True
         except Exception as e:
             print(f"❌ Error archiving email: {e}")
             return False
+
+    @staticmethod
+    async def send_email(user_id: str, db, to: str, subject: str, body: str) -> dict:
+        """Send an email via the Gmail API from the user's connected account.
+        gmail.modify (already in SCOPES) covers messages.send — no extra
+        scope or re-consent needed."""
+        service = await GmailService.get_gmail_service(user_id, db)
+        if not service:
+            raise Exception("Gmail not connected")
+
+        from email.mime.text import MIMEText
+
+        message = MIMEText(body)
+        message['to'] = to
+        message['subject'] = subject
+
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+
+        sent = await asyncio.to_thread(
+            service.users().messages().send(
+                userId='me',
+                body={'raw': raw}
+            ).execute
+        )
+        return {'message_id': sent.get('id'), 'thread_id': sent.get('threadId')}

@@ -9,6 +9,7 @@ class ClassroomProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _archivedCourses = [];
   bool _isLoading = false;
   bool _isSyncing = false;
+  bool _hasLoaded = false;
   DateTime? _lastSyncTime;
   String? _error;
 
@@ -21,6 +22,8 @@ class ClassroomProvider extends ChangeNotifier {
 
   // ── Load courses + auto-sync assignments ─────────────────────
   Future<void> loadCourses() async {
+    if (_isLoading) return;
+
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -32,11 +35,11 @@ class ClassroomProvider extends ChangeNotifier {
       _archivedCourses =
           allCourses.where((c) => c['archived'] == true).toList();
 
+      _hasLoaded = true;
       _isLoading = false;
       notifyListeners();
 
-      // ✅ Auto-sync assignments after loading courses
-      if (_courses.isNotEmpty) {
+      if (_courses.isNotEmpty && _shouldAutoSync()) {
         await _autoSync();
       }
     } catch (e) {
@@ -46,16 +49,27 @@ class ClassroomProvider extends ChangeNotifier {
     }
   }
 
-  // ── Background auto-sync (silent, no loading indicator) ──────
+  // ── Background auto-sync (silent) ────────────────────────────
   Future<void> _autoSync() async {
+    if (_isSyncing) return;
+
     try {
+      _isSyncing = true;
+      notifyListeners();
       await GoogleClassroomService.syncAllAssignments();
       _lastSyncTime = DateTime.now();
+      _isSyncing = false;
       notifyListeners();
     } catch (e) {
-      // Auto-sync failures are silent — don't disrupt the UI
+      _isSyncing = false;
+      notifyListeners();
       print('Auto-sync error: $e');
     }
+  }
+
+  bool _shouldAutoSync() {
+    if (_lastSyncTime == null) return true;
+    return DateTime.now().difference(_lastSyncTime!).inMinutes > 5;
   }
 
   // ── Toggle sync status for a course ──────────────────────────
@@ -91,20 +105,74 @@ class ClassroomProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Manual sync (triggered by "Sync All" button) ─────────────
+  // Actual sync call + task refresh. Callers own the _isSyncing flag so that
+  // enableAllAndSync() can hold it across both the enable step and this one.
+  Future<Map<String, dynamic>> _runSync(BuildContext context) async {
+    final result = await GoogleClassroomService.syncAllAssignments();
+    _lastSyncTime = DateTime.now();
+
+    if (context.mounted) {
+      await context.read<TaskProvider>().refreshTasks();
+    }
+    return result;
+  }
+
+  // ── Sync currently-enabled courses (background timer + pull-to-refresh) ──
+  // Respects each course's individual enabled/disabled toggle.
   Future<Map<String, dynamic>> syncAllAssignments(BuildContext context) async {
+    if (_isSyncing) {
+      return {'new_tasks_count': 0, 'message': 'Already syncing'};
+    }
+
     _isSyncing = true;
     notifyListeners();
 
     try {
-      final result = await GoogleClassroomService.syncAllAssignments();
-      _lastSyncTime = DateTime.now();
+      final result = await _runSync(context);
+      _isSyncing = false;
+      notifyListeners();
+      return result;
+    } catch (e) {
+      _isSyncing = false;
+      notifyListeners();
+      rethrow;
+    }
+  }
 
-      // Refresh task list in TaskProvider after sync
-      if (context.mounted) {
-        await context.read<TaskProvider>().refreshTasks();
+  // ── "Sync All Courses" button ─────────────────────────────────
+  // Unlike syncAllAssignments(), this one actually makes "all" true: it
+  // turns on every course's toggle (one by one, so the user watches them
+  // light up) before syncing. Individually disabled courses stay off for
+  // the background auto-sync and pull-to-refresh — only this explicit
+  // action turns them back on.
+  Future<Map<String, dynamic>> enableAllAndSync(BuildContext context) async {
+    if (_isSyncing) {
+      return {'new_tasks_count': 0, 'message': 'Already syncing'};
+    }
+
+    _isSyncing = true;
+    notifyListeners();
+
+    try {
+      final disabledCourses =
+          _courses.where((c) => c['enabled'] != true).toList();
+
+      for (final course in disabledCourses) {
+        try {
+          await GoogleClassroomService.toggleCourseSync(course['id'], true);
+          course['enabled'] = true;
+          notifyListeners(); // flip this course's switch on right away
+        } catch (_) {
+          // Best-effort: if enabling one course fails, sync still proceeds
+          // for the rest rather than blocking the whole action.
+        }
       }
 
+      if (!context.mounted) {
+        return {'new_tasks_count': 0, 'message': 'Cancelled'};
+      }
+
+      final result = await _runSync(context);
       _isSyncing = false;
       notifyListeners();
       return result;

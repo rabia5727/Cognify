@@ -16,7 +16,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/stat_card.dart';
-import '../../widgets/common/voice_fab.dart';
+import '../../widgets/common/assistant_fab.dart';
 import '../../widgets/empty_states/empty_analytics.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -236,7 +236,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ],
         ),
       ),
-      floatingActionButton: const VoiceFab(),
+      floatingActionButton: const AiChatFab(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Consumer<AuthProvider>(
         builder: (_, auth, __) => BottomNavBar(

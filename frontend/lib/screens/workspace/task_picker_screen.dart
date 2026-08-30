@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: lib/screens/workspace/task_picker_screen.dart
 // PURPOSE: Full screen for selecting tasks to link to a project
+// FIX: Filter out completed tasks
 // ═══════════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
@@ -36,7 +37,8 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
   void initState() {
     super.initState();
     _selected = List<String>.from(widget.initialSelected);
-    _tasks = List.from(widget.allTasks);
+    // ✅ FIX: Filter out completed tasks
+    _tasks = List.from(widget.allTasks.where((task) => !task.isCompleted));
   }
 
   Color _priorityColor(Priority p) {
@@ -56,7 +58,6 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
   }
 
   Future<void> _createNewTask() async {
-    // AddTaskScreen pops itself with the new task as the result (Navigator.pop(context, newTask))
     final result = await Navigator.push<Task>(
       context,
       MaterialPageRoute(
@@ -71,20 +72,17 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
 
     if (result == null || !mounted) return;
 
-    // addTask returns the server-assigned task (backend generates its own UUID)
     final serverTask = await context.read<TaskProvider>().addTask(result);
     if (!mounted) return;
 
     await context.read<TaskProvider>().refreshTasks();
     if (!mounted) return;
 
-    // Use server UUID to find the fresh task; fall back to serverTask directly
     final freshTask = context.read<TaskProvider>().tasks.firstWhere(
           (t) => t.id == serverTask.id,
           orElse: () => serverTask,
         );
 
-    // Add to the local picker list and auto-select it
     setState(() {
       if (!_tasks.any((t) => t.id == freshTask.id)) {
         _tasks.add(freshTask);
@@ -116,13 +114,10 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             AppHeader(
               title: 'Select Tasks',
               onBack: () => Navigator.pop(context, _selected),
             ),
-
-            // Task list
             Expanded(
               child: _tasks.isEmpty
                   ? Center(
@@ -136,10 +131,18 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            'No tasks available',
+                            'No active tasks available',
                             style: TextStyle(
                               color: theme.textTheme.bodySmall?.color,
                               fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Completed tasks are hidden',
+                            style: TextStyle(
+                              color: theme.textTheme.bodySmall?.color,
+                              fontSize: 12,
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -195,7 +198,6 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Checkbox
                                 Padding(
                                   padding: const EdgeInsets.only(top: 1),
                                   child: Icon(
@@ -209,8 +211,6 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 10),
-
-                                // Task info
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -280,8 +280,6 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                                     ],
                                   ),
                                 ),
-
-                                // Priority badge
                                 Container(
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 8, vertical: 3),
@@ -307,8 +305,6 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                       },
                     ),
             ),
-
-            // Create new task button (when tasks exist)
             if (_tasks.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
@@ -353,8 +349,6 @@ class _TaskPickerScreenState extends State<TaskPickerScreen> {
                   ),
                 ),
               ),
-
-            // Done button
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               child: SizedBox(

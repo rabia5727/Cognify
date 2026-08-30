@@ -41,7 +41,7 @@ class _ClassroomSyncScreenState extends State<ClassroomSyncScreen> {
     final provider = context.read<ClassroomProvider>();
 
     try {
-      final result = await provider.syncAllAssignments(context);
+      final result = await provider.enableAllAndSync(context);
 
       // Refresh tasks after sync
       await context.read<TaskProvider>().refreshTasks();

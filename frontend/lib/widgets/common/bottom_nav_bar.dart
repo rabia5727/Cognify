@@ -23,30 +23,38 @@ class BottomNavBar extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _NavItem(
-              icon: Icons.dashboard_rounded,
-              label: 'Dashboard',
-              isSelected: currentIndex == 0,
-              onTap: () => onTabSelected(0),
+            Expanded(
+              child: _NavItem(
+                icon: Icons.dashboard_rounded,
+                label: 'Dashboard',
+                isSelected: currentIndex == 0,
+                onTap: () => onTabSelected(0),
+              ),
             ),
-            _NavItem(
-              icon: Icons.work_outline,
-              label: 'Workspace',
-              isSelected: currentIndex == 1,
-              onTap: () => onTabSelected(1),
+            Expanded(
+              child: _NavItem(
+                icon: Icons.work_outline,
+                label: 'Workspace',
+                isSelected: currentIndex == 1,
+                onTap: () => onTabSelected(1),
+              ),
             ),
             const SizedBox(width: 48),
-            _NavItem(
-              icon: Icons.bar_chart_rounded,
-              label: 'Analytics',
-              isSelected: currentIndex == 2,
-              onTap: () => onTabSelected(2),
+            Expanded(
+              child: _NavItem(
+                icon: Icons.bar_chart_rounded,
+                label: 'Analytics',
+                isSelected: currentIndex == 2,
+                onTap: () => onTabSelected(2),
+              ),
             ),
-            _NavItem(
-              icon: Icons.settings_rounded,
-              label: 'Settings',
-              isSelected: currentIndex == 3,
-              onTap: () => onTabSelected(3),
+            Expanded(
+              child: _NavItem(
+                icon: Icons.settings_rounded,
+                label: 'Settings',
+                isSelected: currentIndex == 3,
+                onTap: () => onTabSelected(3),
+              ),
             ),
           ],
         ),
@@ -82,11 +90,19 @@ class _NavItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 24, color: color),
           const SizedBox(height: 3),
+          // maxLines/overflow prevent "Workspace"/"Dashboard" from ever
+          // wrapping to a second line in the narrower per-item width the
+          // Expanded wrappers give each icon — a wrap was pushing the
+          // Column past its available height (RenderFlex overflow).
           Text(
             label,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 11,
               color: color,

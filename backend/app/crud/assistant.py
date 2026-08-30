@@ -1,5 +1,6 @@
 # app/crud/assistant.py
 
+import os
 import uuid
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
@@ -18,23 +19,113 @@ _base_llm = ChatGroq(
     model=settings.ORCHESTRATOR_MODEL,
     temperature=0.7,
     max_tokens=1024,
+    timeout=20,
+    max_retries=0,  # a same-model retry just delays reaching the fallback below
 )
 
-# ── Tools whose output is already user-ready ─────────────────────────────────
-# These tools return carefully formatted messages (full document content,
-# email drafts, search results, study plans).
-# Passing them through a second LLM call causes the LLM to SUMMARIZE
-# the output — destroying the formatting and losing content.
-# Solution: use the tool result directly as the reply, skip second LLM call.
+# Backup model, tried only if the primary model's call fails or times out —
+# same Groq account, no extra signup. gpt-oss needs reasoning_effort="low"
+# (see _classify_tool_categories) so it doesn't burn its token budget on
+# hidden reasoning before ever producing visible content; llama models
+# don't use/need that param.
+_base_llm_fallback = ChatGroq(
+    api_key=settings.GROQ_API_KEY,
+    model=settings.ORCHESTRATOR_FALLBACK_MODEL,
+    temperature=0.7,
+    max_tokens=1024,
+    timeout=20,
+    max_retries=1,
+    reasoning_effort="low",
+)
+
+# Cheap/fast pre-router — decides which tool category (if any) a message
+# needs, so the big orchestrator only binds relevant tool schemas instead of
+# all ~21 on every single message (see _classify_tool_categories below).
+_router_llm = ChatGroq(
+    api_key=settings.GROQ_API_KEY,
+    model=settings.LIGHTWEIGHT_MODEL,
+    temperature=0,
+    max_tokens=80,
+    timeout=8,
+    max_retries=0,
+)
+
+_router_llm_fallback = ChatGroq(
+    api_key=settings.GROQ_API_KEY,
+    model=settings.LIGHTWEIGHT_FALLBACK_MODEL,
+    temperature=0,
+    max_tokens=80,
+    timeout=8,
+    max_retries=1,
+    reasoning_effort="low",
+)
+
+
+async def _ainvoke_with_fallback(primary, fallback, messages):
+    """
+    Try the primary model; on ANY failure (timeout, connection error, model
+    outage) retry once with a different backup model instead of failing the
+    whole request. A problem specific to one model no longer takes the
+    assistant down — it just costs one extra round trip.
+    """
+    try:
+        return await primary.ainvoke(messages)
+    except Exception as e:
+        print(f"⚠️ Primary model failed ({type(e).__name__}: {e}) — retrying with fallback model")
+        return await fallback.ainvoke(messages)
+
+_ROUTER_PROMPT = """You are a fast intent router. Decide which tool categories \
+(if any) are needed to handle the user's message. Reply with ONLY a \
+comma-separated list using these exact words: task, execution, schedule, none.
+
+- task: creating, listing, updating tasks/projects; checking deadlines/status
+- execution: writing essays/assignments/reports, researching a topic, \
+drafting/editing emails, breaking a task into steps, building a study plan, \
+suggesting resources
+- schedule: summarizing the day, prioritizing tasks, workload balance, free \
+time slots, productivity score, weekly summary, most active hours
+- none: greetings, thanks, small talk, or anything not needing a tool
+
+If the message could span more than one category, list all that apply. If \
+unsure, list all three. Reply with only the category words, nothing else."""
+
+_TOOL_CATEGORIES = {"task", "execution", "schedule"}
+
+
+async def _classify_tool_categories(user_message: str) -> set:
+    """
+    Which tool category schema(s) the orchestrator actually needs for this
+    message. Falls back to "all categories" (the old always-bind-everything
+    behavior) on any router failure or ambiguous response, so a bad
+    classification only costs speed, never capability.
+    """
+    try:
+        response = await _ainvoke_with_fallback(_router_llm, _router_llm_fallback, [
+            SystemMessage(content=_ROUTER_PROMPT),
+            HumanMessage(content=user_message),
+        ])
+        raw   = (response.content or "").strip().lower()
+        found = {cat for cat in _TOOL_CATEGORIES if cat in raw}
+        if found:
+            return found
+        if "none" in raw:
+            return set()
+        return set(_TOOL_CATEGORIES)  # unrecognized reply — be safe
+    except Exception:
+        return set(_TOOL_CATEGORIES)  # router itself failed — be safe
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+DOCUMENTS_DIR = os.path.join(_PROJECT_ROOT, "generated_documents")
+
 _PASSTHROUGH_TOOLS = {
-    "generate_solution_tool",  # shows full document content
-    "edit_document_tool",      # shows updated full content
-    "draft_email_tool",        # shows full email draft
-    "edit_email_tool",         # shows updated email draft
-    "search_topic_tool",       # search results
-    "breakdown_task",          # step-by-step plan
-    "build_study_plan",        # study plan
-    "suggest_resources",       # resource list
+    "generate_solution_tool",
+    "edit_document_tool",
+    "draft_email_tool",
+    "edit_email_tool",
+    "search_topic_tool",
+    "breakdown_task",
+    "build_study_plan",
+    "suggest_resources",
 }
 
 SYSTEM_PROMPT = """You are CoCo, an intelligent AI productivity assistant inside Cognify.
@@ -98,6 +189,8 @@ RULES:
 5. ALWAYS use edit_email_tool when user asks to change a drafted email.
 6. Keep replies concise, friendly, plain text.
 7. Never ask more than ONE question at a time."""
+
+
 # ── Session helpers ──────────────────────────────────────────────────────────
 
 def _generate_title_from_message(message: str) -> str:
@@ -126,12 +219,23 @@ async def get_conversation_history(user_id: str, session_id: str, limit: int = 8
     doc = await db["conversations"].find_one({"user_id": user_id, "session_id": session_id})
     if not doc or not doc.get("messages"):
         return []
+
     history = []
     for msg in doc["messages"][-limit:]:
+        content = msg["content"]
+
+        if (
+            msg["role"] == "assistant"
+            and msg.get("intent") in _PASSTHROUGH_TOOLS
+            and len(content) > 400
+        ):
+            content = f"[Earlier generated {msg['intent']} — already shown to user, {len(content)} characters]"
+
         if msg["role"] == "user":
-            history.append(HumanMessage(content=msg["content"]))
+            history.append(HumanMessage(content=content))
         elif msg["role"] == "assistant":
-            history.append(AIMessage(content=msg["content"]))
+            history.append(AIMessage(content=content))
+
     return history
 
 
@@ -172,6 +276,14 @@ async def _clear_pending_action(user_id: str, session_id: str) -> None:
     )
 
 
+async def _set_pending_action(user_id: str, session_id: str, action: dict) -> None:
+    db = get_database()
+    await db["conversations"].update_one(
+        {"user_id": user_id, "session_id": session_id},
+        {"$set": {"pending_action": action, "updated_at": datetime.now(timezone.utc)}},
+    )
+
+
 async def _execute_pending_action(action: dict, user_id: str = "") -> str:
     action_type = action.get("type")
 
@@ -182,11 +294,26 @@ async def _execute_pending_action(action: dict, user_id: str = "") -> str:
             content=action.get("content", ""),
             subject=action.get("subject", "General"),
         )
+
+        db = get_database()
+        await db["conversations"].update_one(
+            {"user_id": user_id, "session_id": action.get("session_id", "")},
+            {"$set": {
+                "pending_action": {
+                    "type": "ask_submit_classroom",
+                    "filename": filename,
+                    "title": action.get("title", "Document"),
+                },
+                "updated_at": datetime.now(timezone.utc),
+            }},
+        )
+
         return (
             f"✅ Your document is ready!\n\n"
             f"📄 **{action.get('title', 'Document')}**\n"
             f"Tap below to download your DOCX file.\n\n"
-            f"[FILE:{filename}]"
+            f"[FILE:{filename}]\n\n"
+            f"📤 Want me to submit this to Google Classroom for you? (yes/no)"
         )
 
     elif action_type == "send_email":
@@ -202,8 +329,6 @@ async def _execute_pending_action(action: dict, user_id: str = "") -> str:
 
 
 # ── Confirmation detection ────────────────────────────────────────────────────
-# Only clear, unambiguous yes-words trigger execution.
-# "make", "create", "go", "do" removed — too ambiguous when editing.
 
 _CONFIRM_WORDS = {
     "yes", "yeah", "yep", "yup",
@@ -215,14 +340,17 @@ _CONFIRM_WORDS = {
     "create the file", "download the file",
 }
 
+_DECLINE_WORDS = {"no", "nope", "not now", "no thanks", "skip", "cancel"}
+
 
 def _is_confirmation(message: str) -> bool:
-    """Max 6 words — prevents 'make it more formal' triggering DOCX creation."""
     cleaned = message.lower().strip().rstrip("!.,?")
-    words   = cleaned.split()
-    if len(words) > 6:
-        return False
-    return cleaned in _CONFIRM_WORDS or bool(set(words) & _CONFIRM_WORDS)
+    return cleaned in _CONFIRM_WORDS
+
+
+def _is_decline(message: str) -> bool:
+    cleaned = message.lower().strip().rstrip("!.,?")
+    return cleaned in _DECLINE_WORDS
 
 
 # ── Main chat function ────────────────────────────────────────────────────────
@@ -238,12 +366,196 @@ async def chat_with_coco(
             new_session = await create_new_session(user_id, first_message=user_message)
             session_id  = new_session["session_id"]
 
-        # ── Confirm-before-execute ────────────────────────────────────────
         pending = await _load_pending_action(user_id, session_id)
+
+        # ── STEP A: "Want me to submit this to Classroom?" ───────────────
+        if pending and pending.get("type") == "ask_submit_classroom":
+            if _is_confirmation(user_message):
+                reply = "Great! Which class is this for?"
+                await _set_pending_action(user_id, session_id, {
+                    "type": "awaiting_classroom_selection",
+                    "filename": pending.get("filename"),
+                    "title": pending.get("title"),
+                })
+                await save_message(user_id, session_id, "user", user_message, source, "confirm")
+                await save_message(user_id, session_id, "assistant", reply, "assistant", "ask_classroom_selection")
+                return {"reply": reply, "intent": "ask_classroom_selection", "session_id": session_id}
+
+            elif _is_decline(user_message):
+                reply = "No problem! Let me know if you need anything else."
+                await _clear_pending_action(user_id, session_id)
+                await save_message(user_id, session_id, "user", user_message, source, "decline")
+                await save_message(user_id, session_id, "assistant", reply, "assistant", "chat")
+                return {"reply": reply, "intent": "chat", "session_id": session_id}
+
+            reply = "Sorry, just to confirm — do you want me to submit this to Google Classroom? (yes/no)"
+            await save_message(user_id, session_id, "user", user_message, source, "chat")
+            await save_message(user_id, session_id, "assistant", reply, "assistant", "chat")
+            return {"reply": reply, "intent": "chat", "session_id": session_id}
+
+        # ── STEP B1: "Which class?" ───────────────────────────────────────
+        if pending and pending.get("type") == "awaiting_classroom_selection":
+            from app.services.google_classroom import GoogleClassroomService
+            import difflib
+
+            db = get_database()
+            course_query = user_message.strip().strip("'\"")
+
+            courses = await GoogleClassroomService.fetch_courses(user_id, db)
+            course_names = [c.get("name", "") for c in courses]
+            course_match = difflib.get_close_matches(course_query, course_names, n=1, cutoff=0.35)
+
+            if not course_match:
+                reply = (
+                    f"I couldn't find a class matching '{course_query}'. "
+                    f"Your classes are: {', '.join(course_names) if course_names else 'none found'}. "
+                    f"Which class is this for?"
+                )
+                await save_message(user_id, session_id, "user", user_message, source, "chat")
+                await save_message(user_id, session_id, "assistant", reply, "assistant", "chat")
+                return {"reply": reply, "intent": "chat", "session_id": session_id}
+
+            matched_course = next(c for c in courses if c.get("name") == course_match[0])
+
+            await _set_pending_action(user_id, session_id, {
+                "type": "awaiting_assignment_selection",
+                "filename": pending.get("filename"),
+                "title": pending.get("title"),
+                "course_id": matched_course.get("id"),
+                "course_name": matched_course.get("name"),
+            })
+
+            reply = f"Got it — **{matched_course.get('name')}**. Which assignment is this for?"
+            await save_message(user_id, session_id, "user", user_message, source, "confirm")
+            await save_message(user_id, session_id, "assistant", reply, "assistant", "ask_assignment")
+            return {"reply": reply, "intent": "ask_assignment", "session_id": session_id}
+
+        # ── STEP B2: "Which assignment?" ──────────────────────────────────
+        if pending and pending.get("type") == "awaiting_assignment_selection":
+            from app.services.google_classroom import GoogleClassroomService
+            import difflib
+
+            db = get_database()
+            assignment_query = user_message.strip().strip("'\"")
+            course_id = pending.get("course_id")
+
+            assignments = await GoogleClassroomService.fetch_assignments(user_id, course_id, db)
+            assignment_titles = [a.get("title", "") for a in assignments]
+            assignment_match = difflib.get_close_matches(assignment_query, assignment_titles, n=1, cutoff=0.35)
+
+            if not assignment_match:
+                reply = (
+                    f"Couldn't find an assignment matching '{assignment_query}' in "
+                    f"{pending.get('course_name')}. Assignments there: "
+                    f"{', '.join(assignment_titles) if assignment_titles else 'none found'}. "
+                    f"Which assignment is this for?"
+                )
+                await save_message(user_id, session_id, "user", user_message, source, "chat")
+                await save_message(user_id, session_id, "assistant", reply, "assistant", "chat")
+                return {"reply": reply, "intent": "chat", "session_id": session_id}
+
+            matched_assignment = next(a for a in assignments if a.get("title") == assignment_match[0])
+
+            await _set_pending_action(user_id, session_id, {
+                "type": "confirmed_classroom_match",
+                "filename": pending.get("filename"),
+                "title": pending.get("title"),
+                "course_id": course_id,
+                "course_name": pending.get("course_name"),
+                "assignment_id": matched_assignment.get("id"),
+                "assignment_title": matched_assignment.get("title"),
+                "alternate_link": matched_assignment.get("alternateLink", ""),
+            })
+
+            reply = (
+                f"Found it! 📚 **{pending.get('course_name')}** → "
+                f"📝 **{matched_assignment.get('title')}**\n\n"
+                f"Shall I go ahead and submit your document there? (yes/no)"
+            )
+            await save_message(user_id, session_id, "user", user_message, source, "confirm")
+            await save_message(user_id, session_id, "assistant", reply, "assistant", "classroom_match_found")
+            return {"reply": reply, "intent": "classroom_match_found", "session_id": session_id}
+
+        # ── STEP C: Final confirm → upload to Drive → give assignment link ─
+        if pending and pending.get("type") == "confirmed_classroom_match":
+            if _is_decline(user_message):
+                reply = "Okay, I won't submit it. Let me know if you need anything else."
+                await _clear_pending_action(user_id, session_id)
+                await save_message(user_id, session_id, "user", user_message, source, "decline")
+                await save_message(user_id, session_id, "assistant", reply, "assistant", "chat")
+                return {"reply": reply, "intent": "chat", "session_id": session_id}
+
+            if _is_confirmation(user_message):
+                from app.services.google_drive_service import GoogleDriveService
+
+                db = get_database()
+                filename = pending.get("filename")
+                filepath = os.path.join(DOCUMENTS_DIR, filename)
+
+                try:
+                    if not os.path.exists(filepath):
+                        raise Exception("Generated file could not be found on the server")
+
+                    with open(filepath, "rb") as f:
+                        file_bytes = f.read()
+
+                    # Upload the .docx to Google Drive (this part always works)
+                    drive_result = await GoogleDriveService.upload_file(
+                        user_id=user_id,
+                        db=db,
+                        file_content=file_bytes,
+                        file_name=filename,
+                        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    )
+
+                    await db["drive_uploads"].insert_one({
+                        "user_id": user_id,
+                        "assignment_id": pending.get("assignment_id"),
+                        "course_id": pending.get("course_id"),
+                        "file_id": drive_result["file_id"],
+                        "file_name": filename,
+                        "share_link": drive_result["share_link"],
+                        "created_at": datetime.now(timezone.utc),
+                    })
+
+                    # NOTE: Google restricts studentSubmissions.modifyAttachments/turnIn
+                    # to specially-verified apps, so we can't submit programmatically.
+                    # Instead: upload to Drive, then hand the user a direct link to the
+                    # exact assignment — tapping it opens the assignment page directly,
+                    # so all that's left is one tap on "Turn In".
+                    assignment_link = pending.get("alternate_link") or (
+                        f"https://classroom.google.com/c/{pending.get('course_id')}"
+                    )
+
+                    reply = (
+                        f"✅ Uploaded to Drive! Your document is ready for "
+                        f"**{pending.get('assignment_title')}** in **{pending.get('course_name')}**.\n\n"
+                        f"Just tap below to open the assignment — attach the file and hit **Turn In**.\n\n"
+                        f"[CLASSROOM_LINK:{assignment_link}]"
+                    )
+                except Exception as e:
+                    reply = f"Something went wrong while submitting: {str(e)}"
+
+                await _clear_pending_action(user_id, session_id)
+                await save_message(user_id, session_id, "user", user_message, source, "confirm")
+                await save_message(user_id, session_id, "assistant", reply, "assistant", "classroom_submitted")
+                return {"reply": reply, "intent": "classroom_submitted", "session_id": session_id}
+
+            reply = "Just to confirm — should I go ahead and submit it now? (yes/no)"
+            await save_message(user_id, session_id, "user", user_message, source, "chat")
+            await save_message(user_id, session_id, "assistant", reply, "assistant", "chat")
+            return {"reply": reply, "intent": "chat", "session_id": session_id}
+
+        # ── Original DOCX confirm-before-execute (unrelated pending types) ─
         if pending and _is_confirmation(user_message):
+            pending["session_id"] = session_id
+            action_type = pending.get("type")
             result_text = await _execute_pending_action(pending, user_id=user_id)
-            await _clear_pending_action(user_id, session_id)
-            intent = "create_docx" if pending.get("type") == "create_docx" else "send_email"
+
+            if action_type != "create_docx":
+                await _clear_pending_action(user_id, session_id)
+
+            intent = "create_docx" if action_type == "create_docx" else "send_email"
             await save_message(user_id, session_id, "user",      user_message, source,      "confirm")
             await save_message(user_id, session_id, "assistant", result_text,  "assistant", intent)
             return {"reply": result_text, "intent": intent, "session_id": session_id}
@@ -251,20 +563,42 @@ async def chat_with_coco(
         # ── Normal tool-calling flow ──────────────────────────────────────
         history = await get_conversation_history(user_id, session_id, limit=8)
 
-        all_tools = (
-            get_task_agent_tools(user_id) +
-            get_execution_agent_tools(user_id, session_id) +
-            get_scheduler_agent_tools(user_id) +
-            get_analytics_agent_tools(user_id)
+        # Only bind the tool category schemas this message actually needs.
+        # get_execution_agent_tools() already includes the document-agent
+        # tools (search_topic_tool, generate_solution_tool, edit_document_tool)
+        # internally, so it isn't listed separately here.
+        categories = await _classify_tool_categories(user_message)
+
+        # The router classifies each message in isolation, with no idea a
+        # draft is already sitting in pending_action — so a terse edit like
+        # "change the recipient to x@y.com" doesn't obviously read as
+        # "execution" work and the router can return none at all. If a
+        # send_email/create_docx draft is still awaiting confirmation,
+        # keep edit_email_tool/edit_document_tool available regardless of
+        # what the router decided, so an edit request never falls through
+        # to a generic chat reply that ignores the pending draft entirely.
+        if pending and pending.get("type") in ("send_email", "create_docx"):
+            categories.add("execution")
+
+        active_tools = []
+        if "task" in categories:
+            active_tools += get_task_agent_tools(user_id)
+        if "execution" in categories:
+            active_tools += get_execution_agent_tools(user_id, session_id)
+        if "schedule" in categories:
+            active_tools += get_scheduler_agent_tools(user_id) + get_analytics_agent_tools(user_id)
+
+        tool_map = {t.name: t for t in active_tools}
+        llm_with_tools = _base_llm.bind_tools(active_tools) if active_tools else _base_llm
+        llm_with_tools_fallback = (
+            _base_llm_fallback.bind_tools(active_tools) if active_tools else _base_llm_fallback
         )
-        tool_map       = {t.name: t for t in all_tools}
-        llm_with_tools = _base_llm.bind_tools(all_tools)
 
         messages = [SystemMessage(content=SYSTEM_PROMPT)]
         messages.extend(history)
         messages.append(HumanMessage(content=user_message))
 
-        response = await llm_with_tools.ainvoke(messages)
+        response = await _ainvoke_with_fallback(llm_with_tools, llm_with_tools_fallback, messages)
         messages.append(response)
 
         intent       = "chat"
@@ -289,14 +623,9 @@ async def chat_with_coco(
                 else:
                     tool_results.append(ToolMessage(content="Tool not found.", tool_call_id=tool_id))
 
-            # ── ✅ KEY FIX: skip second LLM for formatting tools ──────────
-            # These tools already return perfectly formatted user-facing messages.
-            # Running them through a second LLM call causes summarization/compression
-            # which loses the full document content, email body, etc.
             if intent in _PASSTHROUGH_TOOLS:
                 ai_reply = "\n\n".join(tr.content for tr in tool_results)
             else:
-                # For data tools (task lists, stats etc.) — LLM formats the raw output
                 messages.extend(tool_results)
                 messages.append(HumanMessage(
                     content=(
@@ -306,13 +635,13 @@ async def chat_with_coco(
                         "document is ready to download."
                     )
                 ))
-                final    = await _base_llm.ainvoke(messages)
+                final    = await _ainvoke_with_fallback(_base_llm, _base_llm_fallback, messages)
                 ai_reply = final.content.strip()
         else:
             ai_reply = response.content.strip()
 
         if not ai_reply:
-            retry    = await _base_llm.ainvoke([
+            retry    = await _ainvoke_with_fallback(_base_llm, _base_llm_fallback, [
                 SystemMessage(content="You are CoCo, a friendly AI productivity assistant."),
                 HumanMessage(content=user_message),
             ])
@@ -327,14 +656,18 @@ async def chat_with_coco(
 
     except Exception as e:
         import traceback
-        print(f"❌ ORCHESTRATOR ERROR: {str(e)}")
+        error_type = type(e).__name__
+        print(f"❌ ORCHESTRATOR ERROR [{error_type}]: {str(e)}")
         print(traceback.format_exc())
 
-        error_reply = (
-            "I'm a bit overwhelmed right now. Please try again in a moment! ⏳"
-            if "rate_limit" in str(e) or "429" in str(e)
-            else "I'm having a moment. Please try again!"
-        )
+        if error_type in ("RateLimitError", "APIStatusError") and "429" in str(e):
+            error_reply = "I'm a bit overwhelmed right now. Please try again in a moment! ⏳"
+        elif error_type in ("APITimeoutError", "TimeoutError"):
+            error_reply = "That took a bit too long — mind trying again? ⏳"
+        elif error_type == "APIConnectionError":
+            error_reply = "I'm having trouble connecting right now. Check your internet and try again!"
+        else:
+            error_reply = "I'm having a moment. Please try again!"
 
         if not session_id:
             new_session = await create_new_session(user_id, first_message=user_message)

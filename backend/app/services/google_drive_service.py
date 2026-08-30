@@ -1,3 +1,7 @@
+# googleapiclient is synchronous — every .execute() call here goes through
+# asyncio.to_thread() so it doesn't block the FastAPI event loop for every
+# other request while a Drive upload/refresh is in flight.
+import asyncio
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -22,23 +26,40 @@ class GoogleDriveService:
             return None
         
         tokens = user['drive_tokens']
+        # Drive tokens are issued with GOOGLE_DRIVE_CLIENT_ID/SECRET when set
+        # (see routes/drive.py's get_client_id/get_client_secret) — refreshing
+        # under GOOGLE_CLIENT_ID instead causes Google to reject with
+        # "unauthorized_client", since that's a different registered client.
+        # Tokens from "Connect All" are a third case — minted under
+        # CONNECT_ALL_CLIENT_ID and tagged accordingly.
+        if tokens.get('oauth_client') == 'connect_all':
+            client_id = settings.CONNECT_ALL_CLIENT_ID
+            client_secret = settings.CONNECT_ALL_CLIENT_SECRET
+        else:
+            client_id = settings.GOOGLE_DRIVE_CLIENT_ID or settings.GOOGLE_CLIENT_ID
+            client_secret = settings.GOOGLE_DRIVE_CLIENT_SECRET or settings.GOOGLE_CLIENT_SECRET
+
         creds = Credentials(
             token=tokens.get('access_token'),
             refresh_token=tokens.get('refresh_token'),
             token_uri='https://oauth2.googleapis.com/token',
-            client_id=settings.GOOGLE_CLIENT_ID,
-            client_secret=settings.GOOGLE_CLIENT_SECRET,
-            scopes=GoogleDriveService.SCOPES
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=GoogleDriveService.SCOPES,
+            expiry=tokens.get('expires_at'),
         )
-        
+
         if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            await asyncio.to_thread(creds.refresh, Request())
             await db.users.update_one(
                 {"_id": ObjectId(user_id)},
-                {"$set": {"drive_tokens.access_token": creds.token}}
+                {"$set": {
+                    "drive_tokens.access_token": creds.token,
+                    "drive_tokens.expires_at": creds.expiry,
+                }}
             )
-        
-        return build('drive', 'v3', credentials=creds)
+
+        return await asyncio.to_thread(build, 'drive', 'v3', credentials=creds)
     
     @staticmethod
     async def disconnect(user_id: str, db):
@@ -53,22 +74,26 @@ class GoogleDriveService:
     async def _get_or_create_app_folder(service) -> str:
         """Get or create Cognify folder in Google Drive"""
         # Search for existing Cognify folder
-        results = service.files().list(
-            q="name='Cognify' and mimeType='application/vnd.google-apps.folder' and trashed=false",
-            spaces='drive',
-            fields='files(id, name)'
-        ).execute()
-        
+        results = await asyncio.to_thread(
+            service.files().list(
+                q="name='Cognify' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+                spaces='drive',
+                fields='files(id, name)'
+            ).execute
+        )
+
         folders = results.get('files', [])
         if folders:
             return folders[0]['id']
-        
+
         # Create new folder
         folder_metadata = {
             'name': 'Cognify',
             'mimeType': 'application/vnd.google-apps.folder'
         }
-        folder = service.files().create(body=folder_metadata, fields='id').execute()
+        folder = await asyncio.to_thread(
+            service.files().create(body=folder_metadata, fields='id').execute
+        )
         return folder.get('id')
     
     @staticmethod
@@ -97,12 +122,14 @@ class GoogleDriveService:
         file_stream = io.BytesIO(file_content)
         media = MediaIoBaseUpload(file_stream, mimetype=mime_type, resumable=True)
         
-        file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id,webViewLink,size'
-        ).execute()
-        
+        file = await asyncio.to_thread(
+            service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id,webViewLink,size'
+            ).execute
+        )
+
         return {
             'file_id': file.get('id'),
             'web_view_link': file.get('webViewLink'),
@@ -174,20 +201,24 @@ class GoogleDriveService:
             'mimeType': 'application/vnd.google-apps.document'
         }
         
-        file = service.files().create(
-            body=file_metadata,
-            fields='id,webViewLink'
-        ).execute()
-        
+        file = await asyncio.to_thread(
+            service.files().create(
+                body=file_metadata,
+                fields='id,webViewLink'
+            ).execute
+        )
+
         # Add content to the document
         doc_content = f'<html><body><pre>{content}</pre></body></html>'
-        service.files().update(
-            fileId=file.get('id'),
-            media_body=MediaIoBaseUpload(
-                io.BytesIO(doc_content.encode('utf-8')),
-                mimetype='text/html'
-            )
-        ).execute()
+        await asyncio.to_thread(
+            service.files().update(
+                fileId=file.get('id'),
+                media_body=MediaIoBaseUpload(
+                    io.BytesIO(doc_content.encode('utf-8')),
+                    mimetype='text/html'
+                )
+            ).execute
+        )
         
         return {
             'file_id': file.get('id'),

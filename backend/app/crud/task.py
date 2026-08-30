@@ -7,6 +7,7 @@ from typing import Optional
 from app.db.connection import get_database
 from app.models.task import TaskCreate, TaskUpdate, TaskResponse
 from app.crud.analytics import record_daily_snapshot
+from app.crud import sync_dismissals
 
 async def _sync_project_status(db, project_id: str) -> None:
     """Auto-complete or reactivate a project based on its tasks' statuses."""
@@ -303,5 +304,13 @@ async def delete_task(task_id: str, user_id: str) -> bool:
             {"$pull": {"task_ids": task_id}, "$set": {"updated_at": datetime.now(timezone.utc)}},
         )
         await _sync_project_status(db, project_id)
+
+    # Step 5: If this task came from an external sync (Classroom, Gmail),
+    # remember that the user dismissed it — otherwise the next auto-sync
+    # sees no matching task and silently re-creates it.
+    source = task.get("source")
+    source_id = task.get("source_id")
+    if source and source_id:
+        await sync_dismissals.record_dismissal(user_id, source, source_id)
 
     return True

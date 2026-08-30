@@ -6,6 +6,14 @@
 #   - fetch_assignment_submissions() - Get student's submissions
 #   - submit_text_submission() - Submit text answer
 #   - submit_file_submission() - Upload file to Drive and submit
+#
+# IMPORTANT: googleapiclient is a synchronous library — every .execute()
+# call is a *blocking* network request. Calling it directly inside an
+# async def freezes the entire FastAPI event loop for the duration of that
+# call, stalling every other request the server is handling (verified:
+# a single Gmail sync blocked an unrelated GET / for ~10s). All calls here
+# go through asyncio.to_thread() so they run on a worker thread instead.
+import asyncio
 import httpx
 from datetime import datetime
 from google.oauth2.credentials import Credentials
@@ -30,27 +38,41 @@ class GoogleClassroomService:
             return None
         
         tokens = user['classroom_tokens']
+        # Tokens minted via "Connect All" were issued under CONNECT_ALL_CLIENT_ID,
+        # not GOOGLE_CLIENT_ID — refreshing under the wrong client gets
+        # rejected by Google with "unauthorized_client".
+        if tokens.get('oauth_client') == 'connect_all':
+            client_id = settings.CONNECT_ALL_CLIENT_ID
+            client_secret = settings.CONNECT_ALL_CLIENT_SECRET
+        else:
+            client_id = settings.GOOGLE_CLIENT_ID
+            client_secret = settings.GOOGLE_CLIENT_SECRET
+
         creds = Credentials(
             token=tokens.get('access_token'),
             refresh_token=tokens.get('refresh_token'),
             token_uri='https://oauth2.googleapis.com/token',
-            client_id=settings.GOOGLE_CLIENT_ID,
-            client_secret=settings.GOOGLE_CLIENT_SECRET,
-            scopes=GoogleClassroomService.SCOPES
+            client_id=client_id,
+            client_secret=client_secret,
+            scopes=GoogleClassroomService.SCOPES,
+            expiry=tokens.get('expires_at')
         )
-        
+
         if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            await asyncio.to_thread(creds.refresh, Request())
             # Update tokens in database
+            # Note: creds.expiry is already a naive UTC datetime — do not
+            # round-trip it through .timestamp()/utcfromtimestamp(), which
+            # reinterprets naive datetimes as local time and shifts it by
+            # the server's UTC offset.
             await db.users.update_one(
                 {"_id": ObjectId(user_id)},
                 {"$set": {"classroom_tokens.access_token": creds.token,
-                          "classroom_tokens.expire_at": datetime.utcfromtimestamp
-                          (creds.expiry.timestamp())if creds.expiry else None
+                          "classroom_tokens.expires_at": creds.expiry
                           }}
             )
-        
-        return build('classroom', 'v1', credentials=creds)
+
+        return await asyncio.to_thread(build, 'classroom', 'v1', credentials=creds)
     
     @staticmethod
     async def fetch_courses(user_id: str, db):
@@ -62,7 +84,9 @@ class GoogleClassroomService:
             return []
         
         try:
-            results = service.courses().list(pageSize=50).execute()
+            results = await asyncio.to_thread(
+                service.courses().list(pageSize=50).execute
+            )
             courses = results.get('courses', [])
             print(f"✅ Found {len(courses)} courses")
             
@@ -96,11 +120,13 @@ class GoogleClassroomService:
         
         try:
             print(f"📡 Calling Google Classroom API for course: {course_id}")
-            results = service.courses().courseWork().list(
-                courseId=course_id,
-                courseWorkStates='PUBLISHED'
-            ).execute()
-            
+            results = await asyncio.to_thread(
+                service.courses().courseWork().list(
+                    courseId=course_id,
+                    courseWorkStates='PUBLISHED'
+                ).execute
+            )
+
             assignments = results.get('courseWork', [])
             print(f"✅ Found {len(assignments)} assignments in course {course_id}")
             
@@ -145,11 +171,13 @@ class GoogleClassroomService:
             return None
         
         try:
-            results = service.courses().courseWork().studentSubmissions().list(
-                courseId=course_id,
-                courseWorkId=assignment_id
-            ).execute()
-            
+            results = await asyncio.to_thread(
+                service.courses().courseWork().studentSubmissions().list(
+                    courseId=course_id,
+                    courseWorkId=assignment_id
+                ).execute
+            )
+
             submissions = results.get('studentSubmissions', [])
             if submissions:
                 return submissions[0]  # Return the first submission
@@ -157,6 +185,47 @@ class GoogleClassroomService:
         except Exception as e:
             print(f"❌ Error fetching submission: {e}")
             return None
+    @staticmethod
+    async def submit_to_classroom_with_drive_file(
+        user_id: str, course_id: str, assignment_id: str, drive_file_id: str, db
+    ):
+        """
+        Attaches a Google Drive file to the student's submission slot
+        for this assignment, then marks it as turned in — for real.
+        """
+        service = await GoogleClassroomService.get_classroom_service(user_id, db)
+        if not service:
+            raise Exception("Google Classroom not connected")
+
+        submission = await GoogleClassroomService.fetch_assignment_submissions(
+            user_id, course_id, assignment_id, db
+        )
+        if not submission:
+            raise Exception("Could not find your submission slot for this assignment")
+
+        submission_id = submission.get("id")
+
+        # Attach the uploaded Drive file to the submission
+        await asyncio.to_thread(
+            service.courses().courseWork().studentSubmissions().modifyAttachments(
+                courseId=course_id,
+                courseWorkId=assignment_id,
+                id=submission_id,
+                body={"addAttachments": [{"driveFile": {"id": drive_file_id}}]},
+            ).execute
+        )
+
+        # Mark the assignment as turned in
+        await asyncio.to_thread(
+            service.courses().courseWork().studentSubmissions().turnIn(
+                courseId=course_id,
+                courseWorkId=assignment_id,
+                id=submission_id,
+                body={},
+            ).execute
+        )
+
+        return {"success": True, "message": "Assignment submitted to Google Classroom"}
 
     @staticmethod
     async def submit_text_submission(user_id: str, course_id: str, assignment_id: str, text: str, db):

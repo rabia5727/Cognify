@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:frontend/screens/auth/verfication_screen.dart';
 import '../../theme/app_theme.dart';
 import 'auth_screen.dart';
+import '../../services/api_service.dart';
 import '../../utils/ui_feedback.dart';
+import '../../widgets/common/robot_mascot.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -30,18 +32,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    // TODO: Call API to send verification code
-    await Future.delayed(const Duration(seconds: 1));
+    final email = _emailController.text.trim();
+    final result = await ApiService.forgotPassword(email: email);
 
     setState(() => _isLoading = false);
-    if (mounted) {
+    if (!mounted) return;
+
+    if (result.isSuccess) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              VerificationScreen(email: _emailController.text.trim()),
+          builder: (_) => VerificationScreen(email: email),
         ),
       );
+    } else {
+      UIFeedback.showError(context, result.error!);
     }
   }
 
@@ -56,7 +61,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Robot/AI Icon (as in login screen)
+              // Robot Mascot
               Container(
                 width: 70,
                 height: 70,
@@ -65,7 +70,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   color: const Color(0xFFF0F4FF),
                 ),
                 child: const Center(
-                  child: Text('🤖', style: TextStyle(fontSize: 36)),
+                  child: RobotMascot(
+                    expression: RobotExpression.thinking,
+                    size: 50,
+                  ),
                 ),
               ),
               const SizedBox(height: 32),

@@ -15,7 +15,7 @@ import '../../models/task_model.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/common/app_header.dart';
 import '../../widgets/common/priority_badge.dart';
-import '../assistant/voice_assistant_screen.dart';
+import '../assistant/assistant_screen.dart';
 import 'edit_task_screen.dart';
 
 class TaskDetailScreen extends StatefulWidget {
@@ -89,10 +89,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     );
   }
 
-  void _goToVoiceAssistant() {
+  void _goToVoiceAssistant(Task task) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const VoiceAssistantScreen()),
+      MaterialPageRoute(
+        builder: (_) => AssistantScreen(
+          initialMessage: 'Help me with: ${task.title}',
+        ),
+      ),
     );
   }
 
@@ -105,11 +109,27 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       body: SafeArea(
         child: Consumer<TaskProvider>(
           builder: (context, taskProvider, _) {
-            // Find the task by ID - always fresh from provider
-            final task = taskProvider.tasks.firstWhere(
-              (t) => t.id == widget.taskId,
-              orElse: () => throw Exception('Task not found'),
-            );
+            // Find the task by ID - always fresh from provider.
+            // The task can legitimately disappear mid-screen (e.g. this
+            // screen's own delete flow just removed it from the shared
+            // list) — pop instead of throwing during build.
+            Task? maybeTask;
+            for (final t in taskProvider.tasks) {
+              if (t.id == widget.taskId) {
+                maybeTask = t;
+                break;
+              }
+            }
+
+            if (maybeTask == null) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && Navigator.canPop(context)) {
+                  Navigator.pop(context);
+                }
+              });
+              return const SizedBox.shrink();
+            }
+            final task = maybeTask;
 
             return Column(
               children: [
@@ -200,7 +220,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton.icon(
-                            onPressed: _goToVoiceAssistant,
+                            onPressed: () => _goToVoiceAssistant(task),
                             icon: Icon(Icons.auto_awesome_rounded,
                                 size: 16, color: theme.colorScheme.primary),
                             label: Text('Continue with AI',

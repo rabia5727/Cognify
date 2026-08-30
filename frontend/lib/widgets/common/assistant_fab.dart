@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import '../../constants/app_constant.dart';
 import '../../screens/assistant/assistant_screen.dart';
 
-class VoiceFab extends StatelessWidget {
+class AiChatFab extends StatelessWidget {
   final VoidCallback? onPressed;
   final String? heroTag;
 
-  const VoiceFab({
+  const AiChatFab({
     super.key,
     this.onPressed,
     this.heroTag,
@@ -21,7 +21,6 @@ class VoiceFab extends StatelessWidget {
         heroTag: heroTag ?? Object(),
         onPressed: onPressed ??
             () {
-              // Navigate to voice assistant screen
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -32,7 +31,11 @@ class VoiceFab extends StatelessWidget {
         backgroundColor: AppConstants.primaryBlue,
         elevation: 4,
         shape: const CircleBorder(),
-        child: const Icon(Icons.mic_rounded, color: Colors.white, size: 32),
+        child: const Icon(
+          Icons.auto_awesome_rounded,
+          color: Colors.white,
+          size: 30,
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@
 //   - TEAMMATE's branch: ClassroomProvider + ProxyProvider for analytics
 // ═══════════════════════════════════════════════════════════════════
 
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -30,6 +31,18 @@ import 'widgets/common/notification_permission_sheet.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const CognifyApp());
+}
+
+// Flutter's default ScrollBehavior only allows click-and-drag scrolling for
+// touch/stylus — not mouse — so on web/desktop (tested via `flutter run -d
+// chrome`) dragging with a mouse to scroll silently does nothing anywhere
+// in the app. Mouse wheel still works without this, but drag doesn't.
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        ...super.dragDevices,
+        PointerDeviceKind.mouse,
+      };
 }
 
 class CognifyApp extends StatelessWidget {
@@ -61,6 +74,7 @@ class CognifyApp extends StatelessWidget {
           darkTheme: AppTheme.darkTheme,
           themeMode: mode,
           debugShowCheckedModeBanner: false,
+          scrollBehavior: _AppScrollBehavior(),
           home: const _AppEntryPoint(),
         ),
       ),

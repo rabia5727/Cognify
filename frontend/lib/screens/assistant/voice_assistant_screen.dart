@@ -1,12 +1,14 @@
 // lib/screens/assistant/voice_assistant_screen.dart
 
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../constants/app_constant.dart';
 import '../../widgets/common/app_header.dart';
 import 'assistant_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/user_service.dart';
 
 class VoiceAssistantScreen extends StatefulWidget {
   const VoiceAssistantScreen({super.key});
@@ -84,18 +86,33 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
 
   Future<void> _startRecording() async {
     final hasPermission = await _recorder.hasPermission();
+
+    // ✅ Keep the Settings toggle truthful — always reflects real OS state
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('voice_permission_enabled', hasPermission);
+    await UserService.updatePreferences(voicePermission: hasPermission);
+
     if (!hasPermission) {
       if (mounted) Navigator.pop(context);
       return;
     }
 
-    final dir = await getTemporaryDirectory();
-    _filePath = '${dir.path}/coco_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    RecordConfig config;
+    if (kIsWeb) {
+      // Browsers record via MediaRecorder into an in-memory Blob — there's
+      // no real filesystem path, and path_provider has no web
+      // implementation. wav has the most consistent cross-browser support
+      // (record package's own compatibility notes); aacLc's is inconsistent.
+      _filePath = 'coco_recording.wav';
+      config = const RecordConfig(encoder: AudioEncoder.wav);
+    } else {
+      final dir = await getTemporaryDirectory();
+      _filePath =
+          '${dir.path}/coco_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      config = const RecordConfig(encoder: AudioEncoder.aacLc);
+    }
 
-    await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.aacLc),
-      path: _filePath!,
-    );
+    await _recorder.start(config, path: _filePath!);
 
     setState(() => _isRecording = true);
   }
@@ -117,21 +134,16 @@ class _VoiceAssistantScreenState extends State<VoiceAssistantScreen>
   }
 
   Future<void> _cancel() async {
-    await _recorder.stop();
-    if (_filePath != null) {
-      final file = File(_filePath!);
-      if (await file.exists()) await file.delete();
-    }
+    // cancel() stops AND discards the recording (file or web Blob) in one
+    // call — no need to manually touch the filesystem, which also means
+    // this works on web where there's no dart:io File to manipulate.
+    await _recorder.cancel();
     if (mounted) Navigator.pop(context);
   }
 
   // Switch to chat screen smoothly
   Future<void> _switchToChat() async {
-    await _recorder.stop();
-    if (_filePath != null) {
-      final file = File(_filePath!);
-      if (await file.exists()) await file.delete();
-    }
+    await _recorder.cancel();
     if (mounted) {
       Navigator.pushReplacement(
         context,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/common/auth_components.dart';
+import '../../widgets/common/robot_mascot.dart';
 import 'questionaire/preference_quiz_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -66,8 +67,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         duration: const Duration(milliseconds: 350),
         curve: Curves.easeInOut,
       );
-    }
-    else{
+    } else {
       // on first page, go back to name screen
       Navigator.pop(context);
     }
@@ -107,10 +107,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             children: [
               // Top row with back button (only on pages > 0)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 child: Row(
                   children: [
-                    if (_currentPage > 0)// only show on pages after the first one
+                    if (_currentPage >
+                        0) // only show on pages after the first one
                       GestureDetector(
                         onTap: _previousPage,
                         child: Container(
@@ -127,8 +129,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ),
                       )
-                      else 
-                      const SizedBox(width: 40), // placeholder to keep title centered
+                    else
+                      const SizedBox(
+                          width: 40), // placeholder to keep title centered
                     const Spacer(),
                   ],
                 ),
@@ -193,18 +196,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,  // ← CENTER VERTICALLY
+        mainAxisAlignment: MainAxisAlignment.center, // ← CENTER VERTICALLY
         children: [
           _buildTopSection(data.topType),
           // only show feature card if not question prompt page
           if (data.topType != _TopType.questionPrompt) ...[
-          const SizedBox(height: 40),
-          _FeatureCard(
-            icon: data.cardIcon,
-            title: data.cardTitle,
-            subtitle: data.cardSubtitle,
-          ),
-        ],
+            const SizedBox(height: 40),
+            _FeatureCard(
+              icon: data.cardIcon,
+              title: data.cardTitle,
+              subtitle: data.cardSubtitle,
+            ),
+          ],
         ],
       ),
     );
@@ -216,16 +219,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 100,
-              height: 100,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFFF0F4FF),
-              ),
-              child: const Center(
-                child: Text('🤖', style: TextStyle(fontSize: 52)),
-              ),
+            const RobotMascotBubble(
+              expression: RobotExpression.waving,
+              size: 100,
             ),
             const SizedBox(height: 24),
             Text(
@@ -247,17 +243,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         );
 
       case _TopType.robotOnly:
-        return Center(
-          child: Container(
-            width: 150,
-            height: 150,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: Color(0xFFF0F4FF),
-            ),
-            child: const Center(
-              child: Text('🤖', style: TextStyle(fontSize: 76)),
-            ),
+        return const Center(
+          child: RobotMascotBubble(
+            expression: RobotExpression.happy,
+            size: 150,
           ),
         );
 
@@ -265,39 +254,31 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         return Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            //large robot icon 
-            Container(
-              width: 160,
-              height: 160,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-              color: Color(0xFFF0F4FF),
+            //large robot icon
+            const RobotMascotBubble(
+              expression: RobotExpression.thinking,
+              size: 160,
             ),
-            child: const Center(
-              child: Text('🤖', style: TextStyle(fontSize: 64)),
+            const Text(
+              'Quick Questions',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.darkText,
+              ),
             ),
-          ),
-          const Text(
-            'Quick Questions',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize:20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.darkText,
+            const SizedBox(height: 12),
+            const Text(
+              'Let me ask you few questions\nbefore we start, shall we?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.grayText,
+                height: 1.4,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-      const Text(
-        'Let me ask you few questions\nbefore we start, shall we?',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          fontSize: 16,
-          color: AppColors.grayText,
-          height: 1.4,
-          
-        ),
-        ),
-        ],
+          ],
         );
     }
   }

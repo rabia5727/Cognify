@@ -22,7 +22,7 @@ def _validate_category(v):
 def _validate_due_date_create(v):
     """
     Only used on CREATE — prevents creating new tasks with past dates.
-    NOT used on UPDATE — overdue tasks must still be updatable.
+    EXCEPT when skip_date_validation is True (for Classroom/Gmail imports).
     """
     if v:
         now = datetime.now(timezone.utc)
@@ -71,9 +71,15 @@ class TaskSchema(BaseModel):
 # ── TaskCreate (what Flutter sends when creating a task) ───────────
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
-    description: Optional[str] = Field(None, max_length=1000)
+    description: Optional[str] = Field(None, max_length=5000)  # ✅ Increased to 5000
     priority: Optional[str] = "medium"
     category: Optional[str] = None
+
+    # Must be declared before due_date: pydantic v2 field_validators only see
+    # fields declared earlier in info.data, so due_date's validator needs
+    # this flag to already be validated when it runs.
+    skip_date_validation: Optional[bool] = False
+
     due_date: Optional[datetime] = None
     due_time: Optional[str] = None
     project_id: Optional[str] = None
@@ -91,15 +97,17 @@ class TaskCreate(BaseModel):
         return _validate_category(v)
 
     @field_validator("due_date")
-    def validate_due_date(cls, v):
-        # ✅ CREATE: reject past dates (user shouldn't create tasks already overdue)
+    def validate_due_date(cls, v, info):
+        # ✅ Skip validation if flag is True (for Classroom/Gmail imports)
+        if info.data.get('skip_date_validation'):
+            return v
         return _validate_due_date_create(v)
 
 
 # ── TaskUpdate (what Flutter sends when editing / toggling a task) ──
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=200)
-    description: Optional[str] = Field(None, max_length=1000)
+    description: Optional[str] = Field(None, max_length=5000)  # ✅ Increased to 5000
     status: Optional[str] = None
     priority: Optional[str] = None
     category: Optional[str] = None

@@ -101,9 +101,11 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
     setState(() => _animatingTaskId = id);
 
     try {
+      // toggleComplete()'s underlying updateTask() already replaces the
+      // local task with the server's confirmed response — a follow-up
+      // refreshTasks() would just be a second, redundant full-list refetch
+      // (and briefly flashes the whole list to a loading skeleton).
       await taskProvider.toggleComplete(id);
-      // Force refresh to get confirmed state from backend
-      await taskProvider.refreshTasks();
     } catch (_) {
       if (mounted) UIFeedback.showError(context, 'Could not update task.');
     } finally {
@@ -112,7 +114,7 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
 
     if (isCompleting && mounted) {
       _confettiController.play();
-      UIFeedback.showSuccess(context, '🎉 Task completed! Great job!');
+      UIFeedback.showSuccess(context, 'Task completed! Great job!');
     }
   }
 
@@ -179,16 +181,14 @@ class _WorkSpaceScreenState extends State<WorkSpaceScreen> {
       MaterialPageRoute(
         builder: (_) => TaskDetailScreen(
           taskId: id,
-          onTaskUpdated: (updated) async {
-            try {
-              await context.read<TaskProvider>().updateTask(updated);
-            } catch (_) {}
-          },
-          onTaskDeleted: (taskId) async {
-            try {
-              await context.read<TaskProvider>().deleteTask(taskId);
-              if (mounted) UIFeedback.showSuccess(context, 'Task deleted');
-            } catch (_) {}
+          // TaskDetailScreen already applies the update/delete to the
+          // shared TaskProvider before calling these — they're notifications
+          // only. Calling the provider again here would be a redundant
+          // second network request, and for delete it would always fail
+          // (the task is already gone), which used to eat the success toast.
+          onTaskUpdated: (updated) {},
+          onTaskDeleted: (taskId) {
+            if (mounted) UIFeedback.showSuccess(context, 'Task deleted');
           },
         ),
       ),

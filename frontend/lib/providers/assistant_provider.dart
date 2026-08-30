@@ -9,6 +9,8 @@
 // This is what makes "history of chat should show in separate chats"
 // actually work end-to-end.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../models/assistant_model.dart';
 import '../services/assistant_service.dart';
@@ -153,6 +155,16 @@ class AssistantProvider extends ChangeNotifier {
           timestamp: DateTime.now(),
         ));
       }
+    } on TimeoutException {
+      // The AI service (Groq) is just slow/degraded right now, not a
+      // connection failure — say so rather than implying something's broken.
+      _messages.add(AssistantMessage(
+        role: 'assistant',
+        content:
+            'The AI is taking longer than usual to respond right now. Please wait a moment and try again.',
+        source: 'assistant',
+        timestamp: DateTime.now(),
+      ));
     } finally {
       _isTyping = false;
       _isSending = false; // ✅ always release the guard

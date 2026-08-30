@@ -143,11 +143,9 @@ class _AuthScreenState extends State<AuthScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Robot Icon - Centered
               // Robot Mascot - Centered with Animation
               Padding(
-                padding: const EdgeInsets.only(
-                    top: 20), // ✅ This pushes just the robot down
+                padding: const EdgeInsets.only(top: 20),
                 child: Center(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 400),
@@ -161,7 +159,7 @@ class _AuthScreenState extends State<AuthScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: 24), // ✅ Keep this as is
+              const SizedBox(height: 24),
 
               // Welcome Text - Centered
               Center(
@@ -202,25 +200,6 @@ class _AuthScreenState extends State<AuthScreen>
                 onPressed: _handleSubmit,
                 isLoading: _isLoading,
               ),
-              const SizedBox(height: 28),
-
-              // Or Divider
-              const OrDivider(),
-              const SizedBox(height: 20),
-
-              // Google Button
-              Row(children: [
-                Expanded(
-                  child: SocialButton(
-                    label: 'Continue with Google',
-                    icon: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CustomPaint(painter: _GoogleLogoPainter())),
-                    onPressed: _handleGoogleSignIn,
-                  ),
-                )
-              ]),
               const SizedBox(height: 24),
 
               // Toggle Login/Signup
@@ -261,7 +240,6 @@ class _AuthScreenState extends State<AuthScreen>
   Widget _buildLoginForm() {
     return Form(
       key: _loginFormKey,
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -554,68 +532,6 @@ class _AuthScreenState extends State<AuthScreen>
       ),
     );
   }
-
-  Future<void> _handleGoogleSignIn() async {
-    setState(() => _isLoading = true);
-
-    final result = await GoogleAuthService.signIn();
-
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-
-    if (result.isSuccess && result.data != null) {
-      final userResult = await ApiService.getMe();
-      if (!mounted) return;
-
-      final user = UserModel(
-        id: userResult.data?.id ?? '',
-        name: userResult.data?.name ?? '',
-        email: userResult.data?.email ?? '',
-      );
-
-      final token = result.data?.accessToken ?? '';
-      Provider.of<AuthProvider>(context, listen: false)
-          .onLoginSuccess(user, token);
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.error ?? 'Google sign in failed'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-}
-
-class _GoogleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final r = size.width / 2;
-    paint.color = Colors.white;
-    canvas.drawCircle(Offset(cx, cy), r, paint);
-    paint.color = const Color(0xFF4285F4);
-    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.85),
-        -0.3, 1.9, true, paint);
-    paint.color = const Color(0xFF34A853);
-    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.85),
-        1.6, 1.6, true, paint);
-    paint.color = const Color(0xFFFBBC05);
-    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.85),
-        3.2, 0.8, true, paint);
-    paint.color = const Color(0xFFEA4335);
-    canvas.drawArc(Rect.fromCircle(center: Offset(cx, cy), radius: r * 0.85),
-        4.0, 0.55, true, paint);
-    paint.color = Colors.white;
-    canvas.drawCircle(Offset(cx, cy), r * 0.5, paint);
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
 }
 
 class _TermsSection extends StatelessWidget {

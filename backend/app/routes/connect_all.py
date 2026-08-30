@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 import requests
 import urllib.parse
@@ -96,26 +96,32 @@ async def connect_all_callback(code: str, state: str):
         
         access_token = token_data.get("access_token")
         refresh_token = token_data.get("refresh_token")
-        
+        expires_at = datetime.utcnow() + timedelta(
+            seconds=token_data.get("expires_in", 3600)
+        )
+
+        # This single token was minted under CONNECT_ALL_CLIENT_ID, a
+        # different registered OAuth client than the one each service's
+        # get_*_service() normally refreshes with (GOOGLE_CLIENT_ID /
+        # GMAIL_CLIENT_ID / GOOGLE_DRIVE_CLIENT_ID). Tagging oauth_client
+        # lets each refresh path pick the client that actually issued the
+        # token — refreshing under the wrong client gets rejected by
+        # Google with "unauthorized_client".
+        shared_fields = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_at": expires_at,
+            "oauth_client": "connect_all",
+            "connected_at": datetime.utcnow(),
+        }
+
         # ✅ Store tokens for ALL services
         await db.users.update_one(
             {"_id": ObjectId(user_id)},
             {"$set": {
-                "classroom_tokens": {
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "connected_at": datetime.utcnow()
-                },
-                "gmail_tokens": {
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "connected_at": datetime.utcnow()
-                },
-                "drive_tokens": {
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "connected_at": datetime.utcnow()
-                }
+                "classroom_tokens": dict(shared_fields),
+                "gmail_tokens": dict(shared_fields),
+                "drive_tokens": dict(shared_fields),
             }}
         )
         

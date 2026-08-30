@@ -4,7 +4,9 @@
 // history, and exposes new endpoints for listing/creating/deleting
 // chat sessions. This service layer mirrors those changes exactly.
 
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import '../models/assistant_model.dart';
 import '../config/app_config.dart';
@@ -101,7 +103,10 @@ class AssistantService {
               'session_id': sessionId ?? '',
             }),
           )
-          .timeout(const Duration(seconds: 30));
+          // The backend retries internally on a slow/degraded LLM response
+          // (up to ~60s worst case) — a shorter client timeout here just
+          // abandons requests the backend might still be about to finish.
+          .timeout(const Duration(seconds: 55));
 
       if (res.statusCode == 200) {
         final body = jsonDecode(res.body);
@@ -112,6 +117,11 @@ class AssistantService {
         );
       }
       return null;
+    } on TimeoutException {
+      // Distinguish "the AI is just slow right now" from a real connection
+      // failure, so the provider can tell the user something more honest
+      // than a generic "having trouble connecting".
+      rethrow;
     } catch (_) {
       return null;
     }
@@ -212,8 +222,22 @@ class AssistantService {
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }
-      request.files
-          .add(await http.MultipartFile.fromPath('file', audioFilePath));
+
+      if (kIsWeb) {
+        // On web, audioFilePath is a blob: URL (from URL.createObjectURL),
+        // not a real filesystem path — dart:io-based fromPath can't read
+        // it. Blob URLs are fetchable same-origin, so pull the bytes via
+        // a normal GET and upload those directly instead.
+        final blobResponse = await http.get(Uri.parse(audioFilePath));
+        request.files.add(http.MultipartFile.fromBytes(
+          'audio',
+          blobResponse.bodyBytes,
+          filename: 'recording.wav',
+        ));
+      } else {
+        request.files
+            .add(await http.MultipartFile.fromPath('audio', audioFilePath));
+      }
 
       final streamedResponse =
           await request.send().timeout(const Duration(seconds: 30));

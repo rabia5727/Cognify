@@ -6,10 +6,11 @@
 //   - Added Google Drive as fully functional (not "Coming Soon")
 //   - Added "Connect All" button for one-click connection
 //   - Replaced static mock data with real backend data
+//   - Added persistent profile image storage using SharedPreferences
 // ═══════════════════════════════════════════════════════════════════
 
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:frontend/screens/workspace/drive_sync_screen.dart';
@@ -17,6 +18,7 @@ import 'package:frontend/screens/workspace/gmail_sync_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../config/app_config.dart';
 import '../../providers/auth_provider.dart';
@@ -31,6 +33,8 @@ import '../workspace/classroom_sync_screen.dart';
 import 'change_password_screen.dart';
 import 'edit_name_screen.dart';
 
+const String _profileImageKey = 'profile_image';
+
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
@@ -39,14 +43,61 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  File? _profileImage;
+  Uint8List? _profileImage;
 
   @override
   void initState() {
     super.initState();
+    _loadProfileImage();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ProfileProvider>().loadConnections();
     });
+  }
+
+  // ─── Profile Image Persistence ──────────────────────────────────
+  // Kept as raw bytes end-to-end (SharedPreferences <-> Image.memory).
+  // path_provider's temp-directory APIs have no web implementation, so
+  // round-tripping through a cached File (as this used to) threw
+  // MissingPluginException on the web build — bytes work on every platform.
+
+  Future<void> _loadProfileImage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final base64Image = prefs.getString(_profileImageKey);
+      if (base64Image != null && base64Image.isNotEmpty) {
+        final bytes = base64Decode(base64Image);
+        if (mounted) {
+          setState(() => _profileImage = bytes);
+        }
+      }
+    } catch (e) {
+      // Ignore - no image saved
+    }
+  }
+
+  Future<void> _saveProfileImage(Uint8List bytes) async {
+    try {
+      final base64Image = base64Encode(bytes);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_profileImageKey, base64Image);
+    } catch (e) {
+      // Handle error
+    }
+  }
+
+  Future<void> _removeProfileImage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_profileImageKey);
+      if (mounted) {
+        setState(() => _profileImage = null);
+        UIFeedback.showSuccess(context, 'Profile photo removed');
+      }
+    } catch (e) {
+      if (mounted) {
+        UIFeedback.showError(context, 'Failed to remove photo');
+      }
+    }
   }
 
   void _navigateToEditName() {
@@ -363,8 +414,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: 'Remove Photo',
                 onTap: () {
                   Navigator.pop(ctx);
-                  setState(() => _profileImage = null);
-                  UIFeedback.showSuccess(context, 'Profile photo removed');
+                  _removeProfileImage();
                 }),
           ],
           const SizedBox(height: 12),
@@ -383,8 +433,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final image = await ImagePicker().pickImage(
           source: source, maxWidth: 500, maxHeight: 500, imageQuality: 85);
       if (image != null) {
-        setState(() => _profileImage = File(image.path));
-        if (mounted) UIFeedback.showSuccess(context, 'Photo updated!');
+        // XFile.readAsBytes() works on every platform, including web —
+        // image.path is a blob: URL there, which dart:io.File can't open.
+        final bytes = await image.readAsBytes();
+        await _saveProfileImage(bytes);
+        if (mounted) {
+          setState(() => _profileImage = bytes);
+          UIFeedback.showSuccess(context, 'Photo updated!');
+        }
       }
     } catch (e) {
       if (mounted) UIFeedback.showError(context, 'Failed to pick image: $e');
@@ -490,10 +546,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               profileProvider.isClassroomConnected &&
                                   profileProvider.isGmailConnected &&
                                   profileProvider.isDriveConnected;
-                          final anyconnected =
-                              profileProvider.isClassroomConnected ||
-                                  profileProvider.isGmailConnected ||
-                                  profileProvider.isDriveConnected;
 
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,7 +567,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
 
-                              //  CONNECT ALL BUTTON
+                              // CONNECT ALL BUTTON
                               if (!allConnected)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 16),
@@ -540,7 +592,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
 
-                              //disconnect All Button
+                              // DISCONNECT ALL BUTTON
                               if (allConnected)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 16),
@@ -617,7 +669,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 const RowDivider(),
 
-                                // ✅ Google Drive - Now Fully Functional
+                                // Google Drive
                                 _ConnectedAccountRow(
                                   icon: Icons.folder_outlined,
                                   label: 'Google Drive',
@@ -638,7 +690,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   onDisconnect: () => _disconnectDrive(
                                       context, profileProvider),
                                   isLoading: profileProvider.isLoading,
-                                  isComingSoon: false, // ✅ Changed to false
+                                  isComingSoon: false,
                                 ),
                               ]),
                             ],
@@ -675,7 +727,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 class _ProfilePhoto extends StatelessWidget {
   final VoidCallback onTap;
-  final File? profileImage;
+  final Uint8List? profileImage;
   final String initials;
   const _ProfilePhoto(
       {required this.onTap, this.profileImage, required this.initials});
@@ -697,7 +749,7 @@ class _ProfilePhoto extends StatelessWidget {
                       width: 3)),
               child: ClipOval(
                   child: profileImage != null
-                      ? Image.file(profileImage!,
+                      ? Image.memory(profileImage!,
                           width: 100, height: 100, fit: BoxFit.cover)
                       : Center(
                           child: Text(initials,

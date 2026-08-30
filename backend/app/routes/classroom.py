@@ -19,7 +19,8 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
+import asyncio
 import base64
 import hashlib
 import secrets
@@ -29,6 +30,7 @@ from app.db.connection import get_database
 from app.utils.dependencies import get_current_user
 from app.services.google_classroom import GoogleClassroomService
 from app.crud.task import create_task
+from app.crud import sync_dismissals
 from app.models.task import TaskCreate
 from app.config import settings
 
@@ -103,6 +105,70 @@ class FileSubmissionRequest(BaseModel):
 # HELPER FUNCTIONS
 # ─────────────────────────────────────────────────────────────────
 
+def _priority_from_due_date(due_date: Optional[datetime]) -> str:
+    """
+    Derive task priority from how soon a Classroom assignment is due:
+    - due today or overdue        -> high
+    - due within the next 6 days  -> medium
+    - due a week or more away     -> low
+    No due date keeps the neutral default of medium.
+    """
+    if due_date is None:
+        return "medium"
+
+    days_until = (due_date.date() - datetime.utcnow().date()).days
+
+    if days_until <= 0:
+        return "high"
+    elif days_until < 7:
+        return "medium"
+    else:
+        return "low"
+
+
+# Fallback window for assignments with no due date at all — there's no
+# "due today or later" to check, so these are judged by how recently they
+# were posted/updated instead. Keeps sync from dragging in a whole
+# semester/year of finished-course backlog that never had a due date set.
+RECENT_ASSIGNMENT_CUTOFF_DAYS = 30
+
+
+def _is_recent_assignment(assignment: Dict[str, Any], cutoff_days: int = RECENT_ASSIGNMENT_CUTOFF_DAYS) -> bool:
+    """
+    True if a Classroom assignment counts as "latest" rather than old
+    backlog from a past course or semester.
+    - Has a due date -> latest only if that date is today or in the future.
+      Anything already overdue, even by a day, is old — no trailing grace
+      window, by design (a 30-day trailing window was still pulling in
+      assignments overdue by over a week).
+    - No due date at all -> fall back to how recently it was posted/updated
+      (within cutoff_days), since there's no due date to judge by.
+    - Nothing usable at all -> don't silently drop it
+    """
+    today = datetime.utcnow().date()
+
+    due = assignment.get('dueDate')
+    if due:
+        try:
+            due_date = datetime(
+                due.get('year', 2024), due.get('month', 1), due.get('day', 1)
+            ).date()
+            return due_date >= today
+        except (ValueError, TypeError):
+            pass  # unparsable due date — fall through to posted/updated time
+
+    cutoff = datetime.utcnow() - timedelta(days=cutoff_days)
+    timestamp_str = assignment.get('updateTime') or assignment.get('creationTime')
+    if timestamp_str:
+        try:
+            ts = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')).replace(tzinfo=None)
+            return ts >= cutoff
+        except ValueError:
+            pass
+
+    return True
+
+
 async def get_synced_courses(db, user_id: str) -> Dict[str, Dict]:
     """Get synced courses as a dictionary keyed by course_id"""
     user = await db.users.find_one({"_id": ObjectId(user_id)})
@@ -156,9 +222,10 @@ async def store_oauth_tokens(db, user_id: str, credentials):
             "classroom_tokens": {
                 "access_token": credentials.token,
                 "refresh_token": credentials.refresh_token,
-                "expires_at": datetime.utcfromtimestamp(
-                    credentials.expiry.timestamp()
-                ) if credentials.expiry else None,
+                # credentials.expiry is already a naive UTC datetime — store
+                # it directly. Round-tripping through .timestamp() treats it
+                # as local time and shifts it by the server's UTC offset.
+                "expires_at": credentials.expiry,
                 "connected_at": datetime.utcnow()
             }
         }}
@@ -432,11 +499,25 @@ async def sync_assignments(current_user: dict = Depends(get_current_user)):
     synced_assignments = []
     errors = []
 
-    for course_id in enabled_course_ids:
+    # Assignments the user explicitly deleted before — don't resurrect them.
+    dismissed_ids = await sync_dismissals.get_dismissed_source_ids(user_id, "google_classroom")
+
+    # Fetch every course's assignments concurrently instead of one at a
+    # time — this was a sequential chain of blocking Google API round
+    # trips, so N courses meant N times the wait for no reason (each
+    # course's fetch is independent of the others).
+    assignments_by_course = await asyncio.gather(
+        *(GoogleClassroomService.fetch_assignments(user_id, cid, db) for cid in enabled_course_ids),
+        return_exceptions=True,
+    )
+
+    for course_id, assignments in zip(enabled_course_ids, assignments_by_course):
+        if isinstance(assignments, Exception):
+            print(f"❌ Error syncing course {course_id}: {assignments}")
+            errors.append(str(assignments))
+            continue
+
         try:
-            assignments = await GoogleClassroomService.fetch_assignments(
-                user_id, course_id, db
-            )
             print(f"📖 Course {course_id}: found {len(assignments)} assignments")
 
             for assignment in assignments:
@@ -450,6 +531,14 @@ async def sync_assignments(current_user: dict = Depends(get_current_user)):
                 })
 
                 if not existing_task:
+                    if assignment_id in dismissed_ids:
+                        print(f"🚫 Skipping user-deleted assignment: {assignment.get('title')}")
+                        continue
+
+                    if not _is_recent_assignment(assignment):
+                        print(f"⏳ Skipping old assignment (outside {RECENT_ASSIGNMENT_CUTOFF_DAYS}-day window): {assignment.get('title')}")
+                        continue
+
                     # Parse due date safely
                     due_date = None
                     if assignment.get('dueDate'):
@@ -467,13 +556,15 @@ async def sync_assignments(current_user: dict = Depends(get_current_user)):
                     task_data = TaskCreate(
                         title=assignment.get('title', 'Untitled Assignment'),
                         description=assignment.get('description', ''),
-                        priority="medium",
-                        category="academic",
+                        priority=_priority_from_due_date(due_date),
+                        category="classroom",
                         due_date=due_date,
                         source="google_classroom",
                         source_id=assignment_id,
                         course_id=course_id,
+                        skip_date_validation=True,
                     )
+
                     await create_task(task_data, user_id)
                     new_tasks_count += 1
                     synced_assignments.append(assignment.get('title'))
@@ -493,7 +584,6 @@ async def sync_assignments(current_user: dict = Depends(get_current_user)):
             continue  # don't let one failed course stop others
 
     print(f"🎯 Sync complete: {new_tasks_count} new tasks created")
-
     return {
         "message": f"Sync completed. {new_tasks_count} new assignments added.",
         "new_tasks_count": new_tasks_count,

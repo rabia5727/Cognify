@@ -5,15 +5,31 @@
 #   Taiba owns: generate_email_draft(), edit_email_draft()
 #   Rabia owns: send_email_via_gmail() — she implements Gmail API here
 
+import re
 from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from app.config import settings
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _is_valid_email(value: str) -> bool:
+    """
+    True if `value` looks like an actual email address. The draft LLM is
+    deliberately allowed to write a name/role as a placeholder recipient
+    (e.g. "TO: Noor") when given one — this catches that before it reaches
+    Gmail's API, which rejects anything that isn't address-shaped with a
+    cryptic "Invalid To header" error.
+    """
+    return bool(_EMAIL_RE.match((value or "").strip()))
 
 _email_llm = ChatGroq(
     api_key=settings.GROQ_API_KEY,
     model=settings.ORCHESTRATOR_MODEL,
     temperature=0.4,
     max_tokens=1024,
+    timeout=20,
+    max_retries=2,
 )
 
 
@@ -140,41 +156,40 @@ BODY:
 # ── ✅ RABIA PLUGS IN HERE ────────────────────────────────────────────────────
 async def send_email_via_gmail(to: str, subject: str, body: str, user_id: str = "") -> str:
     """
-    Sends an email via Gmail API.
+    Sends an email via Gmail API using the user's connected Gmail account.
 
-    ┌─────────────────────────────────────────────────────┐
-    │  RABIA — implement this function                    │
-    │                                                     │
-    │  Steps:                                             │
-    │  1. Get user's Gmail OAuth token from DB            │
-    │     (user_id is provided)                           │
-    │  2. Build Gmail API service with the token          │
-    │  3. Create message:                                 │
-    │       import base64                                 │
-    │       from email.mime.text import MIMEText          │
-    │       msg = MIMEText(body)                          │
-    │       msg['to'] = to                                │
-    │       msg['subject'] = subject                      │
-    │       raw = base64.urlsafe_b64encode(               │
-    │                 msg.as_bytes()).decode()             │
-    │  4. Send:                                           │
-    │       service.users().messages().send(              │
-    │           userId='me',                              │
-    │           body={'raw': raw}                         │
-    │       ).execute()                                   │
-    │  5. Return success string                           │
-    └─────────────────────────────────────────────────────┘
-
-    This function is called from assistant.py
-    _execute_pending_action() when:
+    Called from assistant.py _execute_pending_action() when:
       - action["type"] == "send_email"
       - user confirmed with "yes"
     """
-    # TODO: Rabia replaces this placeholder with real Gmail API call
-    return (
-        f"📧 Email is ready to send!\n\n"
-        f"**To:** {to}\n"
-        f"**Subject:** {subject}\n\n"
-        f"_(Gmail send integration — Rabia implementing)_\n"
-        f"You can copy the email above and send it manually for now."
-    )
+    from app.db.connection import get_database
+    from app.services.gmail_service import GmailService
+
+    if not _is_valid_email(to):
+        return (
+            f"📧 Your email is drafted, but I don't have a real email "
+            f"address for the recipient — it's currently set to \"{to}\".\n\n"
+            f"**Subject:** {subject}\n\n"
+            f"What's their actual email address? Once you tell me, I can send it."
+        )
+
+    db = get_database()
+
+    try:
+        await GmailService.send_email(user_id, db, to=to, subject=subject, body=body)
+    except Exception as e:
+        if "Gmail not connected" in str(e):
+            return (
+                f"📧 Your email is drafted and ready:\n\n"
+                f"**To:** {to}\n**Subject:** {subject}\n\n"
+                f"But your Gmail account isn't connected yet, so I can't send it "
+                f"for you. Connect Gmail in Settings, then ask me to send it again — "
+                f"or copy the draft above and send it manually for now."
+            )
+        return (
+            f"📧 Your email is drafted, but sending it failed: {str(e)}\n\n"
+            f"**To:** {to}\n**Subject:** {subject}\n\n"
+            f"You can copy the draft above and send it manually for now."
+        )
+
+    return f"✅ Sent! Your email to **{to}** is on its way."

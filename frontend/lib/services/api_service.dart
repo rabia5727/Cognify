@@ -166,6 +166,89 @@ static Future<AuthResult> googleLogin({
   }
 }
 
+  /// POST /auth/forgot-password
+  /// Body: { email }
+  static Future<SimpleResult> forgotPassword({required String email}) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/forgot-password'),
+            headers: _jsonHeaders,
+            body: jsonEncode({'email': email}),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (response.statusCode == 200) {
+        return SimpleResult.success();
+      } else {
+        return SimpleResult.failure(_parseError(response));
+      }
+    } on SocketException {
+      return SimpleResult.failure('Cannot connect to server.');
+    } catch (e) {
+      return SimpleResult.failure('Unexpected error: $e');
+    }
+  }
+
+  /// POST /auth/verify-reset-code
+  /// Body: { email, code }
+  static Future<SimpleResult> verifyResetCode({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/verify-reset-code'),
+            headers: _jsonHeaders,
+            body: jsonEncode({'email': email, 'code': code}),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        return SimpleResult.success();
+      } else {
+        return SimpleResult.failure(_parseError(response));
+      }
+    } on SocketException {
+      return SimpleResult.failure('Cannot connect to server.');
+    } catch (e) {
+      return SimpleResult.failure('Unexpected error: $e');
+    }
+  }
+
+  /// POST /auth/reset-password
+  /// Body: { email, code, new_password }
+  static Future<SimpleResult> resetPassword({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/reset-password'),
+            headers: _jsonHeaders,
+            body: jsonEncode({
+              'email': email,
+              'code': code,
+              'new_password': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        return SimpleResult.success();
+      } else {
+        return SimpleResult.failure(_parseError(response));
+      }
+    } on SocketException {
+      return SimpleResult.failure('Cannot connect to server.');
+    } catch (e) {
+      return SimpleResult.failure('Unexpected error: $e');
+    }
+  }
+
   // ── Users ──────────────────────────────────────────────────────────────────
 
   /// GET /users/me — requires JWT token
@@ -227,6 +310,15 @@ static Future<AuthResult> googleLogin({
 }
 
 // ─── Result wrappers ─────────────────────────────────────────────────────────
+
+class SimpleResult {
+  final String? error;
+  bool get isSuccess => error == null;
+
+  SimpleResult._({this.error});
+  factory SimpleResult.success() => SimpleResult._();
+  factory SimpleResult.failure(String error) => SimpleResult._(error: error);
+}
 
 class AuthResult {
   final AuthResponse? data;

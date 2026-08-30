@@ -51,11 +51,15 @@ class TaskService {
     return 'Error ${res.statusCode}';
   }
 
-  /// GET /tasks/ — fetch all tasks for the current user
+  /// GET /tasks/ — fetch all tasks for the current user.
+  /// page_size=100 is the backend's max — there's no pagination UI in the
+  /// app, so without this the backend's default page_size=20 silently
+  /// hides anything past the 20th task (increasingly likely as classroom/
+  /// Gmail auto-sync keeps adding more).
   static Future<TaskListResult> getTasks() async {
     try {
       final res = await http
-          .get(Uri.parse('$_base/'), headers: await _headers)
+          .get(Uri.parse('$_base/?page_size=100'), headers: await _headers)
           .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {

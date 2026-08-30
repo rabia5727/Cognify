@@ -175,24 +175,45 @@ def get_update_task_tool(user_id: str):
         'start working on task', 'task in progress'.
         """
         try:
+            # Normalize + validate status
+            valid_statuses = {"pending", "in_progress", "completed"}
+            status_normalized = status.lower().strip().replace("-", "_").replace(" ", "_")
+            status_aliases = {
+                "done": "completed",
+                "finished": "completed",
+                "complete": "completed",
+                "started": "in_progress",
+                "working": "in_progress",
+                "todo": "pending",
+                "in progress": "in_progress",
+                "in-progress": "in_progress",
+            }
+            
+            # ✅ FIX: Map the normalized status to the correct status value
+            mapped_status = status_aliases.get(status_normalized, status_normalized)
+            if mapped_status not in valid_statuses:
+                return f"'{status}' isn't a recognized status. Use pending, in_progress, or completed."
+
             db = get_database()
             task = await db["tasks"].find_one({
                 "user_id": user_id,
                 "title": {"$regex": task_title, "$options": "i"},
-                "status": {"$ne": "completed"},
+                "status": {"$ne": "completed"},  # Don't update already completed tasks
             })
             if not task:
                 return f"Could not find task matching '{task_title}'."
 
             from bson import ObjectId
             from app.models.task import TaskUpdate
-            update_data = TaskUpdate(status=status)
+            
+            # ✅ FIX: Use mapped_status instead of the original status
+            update_data = TaskUpdate(status=mapped_status)
             await update_task(ObjectId(task["_id"]), user_id, update_data)
-            return f"Task '{task['title']}' marked as {status}."
+            return f"✅ Task '{task['title']}' marked as {mapped_status}."
+            
         except Exception as e:
             return f"Failed to update task: {str(e)}"
     return update_task_status
-
 
 # ─────────────────────────────────────────────────────────────────
 # Tool 5 — Get Projects

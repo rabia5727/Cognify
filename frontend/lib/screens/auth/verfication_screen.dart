@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import 'reset_password_screen.dart';
+import '../../services/api_service.dart';
 import '../../utils/ui_feedback.dart';
 
 class VerificationScreen extends StatefulWidget {
@@ -60,12 +61,15 @@ class _VerificationScreenState extends State<VerificationScreen> {
 
     setState(() => _isLoading = true);
 
-    // TODO: Call your verification API
-    await Future.delayed(const Duration(seconds: 1));
+    final result = await ApiService.verifyResetCode(
+      email: widget.email,
+      code: _otpCode,
+    );
 
     setState(() => _isLoading = false);
+    if (!mounted) return;
 
-    if (mounted) {
+    if (result.isSuccess) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -75,6 +79,8 @@ class _VerificationScreenState extends State<VerificationScreen> {
           ),
         ),
       );
+    } else {
+      UIFeedback.showError(context, result.error!);
     }
   }
 
@@ -86,8 +92,14 @@ class _VerificationScreenState extends State<VerificationScreen> {
       _resendTimer = 30;
     });
 
-    // TODO: Call your resend code API
-    UIFeedback.showSuccess(context, 'Verification code resent to your email');
+    final result = await ApiService.forgotPassword(email: widget.email);
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      UIFeedback.showSuccess(context, 'Verification code resent to your email');
+    } else {
+      UIFeedback.showError(context, result.error!);
+    }
 
     _startResendTimer();
   }

@@ -24,11 +24,11 @@ import '../../widgets/common/app_header.dart';
 import '../../widgets/common/bottom_nav_bar.dart';
 import '../../widgets/common/notification_permission_sheet.dart';
 import '../../widgets/common/priority_badge.dart';
-import '../../widgets/common/voice_fab.dart';
+import '../../widgets/common/assistant_fab.dart';
 import '../../widgets/empty_states/empty_dashboard.dart';
 import '../../widgets/layout/refresh_wrapper.dart';
 import '../../widgets/loading/shimmer_loading.dart';
-import '../assistant/voice_assistant_screen.dart';
+import '../assistant/assistant_screen.dart';
 import '../settings/profile_screen.dart';
 import '../workspace/task_detail_screen.dart';
 
@@ -73,22 +73,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _navigateToTaskDetail(Task task) {
-    final taskProvider = context.read<TaskProvider>();
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => TaskDetailScreen(
           taskId: task.id,
-          onTaskUpdated: (updated) async {
-            try {
-              await taskProvider.updateTask(updated);
-            } catch (_) {}
-          },
-          onTaskDeleted: (taskId) async {
-            try {
-              await taskProvider.deleteTask(taskId);
-            } catch (_) {}
-          },
+          // TaskDetailScreen already applies the update/delete to the
+          // shared TaskProvider before calling these — calling it again
+          // here would be a redundant, and for delete always-failing,
+          // second network request.
+          onTaskUpdated: (updated) {},
+          onTaskDeleted: (taskId) {},
         ),
       ),
     );
@@ -105,10 +100,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (mounted) UIFeedback.showInfo(context, 'Dashboard refreshed!');
   }
 
-  void _navigateToVoice() {
+  // "Start Task" used to open VoiceAssistantScreen, which isn't working —
+  // route to the regular text assistant instead, carrying the task's
+  // context so it can pick up execution right away.
+  void _navigateToAssistant([Task? task]) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const VoiceAssistantScreen()),
+      MaterialPageRoute(
+        builder: (_) => AssistantScreen(
+          initialMessage:
+              task != null ? 'Help me with: ${task.title}' : null,
+        ),
+      ),
     );
   }
 
@@ -259,7 +262,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           },
         ),
       ),
-      floatingActionButton: const VoiceFab(heroTag: 'fab_dashboard'),
+      floatingActionButton: const AiChatFab(heroTag: 'fab_dashboard'),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: Consumer<AuthProvider>(
         builder: (_, auth, __) => BottomNavBar(
@@ -300,7 +303,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (overdueTasks.isNotEmpty) {
         return _TaskList(
           tasks: overdueTasks,
-          onStartTask: (_) => _navigateToVoice(),
+          onStartTask: _navigateToAssistant,
           onTaskTap: _navigateToTaskDetail,
           animatingTaskId: _animatingTaskId,
         );
@@ -317,7 +320,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return NoTasksDueTodayEmptyState(
         onViewAllTasks: () => widget.onTabSelected(1),
         nextPriorityTask: nextTask,
-        onStartTask: _navigateToVoice,
+        onStartTask: () => _navigateToAssistant(nextTask),
       );
     }
 
@@ -337,7 +340,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return NoTasksDueTodayEmptyState(
           onViewAllTasks: () => widget.onTabSelected(1),
           nextPriorityTask: nextTask,
-          onStartTask: _navigateToVoice,
+          onStartTask: () => _navigateToAssistant(nextTask),
         );
       }
 
@@ -352,7 +355,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return _TaskList(
       tasks: combined,
-      onStartTask: (_) => _navigateToVoice(),
+      onStartTask: _navigateToAssistant,
       onTaskTap: _navigateToTaskDetail,
       animatingTaskId: _animatingTaskId,
     );
@@ -384,7 +387,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 class _TaskList extends StatelessWidget {
   final List<Task> tasks;
-  final Function(String) onStartTask;
+  final Function(Task) onStartTask;
   final Function(Task) onTaskTap;
   final String? animatingTaskId;
 
@@ -403,7 +406,7 @@ class _TaskList extends StatelessWidget {
       separatorBuilder: (_, __) => const SizedBox(width: 12),
       itemBuilder: (_, i) => _TaskCard(
         task: tasks[i],
-        onStart: () => onStartTask(tasks[i].id),
+        onStart: () => onStartTask(tasks[i]),
         onTap: () => onTaskTap(tasks[i]),
         isAnimating: animatingTaskId == tasks[i].id,
       ),

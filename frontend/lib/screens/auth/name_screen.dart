@@ -6,6 +6,7 @@ import '../../widgets/common/auth_components.dart';
 import '../../services/api_service.dart';
 import 'onboarding_screen.dart';
 import '../../utils/ui_feedback.dart';
+import '../../widgets/common/robot_mascot.dart'; // ✅ ADD THIS IMPORT
 
 class NameScreen extends StatefulWidget {
   final String email;
@@ -84,7 +85,7 @@ class _NameScreenState extends State<NameScreen> {
                 children: [
                   const SizedBox(height: 32),
 
-                  // Mascot centered
+                  // ✅ FIXED: Robot Mascot instead of emoji
                   Center(
                     child: Container(
                       width: 100,
@@ -94,7 +95,11 @@ class _NameScreenState extends State<NameScreen> {
                         color: Color(0xFFF0F4FF),
                       ),
                       child: const Center(
-                          child: Text('🤖', style: TextStyle(fontSize: 52))),
+                        child: RobotMascot(
+                          expression: RobotExpression.waving,
+                          size: 70,
+                        ),
+                      ),
                     ),
                   ),
 

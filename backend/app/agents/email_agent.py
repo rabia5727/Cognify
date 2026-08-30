@@ -14,6 +14,7 @@
 
 from langchain_core.tools import tool
 from app.db.connection import get_database
+from app.crud.email_generator import _is_valid_email
 from datetime import datetime, timezone
 
 
@@ -43,14 +44,26 @@ def _format_email_preview(email: dict, changed: bool = False) -> str:
     to make meaningful edit requests.
     """
     icon = "✏️ Updated draft!" if changed else "📧 Email draft ready!"
+    to = email.get("to", "")
+
+    # The draft LLM will write a name/role as a placeholder (e.g. "Noor")
+    # when it isn't given a real address — flag that now, before the user
+    # confirms send and hits a raw Gmail API rejection instead.
+    recipient_warning = (
+        f"⚠️ \"{to}\" doesn't look like a real email address — tell me the "
+        f"actual address (e.g. 'change the recipient to noor@example.com') "
+        f"before sending.\n\n"
+        if to and not _is_valid_email(to) else ""
+    )
 
     return (
         f"{icon}\n\n"
-        f"**To:** {email.get('to', '—')}\n"
+        f"**To:** {to or '—'}\n"
         f"**Subject:** {email.get('subject', '—')}\n\n"
         f"───────────────────\n"
         f"{email.get('body', '')}\n"
         f"───────────────────\n\n"
+        f"{recipient_warning}"
         f"💬 Want any changes? "
         f"(e.g. 'make it more formal', 'shorten it', 'change the subject', "
         f"'change the recipient to HR department')\n"
@@ -58,6 +71,9 @@ def _format_email_preview(email: dict, changed: bool = False) -> str:
     )
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Tool 1 — Draft Email
+# ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 # Tool 1 — Draft Email
 # ─────────────────────────────────────────────────────────────────────────────
@@ -80,14 +96,33 @@ def get_draft_email_tool(user_id: str, session_id: str):
         """
         try:
             from app.crud.email_generator import generate_email_draft
+            
+            # ✅ NEW: Check for pending_action collision before generating
+            db = get_database()
+            existing = await db["conversations"].find_one(
+                {"user_id": user_id, "session_id": session_id}, {"pending_action": 1}
+            )
+            existing_pending = existing.get("pending_action") if existing else None
+            collision_note = ""
+            
+            if existing_pending and existing_pending.get("type") != "send_email":
+                collision_note = (
+                    "⚠️ Note: this replaces your previous unconfirmed "
+                    f"{existing_pending.get('type', 'action')} — say yes now to keep *this* one.\n\n"
+                )
+            
             email = await generate_email_draft(
                 context=context,
                 to=to,
                 tone=tone,
                 email_type=email_type,
             )
+            
             await _save_email_pending(user_id, session_id, email)
-            return _format_email_preview(email)
+            
+            # ✅ Prepend collision warning if there was a collision
+            return collision_note + _format_email_preview(email)
+            
         except Exception as e:
             return f"Failed to draft email: {str(e)}"
 

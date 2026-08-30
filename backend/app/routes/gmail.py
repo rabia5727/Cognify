@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 
 from app.db.connection import get_database
@@ -128,6 +128,9 @@ async def mobile_oauth_callback(code: str, state: str):
                 "gmail_tokens": {
                     "access_token": token_data.get("access_token"),
                     "refresh_token": token_data.get("refresh_token"),
+                    "expires_at": datetime.utcnow() + timedelta(
+                        seconds=token_data.get("expires_in", 3600)
+                    ),
                     "connected_at": datetime.utcnow()
                 }
             }}

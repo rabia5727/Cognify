@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 from google_auth_oauthlib.flow import Flow
 import requests
@@ -104,6 +104,9 @@ async def mobile_oauth_callback(code: str, state: str):
                 "drive_tokens": {
                     "access_token": token_data.get("access_token"),
                     "refresh_token": token_data.get("refresh_token"),
+                    "expires_at": datetime.utcnow() + timedelta(
+                        seconds=token_data.get("expires_in", 3600)
+                    ),
                     "connected_at": datetime.utcnow()
                 }
             }}

@@ -178,8 +178,12 @@ class TaskProvider extends ChangeNotifier {
   }
 
   Future<void> refreshTasks() async {
+    // Deliberately don't clear _tasks here — the old list should stay
+    // visible until the fresh one arrives, not flash empty in between.
+    // This matters a lot now that background auto-sync calls this every
+    // 10 seconds: clearing first meant any UI watching the task list could
+    // blink to empty mid-session, not just during an explicit refresh.
     _initialized = false;
-    _tasks = [];
     await loadTasks();
   }
 

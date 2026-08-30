@@ -98,7 +98,7 @@ class _AssistantScreenState extends State<AssistantScreen> {
       _scrollToBottom();
       final messages = provider.messages;
       if (messages.isNotEmpty && messages.last.role == 'assistant') {
-        await _tts.speak(messages.last.content);
+        await _tts.speak(_ttsFriendlyText(messages.last.content));
       }
     }
   }
@@ -146,8 +146,40 @@ class _AssistantScreenState extends State<AssistantScreen> {
     return match?.group(1);
   }
 
+  String? _extractClassroomLink(String content) {
+    final match = RegExp(r'\[CLASSROOM_LINK:([^\]]+)\]').firstMatch(content);
+    return match?.group(1);
+  }
+
   String _cleanContent(String content) {
-    return content.replaceAll(RegExp(r'\[FILE:[^\]]+\]'), '').trim();
+    return content
+        .replaceAll(RegExp(r'\[FILE:[^\]]+\]'), '')
+        .replaceAll(RegExp(r'\[CLASSROOM_LINK:[^\]]+\]'), '')
+        .trim();
+  }
+
+  // Detects long generated content (essays, emails) so TTS speaks a short
+// spoken-friendly summary instead of reading the whole formatted block —
+// word counts, markdown symbols, and dividers aloud make for a bad demo.
+  bool _isLongGeneratedContent(String content) {
+    return content.contains('📊') && content.contains('words') ||
+        content.contains('📧 Email draft ready') ||
+        content.contains('✏️ Updated draft') ||
+        content.contains('✅ Here') && content.length > 400;
+  }
+
+  String _ttsFriendlyText(String content) {
+    if (_isLongGeneratedContent(content)) {
+      if (content.contains('📧') || content.contains('Email')) {
+        return "Your email draft is ready. You can read it, ask for changes, or say yes to send.";
+      }
+      return "Your document is ready. You can read it, ask for changes, or say yes to download.";
+    }
+    // Strip markdown/formatting symbols for normal short replies
+    return content
+        .replaceAll(RegExp(r'\[FILE:[^\]]+\]'), '')
+        .replaceAll(RegExp(r'[*_─#]'), '')
+        .trim();
   }
 
   Future<void> _downloadFile(String filename) async {
@@ -158,6 +190,19 @@ class _AssistantScreenState extends State<AssistantScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not open download link.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openClassroomLink(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open Google Classroom.')),
         );
       }
     }
@@ -372,8 +417,10 @@ class _AssistantScreenState extends State<AssistantScreen> {
       AssistantMessage msg, ThemeData theme, bool isDark) {
     final isUser = msg.isUser;
     final filename = isUser ? null : _extractFilename(msg.content);
-    final displayText =
-        filename != null ? _cleanContent(msg.content) : msg.content;
+    final classroomLink = isUser ? null : _extractClassroomLink(msg.content);
+    final displayText = (filename != null || classroomLink != null)
+        ? _cleanContent(msg.content)
+        : msg.content;
     final expression =
         isUser ? RobotExpression.happy : _expressionForMessage(msg);
 
@@ -465,9 +512,15 @@ class _AssistantScreenState extends State<AssistantScreen> {
                 ),
 
                 // Download chip
+                // Download chip
                 if (filename != null) ...[
                   const SizedBox(height: 8),
                   _buildDownloadChip(filename, theme),
+                ],
+                // Open Classroom chip
+                if (classroomLink != null) ...[
+                  const SizedBox(height: 8),
+                  _buildClassroomChip(classroomLink, theme),
                 ],
               ],
             ),
@@ -525,6 +578,42 @@ class _AssistantScreenState extends State<AssistantScreen> {
             ),
             const SizedBox(width: 6),
             const Icon(Icons.arrow_forward_ios_rounded,
+                color: Colors.white70, size: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildClassroomChip(String link, ThemeData theme) {
+    return GestureDetector(
+      onTap: () => _openClassroomLink(link),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(
+              0xFF1A73E8), // Google blue — visually distinct from Drive/DOCX blue
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF1A73E8).withValues(alpha: 0.25),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.school_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 8),
+            Text('Open in Classroom',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600)),
+            SizedBox(width: 6),
+            Icon(Icons.arrow_forward_ios_rounded,
                 color: Colors.white70, size: 12),
           ],
         ),
