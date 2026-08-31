@@ -33,13 +33,13 @@ class Settings(BaseSettings):
     # heavily-optimized models — consistently sub-second in testing, vs.
     # openai/gpt-oss-120b/20b occasionally seeing 20-40s+ stalls under
     # Groq-side load (still fully supports tool-calling, verified).
-    ORCHESTRATOR_MODEL: str = "llama-3.3-70b-versatile"
-    LIGHTWEIGHT_MODEL: str = "llama-3.1-8b-instant"
+    ORCHESTRATOR_MODEL: str = "openai/gpt-oss-120b"
+    LIGHTWEIGHT_MODEL: str = "openai/gpt-oss-20b"
     # Backup models tried if the primary model's call fails or times out —
     # same Groq account, no extra signup, but a different model so a
     # problem specific to one model doesn't take the assistant down.
-    ORCHESTRATOR_FALLBACK_MODEL: str = "openai/gpt-oss-120b"
-    LIGHTWEIGHT_FALLBACK_MODEL: str = "openai/gpt-oss-20b"
+    ORCHESTRATOR_FALLBACK_MODEL: str = "qwen/qwen3.6-27b"
+    LIGHTWEIGHT_FALLBACK_MODEL: str = "qwen/qwen3.6-27b"
     # Outbound mail (password reset OTP) — Gmail SMTP with an App Password,
     # not the GMAIL_CLIENT_ID/SECRET above (those are for per-user Gmail
     # OAuth in the assistant, a different thing from the app's own sender).

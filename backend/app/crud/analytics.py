@@ -8,6 +8,7 @@ from app.models.analytics import (
     MonthlyStats,
 )
 
+MAX_TASK_HOURS = 4.0
 
 def _make_aware(dt: datetime) -> datetime:
     if dt is None:
@@ -28,9 +29,12 @@ def _calc_hours_per_task(tasks: list) -> float:
         return 1.5
 
     total_hours = sum(
-        (_make_aware(t["completed_at"]) - _make_aware(t["created_at"])).total_seconds() / 3600
-        for t in completed_with_time
+    min(
+        (_make_aware(t["completed_at"]) - _make_aware(t["created_at"])).total_seconds() / 3600,
+        MAX_TASK_HOURS,
     )
+    for t in completed_with_time
+)
     return total_hours / len(completed_with_time)
 
 
@@ -75,10 +79,13 @@ async def record_daily_snapshot(user_id: str) -> None:
 
     # Focus hours = sum of actual time per task completed today
     focus_hours = sum(
-        (_make_aware(t["completed_at"]) - _make_aware(t["created_at"])).total_seconds() / 3600
-        for t in completed_today
-        if t.get("created_at")
+    min(
+        (_make_aware(t["completed_at"]) - _make_aware(t["created_at"])).total_seconds() / 3600,
+        MAX_TASK_HOURS,
     )
+    for t in completed_today
+    if t.get("created_at")
+)
 
     # Avg completion time
     avg_completion_time = (
@@ -170,8 +177,8 @@ async def get_analytics_summary(user_id: str) -> AnalyticsSummary:
     n_week_done = len(week_completed)
     # Use actual focus hours from analytics collection if available
     week_focus = sum(
-        record_map.get(d, {}).get("focus_hours", 0.0) for d in week_dates
-    )
+    min(record_map.get(d, {}).get("focus_hours", 0.0), 24.0) for d in week_dates
+)
     def _format_hours(h: float) -> str:
         if h == 0:
             return "0h"
